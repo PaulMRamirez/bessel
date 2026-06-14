@@ -234,6 +234,10 @@ importers:
       three:
         specifier: ^0.171.0
         version: 0.171.0
+    devDependencies:
+      '@types/three':
+        specifier: ^0.171.0
+        version: 0.171.0
 
   packages/spice:
     dependencies:
@@ -268,12 +272,16 @@ importers:
       '@bessel/timeline':
         specifier: workspace:*
         version: link:../timeline
-      react:
-        specifier: ^18.3.1
-        version: 18.3.1
       react-dom:
         specifier: ^18.3.1
         version: 18.3.1(react@18.3.1)
+    devDependencies:
+      '@types/react':
+        specifier: ^18.3.18
+        version: 18.3.31
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
 
 packages:
 

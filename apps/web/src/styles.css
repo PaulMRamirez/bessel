@@ -13,13 +13,88 @@ body,
 }
 
 .bessel-shell {
-  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.bessel-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid #1c2230;
+}
+
+.bessel-header h1 {
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.bessel-subtitle {
+  color: #8a93a6;
+  font-size: 0.9rem;
+}
+
+.bessel-viewer {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 #viewport {
   display: block;
   width: 100%;
-  height: auto;
+  flex: 1;
+  min-height: 0;
   background: #05070b;
+}
+
+.bessel-hud {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  background: rgba(11, 14, 20, 0.7);
   border: 1px solid #1c2230;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+.bessel-viewcontrols,
+.bessel-timeline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  border-top: 1px solid #1c2230;
+  flex-wrap: wrap;
+}
+
+.bessel-timeline input[type='range'] {
+  flex: 1;
+  min-width: 120px;
+}
+
+.bessel-epoch {
+  font-variant-numeric: tabular-nums;
+  min-width: 11ch;
+}
+
+button,
+select {
+  background: #141a26;
+  color: #e6e9ef;
+  border: 1px solid #2a3242;
+  border-radius: 4px;
+  padding: 0.25rem 0.6rem;
+  font: inherit;
+  cursor: pointer;
+}
+
+button[aria-pressed='true'] {
+  background: #2a3a66;
+  border-color: #5b8cff;
 }

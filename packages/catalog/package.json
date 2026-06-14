@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./schema": "./schema/bessel-catalog.schema.json"
+    "./schema": "./schema/bessel-catalog.schema.json",
+    "./examples/cassini": "./examples/cassini-cosmographia.json"
   },
   "types": "./src/index.ts",
   "dependencies": {

@@ -2,7 +2,8 @@
 // SPICE state, with camera-relative rendering (mandatory, CLAUDE.md). Phase 0
 // renders textured planet globes and a spacecraft trajectory polyline.
 
-export const SCENE_PLACEHOLDER = true;
+export { SolarSystemScene, type Km3 } from './three-scene.ts';
+export { INNER_SYSTEM, type PlanetDef } from './planets.ts';
 
 /** Camera modes the controller supports (SPEC 5.3). */
 export type CameraMode = 'orbit' | 'center' | 'track';

@@ -17,6 +17,9 @@ export interface SpacecraftCatalog {
   readonly center: string;
   /** Kernels this catalog requires, by logical name. */
   readonly kernels: readonly string[];
+  /** Optional UTC coverage hints used to bound trajectory sampling. */
+  readonly startTime?: string;
+  readonly endTime?: string;
 }
 
 /** Located, typed catalog error naming the offending field (loud failure). */
@@ -29,3 +32,6 @@ export class CatalogError extends Error {
     this.name = 'CatalogError';
   }
 }
+
+export { parseCosmographiaCatalog } from './cosmographia.ts';
+export type { CosmographiaCatalog, CosmographiaItem } from './cosmographia.ts';
