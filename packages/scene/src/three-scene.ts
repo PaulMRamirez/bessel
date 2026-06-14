@@ -407,6 +407,10 @@ export class SolarSystemScene {
     if (this.starField) this.starField.visible = visible;
   }
 
+  setAtmosphereVisible(visible: boolean): void {
+    if (this.atmosphere) this.atmosphere.visible = visible;
+  }
+
   centerOn(name: string): void {
     if (this.bodies.has(name) || this.spacecraft?.name === name) this.focus = name;
   }

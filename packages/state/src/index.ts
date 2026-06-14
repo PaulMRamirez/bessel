@@ -33,5 +33,12 @@ export const DEFAULT_VIEW: ViewModel = {
 };
 
 export { encodeView, decodeView } from './codec.ts';
+
+// Suite integrations (ADR-0008): the outbound MMGIS deep link and the CZML export.
+// These are intentionally kept in @bessel/state rather than a separate
+// @bessel/integrations package: both are pure functions over the @bessel/state
+// view model and trajectory types and are covered by state.test.ts, so extracting
+// a package would be naming churn with dependency-rule and bundle risk for no
+// behavioral gain. They are grouped here as the suite-contract surface.
 export { buildMmgisUrl, type MmgisHandoff, type MmgisMissionConfig } from './mmgis.ts';
 export { exportCzml, type CzmlOptions, type CzmlSample } from './czml.ts';

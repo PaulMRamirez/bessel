@@ -23,6 +23,37 @@ test('the main view has no serious or critical accessibility violations', async 
   ).toEqual([]);
 });
 
+test('object browser, settings, readouts, and multi-select are wired', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
+
+  // Geometry readout: range to the focused body (Saturn) becomes a finite value.
+  await expect
+    .poll(async () => (await page.getByTestId('readout-range').textContent()) ?? '', {
+      timeout: 10_000,
+    })
+    .toMatch(/\d/);
+
+  // Multi-object selection via the object browser (distinct from the camera focus).
+  await page.getByTestId('select-Earth').click();
+  await page.getByTestId('select-Jupiter').click();
+  const selection = await page.getByTestId('viewport').getAttribute('data-selection');
+  expect(selection).toContain('Earth');
+  expect(selection).toContain('Jupiter');
+
+  // Settings toggle flips a checkbox (mapped to a scene layer seam).
+  const stars = page.getByTestId('setting-stars');
+  await expect(stars).toBeChecked();
+  await stars.click();
+  await expect(stars).not.toBeChecked();
+
+  // Object browser visibility toggle hides a body.
+  const saturnVisible = page.getByTestId('visible-Saturn');
+  await expect(saturnVisible).toBeChecked();
+  await saturnVisible.click();
+  await expect(saturnVisible).not.toBeChecked();
+});
+
 test('a second load works offline against the OPFS kernel cache', async ({ page, context }) => {
   await page.goto('/');
   await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });

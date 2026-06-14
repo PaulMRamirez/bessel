@@ -2,7 +2,7 @@
 // geometry from the SPICE worker, renders with @bessel/scene (camera-relative),
 // and wires the timeline and camera controls. Body positions are precomputed over
 // the demo window so playback interpolates without per-frame worker round-trips.
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { parseCosmographiaCatalog } from '@bessel/catalog';
 import cassiniCatalog from '@bessel/catalog/examples/cassini';
 import { createWebPlatform } from '@bessel/pal-web';
@@ -18,7 +18,27 @@ import cassiniGltf from './assets/cassini.gltf?raw';
 import brightStars from './assets/bright-stars.json';
 import { Clock } from '@bessel/timeline';
 import { decodeView, encodeView, type ViewModel } from '@bessel/state';
-import { TimelineControls, ViewControls } from '@bessel/ui';
+import {
+  CaptureControls,
+  KeyboardHelp,
+  ObjectBrowser,
+  ReadoutPanel,
+  SettingsPanel,
+  TimelineControls,
+  ViewControls,
+  captureStill,
+  downloadBlob,
+  startRecording,
+  useKeyboardShortcuts,
+  type CatalogEntry,
+  type KeyboardAction,
+  type Readouts,
+  type Recorder,
+  type SettingKey,
+  type VisualizationSettings,
+} from '@bessel/ui';
+import { computeReadouts } from './readouts.ts';
+import { toggleSelection } from './selection.ts';
 import { KERNEL_ORDER, KERNEL_URLS } from './kernels.ts';
 import { connectSpice } from './spice.ts';
 import {
@@ -58,6 +78,7 @@ interface Engine {
   lastTs: number;
   labelAccum: number;
   instrumentAccum: number;
+  readoutAccum: number;
 }
 
 export function BesselViewer(): JSX.Element {
@@ -81,6 +102,25 @@ export function BesselViewer(): JSX.Element {
   const [fovOk, setFovOk] = useState(false);
   const [selection, setSelection] = useState<readonly string[]>([]);
   const [track, setTrack] = useState(false);
+  const [settings, setSettings] = useState<VisualizationSettings>({
+    trajectory: true,
+    fov: true,
+    footprint: true,
+    axes: true,
+    stars: true,
+    atmosphere: false,
+    shadows: false,
+  });
+  const [visibility, setVisibility] = useState<Record<string, boolean>>({});
+  const [readouts, setReadouts] = useState<Readouts>({
+    rangeKm: null,
+    phaseDeg: null,
+    incidenceDeg: null,
+    emissionDeg: null,
+  });
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const recorderRef = useRef<Recorder | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -139,6 +179,12 @@ export function BesselViewer(): JSX.Element {
         const saturnRot = await spice.pxform('IAU_SATURN', 'J2000', et0);
         scene.setRings('Saturn', 74500, 140220, saturnRot);
         scene.setAxisTriad('saturn-axes', 'Saturn', saturnRot, 120000);
+        // Atmosphere shell around Saturn (toggled via the settings panel).
+        const sunDir = positionAt(table, 'Saturn', et0);
+        scene.setAtmosphere('Saturn', 60268, 66000, {
+          sunDirection: [-sunDir[0], -sunDir[1], -sunDir[2]],
+        });
+        scene.setAtmosphereVisible(false);
         // Direction to the Sun from Cassini (the Sun sits at the heliocentric origin).
         const sc0 = positionAt(table, 'Cassini', et0);
         scene.setDirectionVectors(
@@ -172,6 +218,7 @@ export function BesselViewer(): JSX.Element {
           lastTs: 0,
           labelAccum: 0,
           instrumentAccum: 0,
+          readoutAccum: 0,
         };
         engineRef.current = engine;
         setBounds([et0, et1]);
@@ -250,6 +297,17 @@ export function BesselViewer(): JSX.Element {
             void spice.et2utc(now, 'ISOC', 0).then((utc) => {
               if (!disposed) setEpochLabel(utc);
             });
+          }
+          // Geometry readouts for the focused body, relative to Cassini.
+          e.readoutAccum += dt;
+          if (e.readoutAccum > 0.3) {
+            e.readoutAccum = 0;
+            const focusName = e.scene.focusBody;
+            if (focusName !== 'Cassini') {
+              void computeReadouts(spice, focusName, focusName, now, '-82').then((r) => {
+                if (!disposed) setReadouts(r);
+              });
+            }
           }
           e.raf = requestAnimationFrame(frame);
         };
@@ -372,6 +430,104 @@ export function BesselViewer(): JSX.Element {
     }
   };
 
+  const togglePlay = (): void => {
+    const next = !playingRef.current;
+    setPlaying(next);
+    playingRef.current = next;
+  };
+
+  const changeRate = (r: number): void => {
+    setRate(r);
+    rateRef.current = r;
+  };
+
+  const stepRate = (dir: -1 | 1): void => {
+    const rates = [1, 60, 3600, 86400, 604800];
+    const idx = rates.indexOf(rateRef.current);
+    changeRate(rates[Math.max(0, Math.min(rates.length - 1, idx + dir))]!);
+  };
+
+  const onSettingChange = (key: SettingKey, value: boolean): void => {
+    setSettings((s) => ({ ...s, [key]: value }));
+    const s = engineRef.current?.scene;
+    if (!s) return;
+    if (key === 'trajectory') s.setTrajectoryVisible(value);
+    else if (key === 'fov') s.setFovVisible(value);
+    else if (key === 'footprint') s.setFootprintVisible(value);
+    else if (key === 'axes') s.setAxesVisible(value);
+    else if (key === 'stars') s.setStarFieldVisible(value);
+    else if (key === 'atmosphere') s.setAtmosphereVisible(value);
+    else if (key === 'shadows' && value) s.enableShadows(60268);
+  };
+
+  const onToggleSelectObject = (id: string): void => {
+    setSelection((sel) => toggleSelection(sel, id));
+  };
+
+  const onToggleVisibleObject = (id: string, visible: boolean): void => {
+    setVisibility((v) => ({ ...v, [id]: visible }));
+    engineRef.current?.scene.setVisible(id, visible);
+  };
+
+  const onCaptureStill = (): void => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    void captureStill(canvas)
+      .then((blob) => downloadBlob(blob, 'bessel.png'))
+      .catch((err: unknown) => console.error('capture failed', err));
+  };
+
+  const onToggleRecording = (): void => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    if (recorderRef.current) {
+      void recorderRef.current.stop().then((blob) => downloadBlob(blob, 'bessel.webm'));
+      recorderRef.current = null;
+      setRecording(false);
+    } else {
+      try {
+        recorderRef.current = startRecording(canvas);
+        setRecording(true);
+      } catch (err) {
+        console.error('recording failed', err);
+      }
+    }
+  };
+
+  const onKeyboardAction = useCallback(
+    (action: KeyboardAction): void => {
+      const e = engineRef.current;
+      if (!e) return;
+      if (action.type === 'playToggle') togglePlay();
+      else if (action.type === 'scrub') {
+        const step = (bounds[1] - bounds[0]) / 200;
+        const next = e.clock.state.et + action.direction * step;
+        onScrub(Math.max(bounds[0], Math.min(bounds[1], next)));
+      } else if (action.type === 'rate') stepRate(action.direction);
+      else if (action.type === 'center') {
+        if (selection[0]) onCenter(selection[0]);
+      } else if (action.type === 'help') setHelpOpen((o) => !o);
+    },
+    [bounds, selection],
+  );
+  useKeyboardShortcuts(onKeyboardAction);
+
+  const objectEntries: CatalogEntry[] = [
+    ...INNER_SYSTEM.map((p) => ({ id: p.name, name: p.name, kind: 'body' as const })),
+    { id: 'Cassini', name: 'Cassini', kind: 'spacecraft' },
+    { id: 'CASSINI_ISS_WAC', name: 'ISS Wide Angle', kind: 'instrument' },
+  ];
+  const annotations =
+    bounds[1] > bounds[0]
+      ? [
+          {
+            id: 'soi',
+            et: bounds[0] + 0.15 * (bounds[1] - bounds[0]),
+            label: 'Saturn orbit insertion',
+          },
+        ]
+      : [];
+
   return (
     <div className="bessel-viewer">
       <canvas
@@ -416,6 +572,22 @@ export function BesselViewer(): JSX.Element {
           {selection.length ? `Selected: ${selection.join(', ')}` : 'No selection'}
         </span>
       </div>
+      <div className="bessel-panels">
+        <ObjectBrowser
+          entries={objectEntries}
+          selection={selection}
+          visibility={visibility}
+          onToggleSelect={onToggleSelectObject}
+          onToggleVisible={onToggleVisibleObject}
+        />
+        <SettingsPanel settings={settings} onChange={onSettingChange} />
+        <ReadoutPanel target={focus} readouts={readouts} />
+        <CaptureControls
+          recording={recording}
+          onCaptureStill={onCaptureStill}
+          onToggleRecording={onToggleRecording}
+        />
+      </div>
       <ViewControls bodies={CENTER_TARGETS} focus={focus} onCenter={onCenter} />
       <TimelineControls
         playing={playing}
@@ -424,17 +596,22 @@ export function BesselViewer(): JSX.Element {
         min={bounds[0]}
         max={bounds[1]}
         value={et}
-        onPlayToggle={() => {
-          const next = !playing;
-          setPlaying(next);
-          playingRef.current = next;
-        }}
-        onRateChange={(r) => {
-          setRate(r);
-          rateRef.current = r;
-        }}
+        annotations={annotations}
+        onPlayToggle={togglePlay}
+        onRateChange={changeRate}
         onScrub={onScrub}
+        onAnnotationSelect={onScrub}
       />
+      <KeyboardHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
+      <button
+        type="button"
+        className="bessel-help-button"
+        onClick={() => setHelpOpen(true)}
+        aria-label="Keyboard shortcuts help"
+        data-testid="help-button"
+      >
+        ?
+      </button>
     </div>
   );
 }
