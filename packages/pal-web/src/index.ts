@@ -102,7 +102,7 @@ class OpfsFileSystem implements FileSystem {
   }
 }
 
-const webCapabilities: Capabilities = {
+export const webCapabilities: Capabilities = {
   target: 'web',
   pythonBridge: false,
   webxr: typeof navigator !== 'undefined' && 'xr' in navigator,

@@ -205,12 +205,22 @@ importers:
       '@capacitor/share':
         specifier: ^6.0.2
         version: 6.0.4(@capacitor/core@6.2.1)
+      fflate:
+        specifier: ^0.8.2
+        version: 0.8.3
 
   packages/pal-electron:
     dependencies:
       '@bessel/pal':
         specifier: workspace:*
         version: link:../pal
+    devDependencies:
+      '@bessel/pal-capacitor':
+        specifier: workspace:*
+        version: link:../pal-capacitor
+      '@bessel/pal-web':
+        specifier: workspace:*
+        version: link:../pal-web
 
   packages/pal-web:
     dependencies:

@@ -6,6 +6,7 @@
 import type { Capabilities } from '@bessel/pal';
 
 export { NodeKernelSource } from './kernel-source.ts';
+export { resolveMetaKernel, resolveLoadableKernels, type MetaKernel } from './meta-kernel.ts';
 
 export const electronCapabilities: Capabilities = {
   target: 'electron',
