@@ -1,0 +1,15 @@
+node_modules/
+dist/
+out/
+.vite/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+.env
+.env.*
+.DS_Store
+kernels/data/
+apps/desktop/out/
+apps/mobile/ios/
+apps/mobile/android/

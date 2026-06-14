@@ -1,0 +1,13 @@
+[
+  {
+    "name": "web app shell (initial JS, gzip, excludes lazy WASM)",
+    "path": "apps/web/dist/assets/*.js",
+    "limit": "350 KB",
+    "gzip": true
+  },
+  {
+    "name": "CSPICE WASM (lazy loaded)",
+    "path": "apps/web/dist/**/*.wasm",
+    "limit": "4 MB"
+  }
+]
