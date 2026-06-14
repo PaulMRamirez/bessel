@@ -62,3 +62,9 @@ export class Clock {
     for (const l of this.listeners) l(this.et);
   }
 }
+
+export {
+  sortByEt,
+  markerFraction,
+  type TimelineAnnotation,
+} from './annotations.ts';

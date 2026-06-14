@@ -1,6 +1,8 @@
-// Minimal timeline controls (Phase 0): play and pause, rate, epoch readout, and a
-// scrub slider. Keyboard operable (native button and input semantics); the full
-// Cosmographia shortcut set and accessibility pass arrive in later phases.
+// Timeline controls: play and pause, rate, epoch readout, a scrub slider, and
+// event-marker annotations over the scrub track. Keyboard operable (native button,
+// input, and per-marker button semantics).
+
+import { markerFraction, type TimelineAnnotation } from '@bessel/timeline';
 
 export interface TimelineControlsProps {
   readonly playing: boolean;
@@ -9,14 +11,17 @@ export interface TimelineControlsProps {
   readonly min: number;
   readonly max: number;
   readonly value: number;
+  readonly annotations?: readonly TimelineAnnotation[];
   readonly onPlayToggle: () => void;
   readonly onRateChange: (rate: number) => void;
   readonly onScrub: (et: number) => void;
+  readonly onAnnotationSelect?: (et: number) => void;
 }
 
 const RATES = [1, 60, 3600, 86400, 604800];
 
 export function TimelineControls(props: TimelineControlsProps): JSX.Element {
+  const annotations = props.annotations ?? [];
   return (
     <div className="bessel-timeline" role="group" aria-label="Timeline controls">
       <button type="button" onClick={props.onPlayToggle} aria-pressed={props.playing}>
@@ -36,16 +41,34 @@ export function TimelineControls(props: TimelineControlsProps): JSX.Element {
           ))}
         </select>
       </label>
-      <input
-        type="range"
-        min={props.min}
-        max={props.max}
-        value={props.value}
-        step={(props.max - props.min) / 1000 || 1}
-        onChange={(e) => props.onScrub(Number(e.target.value))}
-        aria-label="Scrub mission time"
-        data-testid="scrub"
-      />
+      <div className="bessel-scrub-track">
+        <input
+          type="range"
+          min={props.min}
+          max={props.max}
+          value={props.value}
+          step={(props.max - props.min) / 1000 || 1}
+          onChange={(e) => props.onScrub(Number(e.target.value))}
+          aria-label="Scrub mission time"
+          data-testid="scrub"
+        />
+        {annotations.length > 0 && (
+          <div className="bessel-markers" aria-label="Timeline events">
+            {annotations.map((a) => (
+              <button
+                key={a.id}
+                type="button"
+                className="bessel-marker"
+                style={{ left: `${markerFraction(a.et, props.min, props.max) * 100}%` }}
+                title={a.label}
+                aria-label={`Event: ${a.label}`}
+                data-testid={`marker-${a.id}`}
+                onClick={() => props.onAnnotationSelect?.(a.et)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
       <span data-testid="epoch" className="bessel-epoch">
         {props.epochLabel}
       </span>
