@@ -44,6 +44,27 @@ export async function createSpiceEngine(options?: SpiceEngineOptions): Promise<S
     async spkezr(target, et, frame, abcorr: AberrationCorrection, observer) {
       return bindings.spkezr(target, et, frame, abcorr, observer);
     },
+    async getfov(instId, room) {
+      return bindings.getfov(instId, room);
+    },
+    async bodvrd(body, item) {
+      return bindings.bodvrd(body, item);
+    },
+    async bodvcd(bodyId, item) {
+      return bindings.bodvcd(bodyId, item);
+    },
+    async pxform(from, to, et) {
+      return bindings.pxform(from, to, et);
+    },
+    async sxform(from, to, et) {
+      return bindings.sxform(from, to, et);
+    },
+    async sincpt(method, target, et, fixref, abcorr: AberrationCorrection, observer, dref, dvec) {
+      return bindings.sincpt(method, target, et, fixref, abcorr, observer, dref, dvec);
+    },
+    async subpnt(method, target, et, fixref, abcorr: AberrationCorrection, observer) {
+      return bindings.subpnt(method, target, et, fixref, abcorr, observer);
+    },
     async tkvrsn() {
       return bindings.tkvrsn();
     },

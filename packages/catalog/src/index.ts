@@ -35,3 +35,12 @@ export class CatalogError extends Error {
 
 export { parseCosmographiaCatalog } from './cosmographia.ts';
 export type { CosmographiaCatalog, CosmographiaItem } from './cosmographia.ts';
+
+export {
+  parseBesselCatalog,
+  validateCatalog,
+  schemaIsValid,
+  type ValidationResult,
+} from './validator.ts';
+export { resolveCatalogKernels } from './kernels.ts';
+export * from './native-types.ts';

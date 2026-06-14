@@ -8,6 +8,14 @@ declare module '*.tls?url' {
   const src: string;
   export default src;
 }
+declare module '*.tpc?url' {
+  const src: string;
+  export default src;
+}
+declare module '*.ti?url' {
+  const src: string;
+  export default src;
+}
 declare module '@bessel/catalog/examples/cassini' {
   const catalog: unknown;
   export default catalog;

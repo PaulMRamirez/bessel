@@ -1,7 +1,16 @@
 // Worker message protocol between the main thread and the SPICE Web Worker.
 // Requests are tagged by method; responses carry the matching id.
 
-import type { AberrationCorrection, PositionResult, StateVector } from './index.ts';
+import type {
+  AberrationCorrection,
+  FovResult,
+  InterceptResult,
+  Mat3,
+  PositionResult,
+  StateVector,
+  SubPointResult,
+  Vec3,
+} from './index.ts';
 
 export type SpiceWorkerRequest =
   | { id: number; method: 'furnsh'; name: string; bytes: Uint8Array }
@@ -29,6 +38,33 @@ export type SpiceWorkerRequest =
       abcorr: AberrationCorrection;
       observer: string;
     }
+  | { id: number; method: 'getfov'; instId: number; room?: number }
+  | { id: number; method: 'bodvrd'; body: string; item: string }
+  | { id: number; method: 'bodvcd'; bodyId: number; item: string }
+  | { id: number; method: 'pxform'; from: string; to: string; et: number }
+  | { id: number; method: 'sxform'; from: string; to: string; et: number }
+  | {
+      id: number;
+      method: 'sincpt';
+      surfaceMethod: string;
+      target: string;
+      et: number;
+      fixref: string;
+      abcorr: AberrationCorrection;
+      observer: string;
+      dref: string;
+      dvec: Vec3;
+    }
+  | {
+      id: number;
+      method: 'subpnt';
+      surfaceMethod: string;
+      target: string;
+      et: number;
+      fixref: string;
+      abcorr: AberrationCorrection;
+      observer: string;
+    }
   | { id: number; method: 'tkvrsn' };
 
 export type SpiceWorkerResultMap = {
@@ -41,6 +77,13 @@ export type SpiceWorkerResultMap = {
   utc2et: number;
   spkpos: PositionResult;
   spkezr: StateVector;
+  getfov: FovResult;
+  bodvrd: number[];
+  bodvcd: number[];
+  pxform: Mat3;
+  sxform: number[];
+  sincpt: InterceptResult;
+  subpnt: SubPointResult;
   tkvrsn: string;
 };
 

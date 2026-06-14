@@ -19,6 +19,9 @@ const scpse = resolve(repoRoot, 'kernels/data/cassini_scpse_04173_04236.bsp');
 const outSpk = resolve(repoRoot, 'kernels/fixtures/cassini-soi.bsp');
 
 const CASSINI = -82;
+// Keep the spacecraft plus Saturn (699) so footprint intercepts (sincpt) and
+// sub-observer points resolve against a real body with a shape and a frame.
+const KEEP = new Set([-82, 699]);
 
 const mod = await CSpice();
 const { FS } = mod;
@@ -62,9 +65,11 @@ while (i32(foundPtr) !== 0) {
   call('dafgn_c', 41, idPtr);
   call('dafus_c', sumPtr, 2, 6, dcPtr, icPtr);
   const body = i32(icPtr);
-  if (body === CASSINI) {
-    center = i32(icPtr + 4);
-    cover = [dbl(dcPtr), dbl(dcPtr + 8)];
+  if (KEEP.has(body)) {
+    if (body === CASSINI) {
+      center = i32(icPtr + 4);
+      cover = [dbl(dcPtr), dbl(dcPtr + 8)];
+    }
     call('spksub_c', srcHan, sumPtr, idPtr, dbl(dcPtr), dbl(dcPtr + 8), outHan);
     kept += 1;
   }

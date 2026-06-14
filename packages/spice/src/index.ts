@@ -56,7 +56,59 @@ export interface SpiceEngine {
     observer: string,
   ): Promise<StateVector>;
 
+  /** Instrument field of view: shape, frame, boresight, and boundary vectors. */
+  getfov(instId: number, room?: number): Promise<FovResult>;
+  bodvrd(body: string, item: string): Promise<number[]>;
+  bodvcd(bodyId: number, item: string): Promise<number[]>;
+  /** Rotation (row-major 3x3) from one frame to another at et. */
+  pxform(from: string, to: string, et: number): Promise<Mat3>;
+  /** State transformation (row-major 6x6) from one frame to another at et. */
+  sxform(from: string, to: string, et: number): Promise<number[]>;
+  /** Surface intercept of a ray (dvec in dref) from observer onto target. */
+  sincpt(
+    method: string,
+    target: string,
+    et: number,
+    fixref: string,
+    abcorr: AberrationCorrection,
+    observer: string,
+    dref: string,
+    dvec: Vec3,
+  ): Promise<InterceptResult>;
+  /** Sub-observer point on target. */
+  subpnt(
+    method: string,
+    target: string,
+    et: number,
+    fixref: string,
+    abcorr: AberrationCorrection,
+    observer: string,
+  ): Promise<SubPointResult>;
+
   tkvrsn(): Promise<string>;
+}
+
+/** Row-major 3x3 rotation matrix. */
+export type Mat3 = readonly number[];
+
+export interface FovResult {
+  readonly shape: string;
+  readonly frame: string;
+  readonly boresight: Vec3;
+  readonly bounds: readonly Vec3[];
+}
+
+export interface InterceptResult {
+  readonly found: boolean;
+  readonly point: Vec3;
+  readonly trgepc: number;
+  readonly srfvec: Vec3;
+}
+
+export interface SubPointResult {
+  readonly point: Vec3;
+  readonly trgepc: number;
+  readonly srfvec: Vec3;
 }
 
 /** Located, typed SPICE error. Fail loudly (CLAUDE.md). */

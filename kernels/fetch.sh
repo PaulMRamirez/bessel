@@ -40,5 +40,8 @@ fetch "$GENERIC/pck/pck00011.tpc" "pck00011.tpc"
 # DOY 183). SCPSE bundles the spacecraft (-82) plus the Saturn system.
 fetch "$NAIF/CASSINI/kernels/spk/040701AP_SCPSE_04173_04236.bsp" "cassini_scpse_04173_04236.bsp"
 
+# Cassini ISS instrument kernel, for getfov field-of-view geometry (Phase 1).
+fetch "$NAIF/CASSINI/kernels/ik/cas_iss_v10.ti" "cas_iss_v10.ti"
+
 echo "done. kernels in $DATA:"
 ls -la "$DATA"

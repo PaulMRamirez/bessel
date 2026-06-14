@@ -4,9 +4,13 @@
 import {
   SpiceError,
   type AberrationCorrection,
+  type FovResult,
+  type InterceptResult,
+  type Mat3,
   type PositionResult,
   type SpiceEngine,
   type StateVector,
+  type SubPointResult,
 } from './index.ts';
 import type { SpiceWorkerRequest, SpiceWorkerResponse } from './protocol.ts';
 
@@ -52,6 +56,33 @@ export function createSpiceWorkerClient(worker: Worker): SpiceEngine {
       send<PositionResult>({ method: 'spkpos', target, et, frame, abcorr, observer }),
     spkezr: (target, et, frame, abcorr: AberrationCorrection, observer) =>
       send<StateVector>({ method: 'spkezr', target, et, frame, abcorr, observer }),
+    getfov: (instId, room) => send<FovResult>({ method: 'getfov', instId, room }),
+    bodvrd: (body, item) => send<number[]>({ method: 'bodvrd', body, item }),
+    bodvcd: (bodyId, item) => send<number[]>({ method: 'bodvcd', bodyId, item }),
+    pxform: (from, to, et) => send<Mat3>({ method: 'pxform', from, to, et }),
+    sxform: (from, to, et) => send<number[]>({ method: 'sxform', from, to, et }),
+    sincpt: (method, target, et, fixref, abcorr: AberrationCorrection, observer, dref, dvec) =>
+      send<InterceptResult>({
+        method: 'sincpt',
+        surfaceMethod: method,
+        target,
+        et,
+        fixref,
+        abcorr,
+        observer,
+        dref,
+        dvec,
+      }),
+    subpnt: (method, target, et, fixref, abcorr: AberrationCorrection, observer) =>
+      send<SubPointResult>({
+        method: 'subpnt',
+        surfaceMethod: method,
+        target,
+        et,
+        fixref,
+        abcorr,
+        observer,
+      }),
     tkvrsn: () => send<string>({ method: 'tkvrsn' }),
   };
 }

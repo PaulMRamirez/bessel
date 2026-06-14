@@ -7,11 +7,19 @@ import { parseCosmographiaCatalog } from '@bessel/catalog';
 import cassiniCatalog from '@bessel/catalog/examples/cassini';
 import { createWebPlatform } from '@bessel/pal-web';
 import { INNER_SYSTEM, SolarSystemScene, type Km3 } from '@bessel/scene';
+import type { SpiceEngine } from '@bessel/spice';
 import { Clock } from '@bessel/timeline';
 import { TimelineControls, ViewControls } from '@bessel/ui';
 import { KERNEL_ORDER, KERNEL_URLS } from './kernels.ts';
 import { connectSpice } from './spice.ts';
 import { positionAt, sampleEphemeris, trajectoryOf, type EphemerisTable } from './sampler.ts';
+import {
+  CASSINI_ISS_WAC,
+  fovRim,
+  footprint,
+  loadInstrumentFov,
+  type InstrumentFov,
+} from './instruments.ts';
 
 const STEPS = 120;
 const CENTER_TARGETS = ['Sun', 'Earth', 'Jupiter', 'Saturn', 'Cassini'] as const;
@@ -29,9 +37,12 @@ interface Engine {
   scene: SolarSystemScene;
   clock: Clock;
   table: EphemerisTable;
+  spice: SpiceEngine;
+  fov: InstrumentFov | null;
   raf: number;
   lastTs: number;
   labelAccum: number;
+  instrumentAccum: number;
 }
 
 export function BesselViewer(): JSX.Element {
@@ -39,6 +50,7 @@ export function BesselViewer(): JSX.Element {
   const engineRef = useRef<Engine | null>(null);
   const playingRef = useRef(false);
   const rateRef = useRef(86400);
+  const instrumentsRef = useRef(false);
 
   const [status, setStatus] = useState('Initializing');
   const [ready, setReady] = useState(false);
@@ -48,6 +60,9 @@ export function BesselViewer(): JSX.Element {
   const [bounds, setBounds] = useState<[number, number]>([0, 1]);
   const [epochLabel, setEpochLabel] = useState('');
   const [focus, setFocus] = useState('Saturn');
+  const [instruments, setInstruments] = useState(false);
+  const [footprintPoints, setFootprintPoints] = useState(0);
+  const [fovOk, setFovOk] = useState(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -99,8 +114,24 @@ export function BesselViewer(): JSX.Element {
         scene.centerOn('Saturn');
         scene.setView(0.6, 0.35, FOCUS_DISTANCE['Saturn'] ?? 0.45);
 
+        const fov = await loadInstrumentFov(spice, CASSINI_ISS_WAC).catch((err: unknown) => {
+          console.error('getfov failed', err);
+          return null;
+        });
+        setFovOk(!!fov);
+
         const clock = new Clock(et0, rateRef.current);
-        const engine: Engine = { scene, clock, table, raf: 0, lastTs: 0, labelAccum: 0 };
+        const engine: Engine = {
+          scene,
+          clock,
+          table,
+          spice,
+          fov,
+          raf: 0,
+          lastTs: 0,
+          labelAccum: 0,
+          instrumentAccum: 0,
+        };
         engineRef.current = engine;
         setBounds([et0, et1]);
         setEt(et0);
@@ -121,6 +152,28 @@ export function BesselViewer(): JSX.Element {
             positions.set(name, positionAt(e.table, name, now));
           }
           e.scene.setPositions(positions);
+
+          // Sensor FOV cone (cheap, every frame) and footprint (throttled, async).
+          if (instrumentsRef.current && e.fov) {
+            const scPos = positionAt(e.table, 'Cassini', now);
+            const satPos = positionAt(e.table, 'Saturn', now);
+            e.scene.setFovCone(scPos, fovRim(scPos, satPos, e.fov));
+            e.instrumentAccum += dt;
+            if (e.instrumentAccum > 0.4) {
+              e.instrumentAccum = 0;
+              const fovRef = e.fov;
+              void footprint(e.spice, now, fovRef).then(
+                (pts) => {
+                  if (!disposed && instrumentsRef.current) {
+                    e.scene.setFootprint(pts, 'Saturn', '#ff33cc');
+                    setFootprintPoints(pts.length);
+                  }
+                },
+                (err: unknown) => console.error('footprint failed', err),
+              );
+            }
+          }
+
           e.scene.render();
 
           if (playingRef.current) setEt(now);
@@ -205,6 +258,19 @@ export function BesselViewer(): JSX.Element {
     engineRef.current?.clock.setEpoch(value);
   };
 
+  const onToggleInstruments = (): void => {
+    const next = !instruments;
+    setInstruments(next);
+    instrumentsRef.current = next;
+    const e = engineRef.current;
+    if (e && !next) {
+      // Clear the FOV cone and footprint when instruments are turned off.
+      e.scene.setFovCone([0, 0, 0], []);
+      e.scene.setFootprint([], 'Saturn');
+      setFootprintPoints(0);
+    }
+  };
+
   return (
     <div className="bessel-viewer">
       <canvas
@@ -214,10 +280,22 @@ export function BesselViewer(): JSX.Element {
         width={960}
         height={600}
         data-ready={ready}
+        data-footprint-points={footprintPoints}
+        data-fov={fovOk ? '1' : '0'}
         data-testid="viewport"
       />
       <div className="bessel-hud" data-testid="status">
         {status}
+      </div>
+      <div className="bessel-viewcontrols" role="group" aria-label="Instruments">
+        <button
+          type="button"
+          onClick={onToggleInstruments}
+          aria-pressed={instruments}
+          data-testid="toggle-instruments"
+        >
+          {instruments ? 'Hide instruments' : 'Show instruments'}
+        </button>
       </div>
       <ViewControls bodies={CENTER_TARGETS} focus={focus} onCenter={onCenter} />
       <TimelineControls

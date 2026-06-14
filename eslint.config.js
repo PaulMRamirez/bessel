@@ -15,6 +15,8 @@ export default tseslint.config(
       '**/test-results/**',
       'vendor/**',
       'packages/spice/wasm/**',
+      'apps/*/ios/**',
+      'apps/*/android/**',
       '**/*.config.js',
       '**/*.config.ts',
       'e2e/playwright.config.ts',

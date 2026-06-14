@@ -31,6 +31,36 @@ export async function dispatchSpice(engine: SpiceEngine, req: SpiceWorkerRequest
       return engine.spkpos(req.target, req.et, req.frame, req.abcorr, req.observer);
     case 'spkezr':
       return engine.spkezr(req.target, req.et, req.frame, req.abcorr, req.observer);
+    case 'getfov':
+      return engine.getfov(req.instId, req.room);
+    case 'bodvrd':
+      return engine.bodvrd(req.body, req.item);
+    case 'bodvcd':
+      return engine.bodvcd(req.bodyId, req.item);
+    case 'pxform':
+      return engine.pxform(req.from, req.to, req.et);
+    case 'sxform':
+      return engine.sxform(req.from, req.to, req.et);
+    case 'sincpt':
+      return engine.sincpt(
+        req.surfaceMethod,
+        req.target,
+        req.et,
+        req.fixref,
+        req.abcorr,
+        req.observer,
+        req.dref,
+        req.dvec,
+      );
+    case 'subpnt':
+      return engine.subpnt(
+        req.surfaceMethod,
+        req.target,
+        req.et,
+        req.fixref,
+        req.abcorr,
+        req.observer,
+      );
     case 'tkvrsn':
       return engine.tkvrsn();
   }

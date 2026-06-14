@@ -182,7 +182,11 @@ importers:
 
   packages/color: {}
 
-  packages/pal: {}
+  packages/pal:
+    devDependencies:
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.19.21)(terser@5.48.0)
 
   packages/pal-capacitor:
     dependencies:

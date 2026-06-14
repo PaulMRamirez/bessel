@@ -10,11 +10,13 @@ import {
   BufferGeometry,
   Color,
   DataTexture,
+  DoubleSide,
   Float32BufferAttribute,
   Group,
   Line,
   LineBasicMaterial,
   Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   PerspectiveCamera,
   PointLight,
@@ -75,6 +77,9 @@ export class SolarSystemScene {
   private spacecraft: { name: string; mesh: Mesh; radius: number } | null = null;
   private trajectory: Line | null = null;
   private trajectoryAnchor = 'Sun';
+  private fovCone: Mesh | null = null;
+  private footprint: Mesh | null = null;
+  private footprintAnchor = 'Saturn';
 
   private focus = 'Sun';
   private azimuth = 0.6;
@@ -143,6 +148,91 @@ export class SolarSystemScene {
     this.world.add(this.trajectory);
   }
 
+  /**
+   * Set the sensor FOV cone: apex and rim points are km relative to the Sun (the
+   * same frame as bodies), so the cone tracks the spacecraft each frame.
+   */
+  setFovCone(apex: Km3, rim: readonly Km3[], color = '#33ccff'): void {
+    if (this.fovCone) {
+      this.world.remove(this.fovCone);
+      this.fovCone.geometry.dispose();
+    }
+    if (rim.length < 3) {
+      this.fovCone = null;
+      return;
+    }
+    const tris: number[] = [];
+    const push = (p: Km3): void => {
+      tris.push(p[0] * SCALE, p[1] * SCALE, p[2] * SCALE);
+    };
+    for (let i = 0; i < rim.length; i++) {
+      push(apex);
+      push(rim[i]!);
+      push(rim[(i + 1) % rim.length]!);
+    }
+    const geometry = new BufferGeometry();
+    geometry.setAttribute('position', new Float32BufferAttribute(new Float32Array(tris), 3));
+    geometry.computeVertexNormals();
+    const material = new MeshBasicMaterial({
+      color: new Color(color),
+      transparent: true,
+      opacity: 0.25,
+      side: DoubleSide,
+      depthWrite: false,
+    });
+    this.fovCone = new Mesh(geometry, material);
+    this.world.add(this.fovCone);
+  }
+
+  /**
+   * Set the observation footprint as a filled translucent patch (km relative to
+   * anchorBody). A triangle fan around the centroid gives the footprint area so it
+   * reads as a surface region rather than a hairline.
+   */
+  setFootprint(points: readonly Km3[], anchorBody = 'Saturn', color = '#ffcc00'): void {
+    this.footprintAnchor = anchorBody;
+    if (this.footprint) {
+      this.world.remove(this.footprint);
+      this.footprint.geometry.dispose();
+    }
+    if (points.length < 3) {
+      this.footprint = null;
+      return;
+    }
+    const centroid: Km3 = [
+      points.reduce((s, p) => s + p[0], 0) / points.length,
+      points.reduce((s, p) => s + p[1], 0) / points.length,
+      points.reduce((s, p) => s + p[2], 0) / points.length,
+    ];
+    // Lift the patch a little above the surface (relative to the anchor centre) so
+    // it does not z-fight the globe, and draw it on top so it reads as a highlight.
+    const LIFT = 1.02;
+    const tris: number[] = [];
+    const push = (p: Km3): void => {
+      tris.push(p[0] * LIFT * SCALE, p[1] * LIFT * SCALE, p[2] * LIFT * SCALE);
+    };
+    for (let i = 0; i < points.length; i++) {
+      push(centroid);
+      push(points[i]!);
+      push(points[(i + 1) % points.length]!);
+    }
+    const geometry = new BufferGeometry();
+    geometry.setAttribute('position', new Float32BufferAttribute(new Float32Array(tris), 3));
+    this.footprint = new Mesh(
+      geometry,
+      new MeshBasicMaterial({
+        color: new Color(color),
+        transparent: true,
+        opacity: 0.6,
+        side: DoubleSide,
+        depthWrite: false,
+        depthTest: false,
+      }),
+    );
+    this.footprint.renderOrder = 3;
+    this.world.add(this.footprint);
+  }
+
   /** Update body and spacecraft positions (km relative to the Sun). */
   setPositions(positions: ReadonlyMap<string, Km3>): void {
     for (const [name, pos] of positions) {
@@ -192,6 +282,10 @@ export class SolarSystemScene {
     if (this.trajectory) {
       const anchor = this.positions.get(this.trajectoryAnchor) ?? [0, 0, 0];
       this.trajectory.position.set(anchor[0] * SCALE, anchor[1] * SCALE, anchor[2] * SCALE);
+    }
+    if (this.footprint) {
+      const anchor = this.positions.get(this.footprintAnchor) ?? [0, 0, 0];
+      this.footprint.position.set(anchor[0] * SCALE, anchor[1] * SCALE, anchor[2] * SCALE);
     }
 
     const ce = Math.cos(this.elevation);
