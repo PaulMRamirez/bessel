@@ -269,6 +269,15 @@ export class SolarSystemScene {
     this.distance = distance;
   }
 
+  getView(): { focus: string; azimuth: number; elevation: number; distance: number } {
+    return {
+      focus: this.focus,
+      azimuth: this.azimuth,
+      elevation: this.elevation,
+      distance: this.distance,
+    };
+  }
+
   resize(width: number, height: number): void {
     this.renderer.setSize(width, height, false);
     this.camera.aspect = width / Math.max(1, height);

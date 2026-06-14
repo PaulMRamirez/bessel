@@ -9,6 +9,7 @@ import { createWebPlatform } from '@bessel/pal-web';
 import { INNER_SYSTEM, SolarSystemScene, type Km3 } from '@bessel/scene';
 import type { SpiceEngine } from '@bessel/spice';
 import { Clock } from '@bessel/timeline';
+import { decodeView, encodeView, type ViewModel } from '@bessel/state';
 import { TimelineControls, ViewControls } from '@bessel/ui';
 import { KERNEL_ORDER, KERNEL_URLS } from './kernels.ts';
 import { connectSpice } from './spice.ts';
@@ -63,6 +64,7 @@ export function BesselViewer(): JSX.Element {
   const [instruments, setInstruments] = useState(false);
   const [footprintPoints, setFootprintPoints] = useState(0);
   const [fovOk, setFovOk] = useState(false);
+  const [selection, setSelection] = useState<readonly string[]>([]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -135,6 +137,24 @@ export function BesselViewer(): JSX.Element {
         engineRef.current = engine;
         setBounds([et0, et1]);
         setEt(et0);
+
+        // Reconstruct a shared view from the URL fragment, if present.
+        if (window.location.hash.length > 1) {
+          try {
+            const view = decodeView(window.location.hash);
+            if (view.t) {
+              const sharedEt = await spice.str2et(view.t.replace('Z', ''));
+              clock.setEpoch(sharedEt);
+              setEt(sharedEt);
+            }
+            if (view.camera.target) scene.centerOn(view.camera.target);
+            scene.setView(view.camera.azimuth, view.camera.elevation, view.camera.distance);
+            setFocus(view.camera.target ?? scene.focusBody);
+            setSelection(view.selection);
+          } catch (err) {
+            console.error('failed to apply shared view', err);
+          }
+        }
 
         const frame = (ts: number): void => {
           const e = engineRef.current;
@@ -247,10 +267,37 @@ export function BesselViewer(): JSX.Element {
 
   const onCenter = (body: string): void => {
     setFocus(body);
+    setSelection([body]);
     const e = engineRef.current;
     if (!e) return;
     e.scene.centerOn(body);
     e.scene.setView(0.6, 0.35, FOCUS_DISTANCE[body] ?? 600);
+  };
+
+  const onShare = async (): Promise<void> => {
+    const e = engineRef.current;
+    if (!e) return;
+    const v = e.scene.getView();
+    const utc = await e.spice.et2utc(e.clock.state.et, 'ISOC', 3);
+    const view: ViewModel = {
+      t: `${utc}Z`,
+      camera: {
+        mode: 'center',
+        target: v.focus,
+        distance: v.distance,
+        azimuth: v.azimuth,
+        elevation: v.elevation,
+      },
+      selection,
+      visibility: {},
+      plugins: [],
+    };
+    window.location.hash = encodeView(view);
+    try {
+      await navigator.clipboard?.writeText(window.location.href);
+    } catch {
+      // Clipboard may be unavailable; the URL hash is still updated.
+    }
   };
 
   const onScrub = (value: number): void => {
@@ -282,12 +329,15 @@ export function BesselViewer(): JSX.Element {
         data-ready={ready}
         data-footprint-points={footprintPoints}
         data-fov={fovOk ? '1' : '0'}
+        data-cam-target={focus}
+        data-selection={selection.join(',')}
+        data-epoch={epochLabel}
         data-testid="viewport"
       />
       <div className="bessel-hud" data-testid="status">
         {status}
       </div>
-      <div className="bessel-viewcontrols" role="group" aria-label="Instruments">
+      <div className="bessel-viewcontrols" role="group" aria-label="Instruments and sharing">
         <button
           type="button"
           onClick={onToggleInstruments}
@@ -296,6 +346,12 @@ export function BesselViewer(): JSX.Element {
         >
           {instruments ? 'Hide instruments' : 'Show instruments'}
         </button>
+        <button type="button" onClick={() => void onShare()} data-testid="share">
+          Share view
+        </button>
+        <span className="bessel-selection" data-testid="selection-label">
+          {selection.length ? `Selected: ${selection.join(', ')}` : 'No selection'}
+        </span>
       </div>
       <ViewControls bodies={CENTER_TARGETS} focus={focus} onCenter={onCenter} />
       <TimelineControls

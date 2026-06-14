@@ -14,7 +14,10 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icon.svg'],
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg}'],
+        // Precache the app shell and the CSPICE wasm (code). Kernels (data) are
+        // not precached: they flow through the OPFS cache in pal-web so the PWA
+        // operates offline against cached kernels (SPEC Phase 2).
+        globPatterns: ['**/*.{js,css,html,svg,wasm}'],
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
       },
       manifest: {
