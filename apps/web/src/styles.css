@@ -1,0 +1,25 @@
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  background: #0b0e14;
+  color: #e6e9ef;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+
+.bessel-shell {
+  padding: 1rem;
+}
+
+#viewport {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: #05070b;
+  border: 1px solid #1c2230;
+}

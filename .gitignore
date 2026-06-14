@@ -13,3 +13,10 @@ kernels/data/
 apps/desktop/out/
 apps/mobile/ios/
 apps/mobile/android/
+
+# Vendored CSPICE source, the 101 MB static lib, and the 32 MB de440s.bsp are bulk:
+# rebuilt by packages/spice/scripts/build-cspice.sh, never committed. The small
+# linked artifacts (packages/spice/wasm) and the bounded fixture SPK are committed.
+vendor/
+*.lcov
+.lighthouseci/

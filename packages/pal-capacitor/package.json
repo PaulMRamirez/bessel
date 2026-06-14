@@ -1,0 +1,15 @@
+{
+  "name": "@bessel/pal-capacitor",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@bessel/pal": "workspace:*",
+    "@capacitor/core": "^6.2.0",
+    "@capacitor/filesystem": "^6.0.1",
+    "@capacitor/preferences": "^6.0.2",
+    "@capacitor/share": "^6.0.2"
+  }
+}
