@@ -6,14 +6,28 @@ import { useEffect, useRef, useState } from 'react';
 import { parseCosmographiaCatalog } from '@bessel/catalog';
 import cassiniCatalog from '@bessel/catalog/examples/cassini';
 import { createWebPlatform } from '@bessel/pal-web';
-import { INNER_SYSTEM, SolarSystemScene, type Km3 } from '@bessel/scene';
+import {
+  INNER_SYSTEM,
+  SolarSystemScene,
+  loadSpacecraftModel,
+  parseStarCatalog,
+  type Km3,
+} from '@bessel/scene';
 import type { SpiceEngine } from '@bessel/spice';
+import cassiniGltf from './assets/cassini.gltf?raw';
+import brightStars from './assets/bright-stars.json';
 import { Clock } from '@bessel/timeline';
 import { decodeView, encodeView, type ViewModel } from '@bessel/state';
 import { TimelineControls, ViewControls } from '@bessel/ui';
 import { KERNEL_ORDER, KERNEL_URLS } from './kernels.ts';
 import { connectSpice } from './spice.ts';
-import { positionAt, sampleEphemeris, trajectoryOf, type EphemerisTable } from './sampler.ts';
+import {
+  positionAt,
+  sampleEphemeris,
+  trajectoryOf,
+  velocityAt,
+  type EphemerisTable,
+} from './sampler.ts';
 import {
   CASSINI_ISS_WAC,
   fovRim,
@@ -52,6 +66,7 @@ export function BesselViewer(): JSX.Element {
   const playingRef = useRef(false);
   const rateRef = useRef(86400);
   const instrumentsRef = useRef(false);
+  const trackRef = useRef(false);
 
   const [status, setStatus] = useState('Initializing');
   const [ready, setReady] = useState(false);
@@ -65,6 +80,7 @@ export function BesselViewer(): JSX.Element {
   const [footprintPoints, setFootprintPoints] = useState(0);
   const [fovOk, setFovOk] = useState(false);
   const [selection, setSelection] = useState<readonly string[]>([]);
+  const [track, setTrack] = useState(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -113,6 +129,29 @@ export function BesselViewer(): JSX.Element {
         scene.setBodies(INNER_SYSTEM);
         scene.setSpacecraft('Cassini');
         scene.setTrajectory(trajectoryOf(orbit, 'Cassini'), 'Saturn');
+
+        // Star field, Saturn rings, body-fixed axis triad, and the GLTF spacecraft.
+        try {
+          scene.setStarField(parseStarCatalog(brightStars));
+        } catch (err) {
+          console.error('star field failed', err);
+        }
+        const saturnRot = await spice.pxform('IAU_SATURN', 'J2000', et0);
+        scene.setRings('Saturn', 74500, 140220, saturnRot);
+        scene.setAxisTriad('saturn-axes', 'Saturn', saturnRot, 120000);
+        // Direction to the Sun from Cassini (the Sun sits at the heliocentric origin).
+        const sc0 = positionAt(table, 'Cassini', et0);
+        scene.setDirectionVectors(
+          'Cassini',
+          [{ label: 'to-Sun', dirKm: [-sc0[0], -sc0[1], -sc0[2]], color: 0xffd27f }],
+          200000,
+        );
+        try {
+          scene.setSpacecraftModel(await loadSpacecraftModel(cassiniGltf, 200));
+        } catch (err) {
+          console.error('spacecraft model load failed', err);
+        }
+
         scene.centerOn('Saturn');
         scene.setView(0.6, 0.35, FOCUS_DISTANCE['Saturn'] ?? 0.45);
 
@@ -172,6 +211,14 @@ export function BesselViewer(): JSX.Element {
             positions.set(name, positionAt(e.table, name, now));
           }
           e.scene.setPositions(positions);
+
+          // Track-along-trajectory camera: follow Cassini down its velocity.
+          if (trackRef.current) {
+            e.scene.setFocusVelocity(velocityAt(e.table, 'Cassini', now));
+            e.scene.setCameraMode('track');
+          } else {
+            e.scene.setCameraMode('orbit');
+          }
 
           // Sensor FOV cone (cheap, every frame) and footprint (throttled, async).
           if (instrumentsRef.current && e.fov) {
@@ -305,6 +352,13 @@ export function BesselViewer(): JSX.Element {
     engineRef.current?.clock.setEpoch(value);
   };
 
+  const onToggleTrack = (): void => {
+    const next = !track;
+    setTrack(next);
+    trackRef.current = next;
+    if (next) onCenter('Cassini');
+  };
+
   const onToggleInstruments = (): void => {
     const next = !instruments;
     setInstruments(next);
@@ -330,6 +384,7 @@ export function BesselViewer(): JSX.Element {
         data-footprint-points={footprintPoints}
         data-fov={fovOk ? '1' : '0'}
         data-cam-target={focus}
+        data-cam-mode={track ? 'track' : 'orbit'}
         data-selection={selection.join(',')}
         data-epoch={epochLabel}
         data-testid="viewport"
@@ -345,6 +400,14 @@ export function BesselViewer(): JSX.Element {
           data-testid="toggle-instruments"
         >
           {instruments ? 'Hide instruments' : 'Show instruments'}
+        </button>
+        <button
+          type="button"
+          onClick={onToggleTrack}
+          aria-pressed={track}
+          data-testid="toggle-track"
+        >
+          {track ? 'Stop tracking' : 'Track Cassini'}
         </button>
         <button type="button" onClick={() => void onShare()} data-testid="share">
           Share view

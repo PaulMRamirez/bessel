@@ -35,6 +35,20 @@ import {
   fanTriangleVertices,
   type Km3,
 } from './geometry-builders.ts';
+import { buildDskMesh } from './dsk-mesh.ts';
+import { buildRingMesh } from './rings.ts';
+import { buildAxisTriad } from './axis-triad.ts';
+import { buildDirectionVectors, type DirectionSpec } from './direction-vectors.ts';
+import { buildStarField } from './star-field.ts';
+import { type Star } from './star-catalog.ts';
+import { buildAtmosphere, type AtmosphereParams } from './atmosphere.ts';
+import { buildSunLight } from './shadows.ts';
+import { rowMajor3x3ToMatrix4 } from './orientation.ts';
+import {
+  computeOrbitCameraPosition,
+  computeTrackCameraPosition,
+  type CameraMode as SceneCameraMode,
+} from './camera-modes.ts';
 
 export type { Km3 };
 
@@ -79,7 +93,7 @@ export class SolarSystemScene {
   private readonly world = new Group();
   private readonly bodies = new Map<string, BodyNode>();
   private readonly positions = new Map<string, Km3>();
-  private spacecraft: { name: string; mesh: Mesh; radius: number } | null = null;
+  private spacecraft: { name: string; mesh: Object3D; radius: number } | null = null;
   private trajectory: Line | null = null;
   private trajectoryAnchor = 'Sun';
   private fovCone: Mesh | null = null;
@@ -91,6 +105,15 @@ export class SolarSystemScene {
   private axesVisible = true;
   private starField: Object3D | null = null;
   private starFieldVisible = true;
+  private dskMesh: Mesh | null = null;
+  private rings: Object3D | null = null;
+  private directionVectors: Object3D | null = null;
+  private atmosphere: Object3D | null = null;
+  private spacecraftModel: Object3D | null = null;
+  // Objects that track a body each frame (rings, axes, DSK mesh, direction vectors).
+  private readonly anchored = new Map<Object3D, string>();
+  private mode: SceneCameraMode = 'orbit';
+  private focusVelocity: Km3 = [0, 0, 0];
 
   private focus = 'Sun';
   private azimuth = 0.6;
@@ -220,6 +243,127 @@ export class SolarSystemScene {
     this.world.add(this.footprint);
   }
 
+  private replaceAnchored(prev: Object3D | null, next: Object3D | null, anchorBody: string): void {
+    if (prev) {
+      this.world.remove(prev);
+      this.anchored.delete(prev);
+    }
+    if (next) {
+      this.anchored.set(next, anchorBody);
+      this.world.add(next);
+    }
+  }
+
+  /** Render a DSK shape-model mesh anchored at a body, oriented by a pxform 3x3. */
+  setDskMesh(
+    name: string,
+    anchorBody: string,
+    vertices: readonly number[],
+    plates: readonly number[],
+    rotationRowMajor3x3?: readonly number[],
+  ): void {
+    const mesh = buildDskMesh(vertices, plates);
+    mesh.name = name;
+    if (rotationRowMajor3x3) mesh.setRotationFromMatrix(rowMajor3x3ToMatrix4(rotationRowMajor3x3));
+    this.replaceAnchored(this.dskMesh, mesh, anchorBody);
+    this.dskMesh = mesh;
+  }
+
+  /** Render planetary rings anchored at a body, oriented by a pxform 3x3. */
+  setRings(
+    anchorBody: string,
+    innerRadiusKm: number,
+    outerRadiusKm: number,
+    rotationRowMajor3x3?: readonly number[],
+  ): void {
+    const mesh = buildRingMesh(innerRadiusKm, outerRadiusKm);
+    if (rotationRowMajor3x3) mesh.setRotationFromMatrix(rowMajor3x3ToMatrix4(rotationRowMajor3x3));
+    this.replaceAnchored(this.rings, mesh, anchorBody);
+    this.rings = mesh;
+  }
+
+  /** Render an RGB reference-frame axis triad anchored at a body. */
+  setAxisTriad(
+    name: string,
+    anchorBody: string,
+    rotationRowMajor3x3: readonly number[],
+    lengthKm: number,
+  ): void {
+    const triad = buildAxisTriad(lengthKm);
+    triad.setRotationFromMatrix(rowMajor3x3ToMatrix4(rotationRowMajor3x3));
+    triad.visible = this.axesVisible;
+    this.replaceAnchored(this.axes.get(name) ?? null, triad, anchorBody);
+    this.axes.set(name, triad);
+  }
+
+  /** Render labeled direction arrows anchored at a body. */
+  setDirectionVectors(anchorBody: string, specs: readonly DirectionSpec[], lengthKm: number): void {
+    const group = buildDirectionVectors(specs, lengthKm * SCALE);
+    this.replaceAnchored(this.directionVectors, group, anchorBody);
+    this.directionVectors = group;
+  }
+
+  /** Render an atmosphere limb-glow shell anchored at a body. */
+  setAtmosphere(
+    anchorBody: string,
+    planetRadiusKm: number,
+    atmosphereRadiusKm: number,
+    params: AtmosphereParams,
+  ): void {
+    const mesh = buildAtmosphere(planetRadiusKm, atmosphereRadiusKm, params);
+    this.replaceAnchored(this.atmosphere, mesh, anchorBody);
+    this.atmosphere = mesh;
+  }
+
+  /** Render a star field on the celestial sphere (parented to the camera). */
+  setStarField(stars: readonly Star[]): void {
+    if (this.starField) this.camera.remove(this.starField);
+    const points = buildStarField(stars);
+    points.visible = this.starFieldVisible;
+    this.starField = points;
+    // Parent to the camera so stars stay at infinity regardless of the focus shift.
+    this.camera.add(points);
+    if (!this.scene.children.includes(this.camera)) this.scene.add(this.camera);
+  }
+
+  /** Replace the spacecraft marker with a loaded model (keeps the marker on failure). */
+  setSpacecraftModel(object: Object3D): void {
+    if (!this.spacecraft) return;
+    if (this.spacecraftModel) this.world.remove(this.spacecraftModel);
+    this.world.remove(this.spacecraft.mesh);
+    object.position.copy(this.spacecraft.mesh.position);
+    this.spacecraftModel = object;
+    this.spacecraft = { ...this.spacecraft, mesh: object };
+    this.world.add(object);
+  }
+
+  /** Enable sun-cast shadow mapping (replaces the ambient point light). */
+  enableShadows(bodyRadiusKm: number): void {
+    this.renderer.shadowMap.enabled = true;
+    const light = buildSunLight(bodyRadiusKm * SCALE, 2000);
+    this.world.add(light);
+    for (const node of this.bodies.values()) {
+      node.mesh.castShadow = true;
+      node.mesh.receiveShadow = true;
+    }
+    if (this.dskMesh) {
+      this.dskMesh.castShadow = true;
+      this.dskMesh.receiveShadow = true;
+    }
+  }
+
+  setCameraMode(mode: SceneCameraMode): void {
+    this.mode = mode;
+  }
+
+  get cameraMode(): SceneCameraMode {
+    return this.mode;
+  }
+
+  setFocusVelocity(velocityKm: Km3): void {
+    this.focusVelocity = velocityKm;
+  }
+
   /** Update body and spacecraft positions (km relative to the Sun). */
   setPositions(positions: ReadonlyMap<string, Km3>): void {
     for (const [name, pos] of positions) {
@@ -314,19 +458,22 @@ export class SolarSystemScene {
       const anchor = this.positions.get(this.footprintAnchor) ?? [0, 0, 0];
       this.footprint.position.set(anchor[0] * SCALE, anchor[1] * SCALE, anchor[2] * SCALE);
     }
+    for (const [obj, anchorBody] of this.anchored) {
+      const anchor = this.positions.get(anchorBody) ?? [0, 0, 0];
+      obj.position.set(anchor[0] * SCALE, anchor[1] * SCALE, anchor[2] * SCALE);
+    }
 
-    const ce = Math.cos(this.elevation);
-    this.camera.position.set(
-      this.distance * ce * Math.cos(this.azimuth),
-      this.distance * Math.sin(this.elevation),
-      this.distance * ce * Math.sin(this.azimuth),
-    );
+    const camPos =
+      this.mode === 'track'
+        ? computeTrackCameraPosition(this.focusVelocity, this.distance)
+        : computeOrbitCameraPosition(this.azimuth, this.elevation, this.distance);
+    this.camera.position.set(camPos[0], camPos[1], camPos[2]);
     this.camera.lookAt(new Vector3(0, 0, 0));
 
     // Enforce a minimum apparent size so distant bodies stay visible while the
     // close-up keeps true proportions.
     const cam = this.camera.position;
-    const apply = (mesh: Mesh, radius: number): void => {
+    const apply = (mesh: Object3D, radius: number): void => {
       const dx = this.world.position.x + mesh.position.x - cam.x;
       const dy = this.world.position.y + mesh.position.y - cam.y;
       const dz = this.world.position.z + mesh.position.z - cam.z;

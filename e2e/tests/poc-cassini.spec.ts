@@ -54,3 +54,15 @@ test('poc-cassini renders the trajectory and the timeline changes the frame', as
   const after = await frameStats(viewport);
   expect(after.signature).not.toBe(before.signature);
 });
+
+test('the track-along-trajectory camera mode renders a non-empty frame', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
+  const viewport = page.getByTestId('viewport');
+
+  await page.getByTestId('toggle-track').click();
+  await expect(viewport).toHaveAttribute('data-cam-mode', 'track');
+  await page.waitForTimeout(400);
+  const stats = await frameStats(viewport);
+  expect(stats.nonBackground).toBeGreaterThan(100);
+});

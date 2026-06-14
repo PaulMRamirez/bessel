@@ -67,6 +67,13 @@ export function positionAt(table: EphemerisTable, name: string, et: number): Km3
   ];
 }
 
+/** Finite-difference velocity (km/s) of a body at et, from the sampled table. */
+export function velocityAt(table: EphemerisTable, name: string, et: number): Km3 {
+  const a = positionAt(table, name, et - 1);
+  const b = positionAt(table, name, et + 1);
+  return [(b[0] - a[0]) / 2, (b[1] - a[1]) / 2, (b[2] - a[2]) / 2];
+}
+
 /** Build a polyline (km, relative to Sun) from a body's samples. */
 export function trajectoryOf(table: EphemerisTable, name: string): Km3[] {
   const flat = table.byBody.get(name);

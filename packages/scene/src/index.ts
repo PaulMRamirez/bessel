@@ -13,6 +13,23 @@ export {
   cameraRelativeOffset,
   dskTriangleVertices,
 } from './geometry-builders.ts';
-
-/** Camera modes the controller supports (SPEC 5.3). */
-export type CameraMode = 'orbit' | 'center' | 'track';
+export { buildDskGeometry, buildDskMesh } from './dsk-mesh.ts';
+export { buildRingVertices, buildRingMesh } from './rings.ts';
+export { buildAxisTriad, buildTriadBuffers } from './axis-triad.ts';
+export { buildArrow, buildDirectionVectors, type DirectionSpec } from './direction-vectors.ts';
+export { buildStarField, buildStarPoints, magnitudeToSize } from './star-field.ts';
+export {
+  parseStarCatalog,
+  radec2vec,
+  StarCatalogError,
+  type Star,
+} from './star-catalog.ts';
+export { rayleighCoefficients, buildAtmosphereUniforms, buildAtmosphere } from './atmosphere.ts';
+export { computeShadowFrustum, buildSunLight } from './shadows.ts';
+export { rowMajor3x3ToMatrix4 } from './orientation.ts';
+export { loadSpacecraftModel, normalizeModelRadius, SpacecraftModelError } from './spacecraft-model.ts';
+export {
+  computeTrackCameraPosition,
+  computeOrbitCameraPosition,
+  type CameraMode,
+} from './camera-modes.ts';

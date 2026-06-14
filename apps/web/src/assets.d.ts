@@ -20,3 +20,11 @@ declare module '@bessel/catalog/examples/cassini' {
   const catalog: unknown;
   export default catalog;
 }
+declare module '*.gltf?raw' {
+  const src: string;
+  export default src;
+}
+declare module '*/bright-stars.json' {
+  const stars: unknown;
+  export default stars;
+}
