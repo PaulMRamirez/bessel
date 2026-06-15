@@ -18,9 +18,14 @@ export interface SpacecraftSpec {
   readonly radiusKm?: number;
 }
 
+/** A linear RGB color, components in [0, 1]. */
+export type Rgb01 = readonly [number, number, number];
+
 export interface TrajectorySpec {
   readonly points: readonly Km3[];
   readonly anchorBody: string;
+  /** Optional per-vertex colors (same length as points) for a trail fade. */
+  readonly colors?: readonly Rgb01[];
 }
 
 export interface RingSpec {

@@ -173,7 +173,11 @@ export class SolarSystemScene {
    * line is positioned at the anchor body every frame, so a spacecraft orbit
    * sampled in its central body's frame stays attached to that body.
    */
-  setTrajectory(points: readonly Km3[], anchorBody = 'Sun'): void {
+  setTrajectory(
+    points: readonly Km3[],
+    anchorBody = 'Sun',
+    colors?: readonly (readonly [number, number, number])[],
+  ): void {
     this.trajectoryAnchor = anchorBody;
     if (this.trajectory) {
       this.world.remove(this.trajectory);
@@ -187,7 +191,22 @@ export class SolarSystemScene {
     });
     const geometry = new BufferGeometry();
     geometry.setAttribute('position', new Float32BufferAttribute(coords, 3));
-    this.trajectory = new Line(geometry, new LineBasicMaterial({ color: new Color('#5b8cff') }));
+    let material: LineBasicMaterial;
+    if (colors && colors.length === points.length) {
+      // Per-vertex colors let a strategy (e.g. @bessel/color colorByDistance) fade
+      // the trail along its length.
+      const colorArr = new Float32Array(points.length * 3);
+      colors.forEach((c, i) => {
+        colorArr[i * 3] = c[0];
+        colorArr[i * 3 + 1] = c[1];
+        colorArr[i * 3 + 2] = c[2];
+      });
+      geometry.setAttribute('color', new Float32BufferAttribute(colorArr, 3));
+      material = new LineBasicMaterial({ vertexColors: true });
+    } else {
+      material = new LineBasicMaterial({ color: new Color('#5b8cff') });
+    }
+    this.trajectory = new Line(geometry, material);
     this.world.add(this.trajectory);
   }
 

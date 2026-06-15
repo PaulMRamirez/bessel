@@ -12,7 +12,11 @@ import type { SceneSpec } from './scene-spec.ts';
 export interface SceneTarget {
   setBodies(defs: readonly PlanetDef[]): void;
   setSpacecraft(name: string, radiusKm?: number): void;
-  setTrajectory(points: readonly Km3[], anchorBody?: string): void;
+  setTrajectory(
+    points: readonly Km3[],
+    anchorBody?: string,
+    colors?: readonly (readonly [number, number, number])[],
+  ): void;
   setStarField(stars: readonly Star[]): void;
   setRings(
     anchorBody: string,
@@ -47,7 +51,7 @@ export function buildScene(target: SceneTarget, spec: SceneSpec): void {
   }
 
   if (spec.trajectory) {
-    target.setTrajectory(spec.trajectory.points, spec.trajectory.anchorBody);
+    target.setTrajectory(spec.trajectory.points, spec.trajectory.anchorBody, spec.trajectory.colors);
   }
 
   if (spec.starField) {

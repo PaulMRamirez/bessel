@@ -9,6 +9,7 @@
 import { parseCosmographiaCatalog } from '@bessel/catalog';
 import cassiniCatalog from '@bessel/catalog/examples/cassini';
 import { INNER_SYSTEM, loadSpacecraftModel, parseStarCatalog, type SceneSpec } from '@bessel/scene';
+import { linearRamp } from '@bessel/color';
 import type { Object3D } from 'three';
 import type { SpiceEngine } from '@bessel/spice';
 import cassiniGltf from './assets/cassini.gltf?raw';
@@ -56,10 +57,19 @@ export async function buildMissionScene(
   const sunDir = positionAt(table, 'Saturn', et0);
   const scStart = positionAt(table, spacecraftName, et0);
 
+  // Fade the trajectory along its length with a @bessel/color ramp (dim tail to
+  // bright head), so direction of travel reads at a glance.
+  const orbitPoints = trajectoryOf(orbit, spacecraftName);
+  const ramp = linearRamp('trail', { r: 0.12, g: 0.17, b: 0.38 }, { r: 0.55, g: 0.78, b: 1 });
+  const trajectoryColors = orbitPoints.map((_, i) => {
+    const c = ramp.color(i, [0, Math.max(1, orbitPoints.length - 1)]);
+    return [c.r, c.g, c.b] as const;
+  });
+
   const spec: SceneSpec = {
     bodies: INNER_SYSTEM,
     spacecraft: { name: spacecraftName },
-    trajectory: { points: trajectoryOf(orbit, spacecraftName), anchorBody: 'Saturn' },
+    trajectory: { points: orbitPoints, anchorBody: 'Saturn', colors: trajectoryColors },
     starField: safeStars(),
     rings: [{ body: 'Saturn', innerKm: 74500, outerKm: 140220, rotationRowMajor3x3: saturnRot }],
     axisTriads: [
