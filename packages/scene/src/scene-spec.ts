@@ -9,6 +9,8 @@ import type { Km3 } from './geometry-builders.ts';
 import type { PlanetDef } from './planets.ts';
 import type { Star } from './star-catalog.ts';
 import type { DirectionSpec } from './direction-vectors.ts';
+import type { ParticleSystemParams } from './particle-system.ts';
+import type { KeplerianSwarmParams } from './keplerian-swarm.ts';
 
 /** A 3x3 rotation, row-major, as SPICE pxform returns it. */
 export type Rotation3x3 = readonly number[];
@@ -69,6 +71,20 @@ export interface LabelSpec {
   readonly anchorBody: string;
 }
 
+export interface ParticleSystemSpec {
+  readonly id: string;
+  readonly anchorBody: string;
+  readonly params: ParticleSystemParams;
+  readonly rotationRowMajor3x3?: Rotation3x3;
+}
+
+export interface KeplerianSwarmSpec {
+  readonly id: string;
+  readonly anchorBody: string;
+  readonly params: KeplerianSwarmParams;
+  readonly rotationRowMajor3x3?: Rotation3x3;
+}
+
 /** Everything needed to populate a SolarSystemScene, as inert data. */
 export interface SceneSpec {
   readonly bodies: readonly PlanetDef[];
@@ -79,6 +95,8 @@ export interface SceneSpec {
   readonly axisTriads?: readonly AxisTriadSpec[];
   readonly atmospheres?: readonly AtmosphereSpec[];
   readonly directionVectors?: readonly DirectionVectorsSpec[];
+  readonly particleSystems?: readonly ParticleSystemSpec[];
+  readonly keplerianSwarms?: readonly KeplerianSwarmSpec[];
   readonly labels?: readonly LabelSpec[];
   readonly camera?: CameraSpec;
 }

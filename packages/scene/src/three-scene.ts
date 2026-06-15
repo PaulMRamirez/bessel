@@ -31,6 +31,8 @@ import {
 import type { PlanetDef } from './planets.ts';
 import { pickObjectId } from './picking.ts';
 import { LabelLayer } from './labels.ts';
+import { buildParticleSystem, type ParticleSystemParams } from './particle-system.ts';
+import { buildKeplerianSwarm, type KeplerianSwarmParams } from './keplerian-swarm.ts';
 
 import {
   SCALE,
@@ -112,6 +114,10 @@ export class SolarSystemScene {
   private starFieldVisible = true;
   private dskMesh: Mesh | null = null;
   private rings: Object3D | null = null;
+  private readonly particleSystems = new Map<string, Object3D>();
+  private readonly swarms = new Map<string, Object3D>();
+  private particlesVisible = true;
+  private swarmsVisible = true;
   private directionVectors: Object3D | null = null;
   private atmosphere: Object3D | null = null;
   private spacecraftModel: Object3D | null = null;
@@ -330,6 +336,60 @@ export class SolarSystemScene {
     const group = buildDirectionVectors(specs, lengthKm * SCALE);
     this.replaceAnchored(this.directionVectors, group, anchorBody);
     this.directionVectors = group;
+  }
+
+  /** Replace the particle systems (plumes, dust), each anchored at a body. */
+  setParticleSystems(
+    specs: readonly {
+      id: string;
+      anchorBody: string;
+      params: ParticleSystemParams;
+      rotationRowMajor3x3?: readonly number[];
+    }[],
+  ): void {
+    for (const obj of this.particleSystems.values()) this.replaceAnchored(obj, null, '');
+    this.particleSystems.clear();
+    for (const spec of specs) {
+      const points = buildParticleSystem(spec.params);
+      if (spec.rotationRowMajor3x3) {
+        points.setRotationFromMatrix(rowMajor3x3ToMatrix4(spec.rotationRowMajor3x3));
+      }
+      points.visible = this.particlesVisible;
+      this.replaceAnchored(null, points, spec.anchorBody);
+      this.particleSystems.set(spec.id, points);
+    }
+  }
+
+  setParticleSystemsVisible(visible: boolean): void {
+    this.particlesVisible = visible;
+    for (const obj of this.particleSystems.values()) obj.visible = visible;
+  }
+
+  /** Replace the Keplerian swarms (belts, ring particles), each anchored at a body. */
+  setKeplerianSwarms(
+    specs: readonly {
+      id: string;
+      anchorBody: string;
+      params: KeplerianSwarmParams;
+      rotationRowMajor3x3?: readonly number[];
+    }[],
+  ): void {
+    for (const obj of this.swarms.values()) this.replaceAnchored(obj, null, '');
+    this.swarms.clear();
+    for (const spec of specs) {
+      const points = buildKeplerianSwarm(spec.params);
+      if (spec.rotationRowMajor3x3) {
+        points.setRotationFromMatrix(rowMajor3x3ToMatrix4(spec.rotationRowMajor3x3));
+      }
+      points.visible = this.swarmsVisible;
+      this.replaceAnchored(null, points, spec.anchorBody);
+      this.swarms.set(spec.id, points);
+    }
+  }
+
+  setKeplerianSwarmsVisible(visible: boolean): void {
+    this.swarmsVisible = visible;
+    for (const obj of this.swarms.values()) obj.visible = visible;
   }
 
   /** Render an atmosphere limb-glow shell anchored at a body. */

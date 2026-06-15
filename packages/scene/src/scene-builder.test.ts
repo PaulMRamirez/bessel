@@ -21,6 +21,8 @@ function recordingTarget(): SceneTarget & { calls: Record<string, unknown[][]> }
     setAtmosphere: record('setAtmosphere') as SceneTarget['setAtmosphere'],
     setAtmosphereVisible: record('setAtmosphereVisible') as SceneTarget['setAtmosphereVisible'],
     setDirectionVectors: record('setDirectionVectors') as SceneTarget['setDirectionVectors'],
+    setParticleSystems: record('setParticleSystems') as SceneTarget['setParticleSystems'],
+    setKeplerianSwarms: record('setKeplerianSwarms') as SceneTarget['setKeplerianSwarms'],
     setLabels: record('setLabels') as SceneTarget['setLabels'],
     centerOn: record('centerOn') as SceneTarget['centerOn'],
     setView: record('setView') as SceneTarget['setView'],

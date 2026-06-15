@@ -7,7 +7,7 @@ import type { Km3 } from './geometry-builders.ts';
 import type { PlanetDef } from './planets.ts';
 import type { Star } from './star-catalog.ts';
 import type { DirectionSpec } from './direction-vectors.ts';
-import type { SceneSpec } from './scene-spec.ts';
+import type { SceneSpec, ParticleSystemSpec, KeplerianSwarmSpec } from './scene-spec.ts';
 
 export interface SceneTarget {
   setBodies(defs: readonly PlanetDef[]): void;
@@ -38,6 +38,8 @@ export interface SceneTarget {
   ): void;
   setAtmosphereVisible(visible: boolean): void;
   setDirectionVectors(anchorBody: string, specs: readonly DirectionSpec[], lengthKm: number): void;
+  setParticleSystems(specs: readonly ParticleSystemSpec[]): void;
+  setKeplerianSwarms(specs: readonly KeplerianSwarmSpec[]): void;
   setLabels(specs: readonly { id: string; text: string; anchorBody: string }[]): void;
   centerOn(name: string): void;
   setView(azimuth: number, elevation: number, distance: number): void;
@@ -81,6 +83,14 @@ export function buildScene(target: SceneTarget, spec: SceneSpec): void {
 
   for (const dir of spec.directionVectors ?? []) {
     target.setDirectionVectors(dir.anchorBody, dir.specs, dir.lengthKm);
+  }
+
+  if (spec.particleSystems) {
+    target.setParticleSystems(spec.particleSystems);
+  }
+
+  if (spec.keplerianSwarms) {
+    target.setKeplerianSwarms(spec.keplerianSwarms);
   }
 
   if (spec.labels) {

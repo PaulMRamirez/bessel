@@ -92,6 +92,24 @@ export async function buildMissionScene(
         lengthKm: 200000,
       },
     ],
+    // A faint Keplerian swarm of ring particles (Saturn E-ring) in the ring plane,
+    // demonstrating the KeplerianSwarm geometry type.
+    keplerianSwarms: [
+      {
+        id: 'saturn-ering',
+        anchorBody: 'Saturn',
+        rotationRowMajor3x3: saturnRot,
+        params: {
+          count: 1400,
+          semiMajorMinKm: 180000,
+          semiMajorMaxKm: 480000,
+          eccentricity: 0.03,
+          inclinationDeg: 1.5,
+          color: '#bcd4ff',
+          sizePx: 1.5,
+        },
+      },
+    ],
     labels: [
       ...INNER_SYSTEM.map((p) => ({ id: p.name, text: p.name, anchorBody: p.name })),
       { id: spacecraftName, text: spacecraftName, anchorBody: spacecraftName },
