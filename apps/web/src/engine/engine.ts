@@ -18,6 +18,7 @@ import { encodeView, type ViewModel } from '@bessel/state';
 import { positionAt, velocityAt } from '../sampler.ts';
 import { fovRim, footprint } from '../instruments.ts';
 import { toggleSelection } from '../selection.ts';
+import { parseAnyCatalog, formatLoadError } from '../catalog-load.ts';
 import type { AppStore } from '../store/index.ts';
 import { bootScene, type EngineCore } from './bootstrap.ts';
 import { pushEpochLabel, pushReadouts } from './telemetry.ts';
@@ -304,6 +305,21 @@ export class BesselEngine {
       } catch (err) {
         console.error('recording failed', err);
       }
+    }
+  }
+
+  // Parse and validate a picked or dropped catalog file. On success the object
+  // list becomes catalog-driven; on failure a located error is shown loudly.
+  loadCatalog(file: { name: string; text: string }): void {
+    try {
+      const loaded = parseAnyCatalog(file.name, file.text);
+      this.store.setState({
+        objects: loaded.entries,
+        loadedName: loaded.name,
+        loadError: null,
+      });
+    } catch (err) {
+      this.store.setState({ loadError: formatLoadError(err) });
     }
   }
 

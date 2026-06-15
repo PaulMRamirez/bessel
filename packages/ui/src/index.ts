@@ -39,3 +39,4 @@ export {
   type ObjectInspectorProps,
   type InspectorField,
 } from './ObjectInspector.tsx';
+export { CatalogLoader, type CatalogLoaderProps } from './CatalogLoader.tsx';

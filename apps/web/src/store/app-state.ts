@@ -3,7 +3,8 @@
 // mirror refs) into one object that both React (via useStore) and the imperative
 // BesselEngine (via getState/setState) share.
 
-import type { Readouts, VisualizationSettings } from '@bessel/ui';
+import type { CatalogEntry, Readouts, VisualizationSettings } from '@bessel/ui';
+import { DEFAULT_OBJECT_ENTRIES } from '../catalog-load.ts';
 import { createStore, type Store } from './create-store.ts';
 
 export interface AppState {
@@ -33,6 +34,10 @@ export interface AppState {
   recording: boolean;
   // Theme: persisted to the document via data-theme.
   theme: 'dark' | 'light';
+  // Catalog: the object list (catalog-driven) and load status.
+  objects: readonly CatalogEntry[];
+  loadedName: string | null;
+  loadError: string | null;
 }
 
 export const initialAppState: AppState = {
@@ -68,6 +73,9 @@ export const initialAppState: AppState = {
   helpOpen: false,
   recording: false,
   theme: 'dark',
+  objects: DEFAULT_OBJECT_ENTRIES,
+  loadedName: null,
+  loadError: null,
 };
 
 export type AppStore = Store<AppState>;

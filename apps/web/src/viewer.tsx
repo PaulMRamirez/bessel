@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { INNER_SYSTEM } from '@bessel/scene';
 import {
   CaptureControls,
+  CatalogLoader,
   KeyboardHelp,
   ObjectBrowser,
   ObjectInspector,
@@ -19,19 +20,12 @@ import {
   Tooltip,
   ViewControls,
   useKeyboardShortcuts,
-  type CatalogEntry,
   type KeyboardAction,
 } from '@bessel/ui';
 import { createAppStore, useStore, type AppStore } from './store/index.ts';
 import { useBesselEngine } from './engine/index.ts';
 import { CENTER_TARGETS } from './engine/constants.ts';
 import { AppShell } from './shell/index.ts';
-
-const OBJECT_ENTRIES: readonly CatalogEntry[] = [
-  ...INNER_SYSTEM.map((p) => ({ id: p.name, name: p.name, kind: 'body' as const })),
-  { id: 'Cassini', name: 'Cassini', kind: 'spacecraft' },
-  { id: 'CASSINI_ISS_WAC', name: 'ISS Wide Angle', kind: 'instrument' },
-];
 
 const SPICE_IDS: Readonly<Record<string, string>> = {
   ...Object.fromEntries(INNER_SYSTEM.map((p) => [p.name, p.spiceId])),
@@ -65,6 +59,9 @@ export function BesselViewer(): JSX.Element {
   const helpOpen = useStore(store, (s) => s.helpOpen);
   const recording = useStore(store, (s) => s.recording);
   const theme = useStore(store, (s) => s.theme);
+  const objects = useStore(store, (s) => s.objects);
+  const loadedName = useStore(store, (s) => s.loadedName);
+  const loadError = useStore(store, (s) => s.loadError);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -82,10 +79,10 @@ export function BesselViewer(): JSX.Element {
 
   const filteredEntries = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return q ? OBJECT_ENTRIES.filter((e) => e.name.toLowerCase().includes(q)) : OBJECT_ENTRIES;
-  }, [query]);
+    return q ? objects.filter((e) => e.name.toLowerCase().includes(q)) : objects;
+  }, [query, objects]);
 
-  const focusEntry = OBJECT_ENTRIES.find((e) => e.id === focus);
+  const focusEntry = objects.find((e) => e.id === focus);
   const inspectorFields = [{ label: 'SPICE id', value: SPICE_IDS[focus] ?? '-' }];
 
   const annotations =
@@ -107,6 +104,13 @@ export function BesselViewer(): JSX.Element {
 
   const left = (
     <>
+      <PanelContainer title="Mission" testId="panel-mission">
+        <CatalogLoader
+          onLoad={(file) => engine?.loadCatalog(file)}
+          status={loadedName ? `Loaded ${loadedName}: ${objects.length} objects` : null}
+          error={loadError}
+        />
+      </PanelContainer>
       <PanelContainer title="Objects" testId="panel-objects">
         <SearchBox value={query} onChange={setQuery} placeholder="Filter objects" />
         <ObjectBrowser
