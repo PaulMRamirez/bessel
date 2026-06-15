@@ -38,10 +38,21 @@ test('poc-cassini renders the trajectory and the timeline changes the frame', as
   // The SPICE worker loads CSPICE-WASM and samples the ephemerides before the
   // scene is ready; allow generous time for the first load.
   await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
-  await loadCassiniSample(page);
 
   const viewport = page.getByTestId('viewport');
   await expect(viewport).toHaveAttribute('data-ready', 'true');
+
+  // Regression guard: the WebGL drawing buffer must match the canvas display
+  // aspect, or the scene renders stretched (the buffer once stayed at the 960x600
+  // width/height attributes while the canvas displayed at a different size).
+  const sizing = await viewport.evaluate((el) => {
+    const c = el as HTMLCanvasElement;
+    return { bufW: c.width, bufH: c.height, cssW: c.clientWidth, cssH: c.clientHeight };
+  });
+  expect(sizing.cssW).toBeGreaterThan(0);
+  expect(sizing.bufW / sizing.bufH).toBeCloseTo(sizing.cssW / sizing.cssH, 2);
+
+  await loadCassiniSample(page);
 
   // The trajectory and Saturn render: the frame is not empty.
   const before = await frameStats(viewport);

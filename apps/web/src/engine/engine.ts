@@ -71,6 +71,13 @@ export class BesselEngine {
     try {
       this.core = await bootScene(this.canvas, this.store, this.isDisposed);
       if (this.disposed) return;
+      // Apply the canvas's real CSS size now that the scene exists. The
+      // ResizeObserver fires before boot completes (when there is no scene to
+      // resize), so without this the renderer, camera aspect, and label layer
+      // stay at the canvas width/height attributes and the scene is stretched.
+      const cssW = this.canvas.clientWidth;
+      const cssH = this.canvas.clientHeight;
+      if (cssW > 0 && cssH > 0) this.resize(cssW, cssH);
       this.raf = requestAnimationFrame(this.frame);
       this.store.setState({ status: 'Ready', ready: true });
       void this.loadBookmarksFromStorage();
