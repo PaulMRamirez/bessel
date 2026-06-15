@@ -1,0 +1,476 @@
+/* Component and shell styles, token-driven. Migrated from the Phase 0 styles.css
+   and extended with the app bar, dock, panels, and the new UI components. */
+
+/* Shell ------------------------------------------------------------------ */
+
+.bessel-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.bessel-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* App bar ---------------------------------------------------------------- */
+
+.bessel-appbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--border);
+}
+
+.bessel-appbar-brand {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.bessel-appbar-brand h1 {
+  font-size: 1.1rem;
+  margin: 0;
+  letter-spacing: 0.02em;
+}
+
+.bessel-appbar-subtitle {
+  color: var(--text-1);
+  font-size: 0.9rem;
+}
+
+.bessel-appbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Dock ------------------------------------------------------------------- */
+
+.bessel-dock {
+  flex: 1;
+  min-height: 0;
+}
+
+.bessel-dock-side {
+  overflow-y: auto;
+  background: var(--bg-1);
+  border-inline: 1px solid var(--border);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.bessel-dock-center {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+
+.bessel-resize-handle {
+  width: 6px;
+  background: var(--border);
+  transition: background 0.12s ease;
+}
+
+.bessel-resize-handle:hover,
+.bessel-resize-handle[data-resize-handle-active] {
+  background: var(--accent);
+}
+
+.bessel-dock-narrow {
+  display: flex;
+  flex-direction: column;
+}
+
+.bessel-dock-narrow .bessel-dock-center {
+  flex: 1 1 55%;
+  min-height: 240px;
+}
+
+.bessel-dock-stack {
+  flex: 1 1 45%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--bg-1);
+  border-top: 1px solid var(--border);
+}
+
+/* Viewport stage --------------------------------------------------------- */
+
+.bessel-viewer {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+#viewport {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: #05070b;
+}
+
+.bessel-hud {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  background: var(--hud-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+}
+
+.bessel-viewcontrols {
+  position: absolute;
+  top: var(--space-2);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  background: var(--hud-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  flex-wrap: wrap;
+  max-width: calc(100% - 6rem);
+}
+
+.bessel-selection {
+  color: var(--text-1);
+  font-size: 0.8rem;
+}
+
+/* Bottom bar / timeline -------------------------------------------------- */
+
+.bessel-bottombar {
+  border-top: 1px solid var(--border);
+  background: var(--bg-1);
+}
+
+.bessel-timeline {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  flex-wrap: wrap;
+}
+
+.bessel-timeline input[type='range'] {
+  flex: 1;
+  min-width: 120px;
+}
+
+.bessel-epoch {
+  font-variant-numeric: tabular-nums;
+  min-width: 11ch;
+}
+
+/* Form controls ---------------------------------------------------------- */
+
+button,
+select,
+input[type='search'] {
+  background: var(--bg-2);
+  color: var(--text-0);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  font: inherit;
+  cursor: pointer;
+}
+
+input[type='search'] {
+  cursor: text;
+}
+
+button:hover,
+select:hover {
+  border-color: var(--accent);
+}
+
+button:focus-visible,
+select:focus-visible,
+input:focus-visible,
+[role='tooltip'] + *,
+.bessel-panel-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+button[aria-pressed='true'] {
+  background: var(--accent-bg);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+/* Panels ----------------------------------------------------------------- */
+
+.bessel-panel {
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.82rem;
+}
+
+.bessel-panel-header {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.bessel-panel-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius) var(--radius) 0 0;
+  padding: var(--space-2) var(--space-3);
+  font-weight: 600;
+  text-align: left;
+}
+
+.bessel-panel-caret {
+  color: var(--text-1);
+  font-size: 0.7rem;
+}
+
+.bessel-panel-body {
+  padding: 0 var(--space-3) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.bessel-panel-title {
+  font-size: 0.9rem;
+  margin: 0 0 var(--space-1);
+}
+
+/* Readouts and settings -------------------------------------------------- */
+
+.bessel-readouts dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.15rem var(--space-2);
+  margin: 0;
+}
+
+.bessel-readouts dt {
+  color: var(--text-1);
+}
+
+.bessel-readouts dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.bessel-settings,
+.bessel-object-browser ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  border: none;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bessel-settings legend {
+  padding: 0;
+  font-weight: 600;
+}
+
+.bessel-object-browser li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1);
+}
+
+/* Timeline scrubber markers --------------------------------------------- */
+
+.bessel-scrub-track {
+  position: relative;
+  flex: 1;
+  min-width: 140px;
+}
+
+.bessel-markers {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.bessel-marker {
+  position: absolute;
+  top: -2px;
+  width: 8px;
+  height: 14px;
+  padding: 0;
+  transform: translateX(-50%);
+  background: var(--marker);
+  border: 1px solid var(--marker-border);
+  border-radius: 2px;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+/* Keyboard help ---------------------------------------------------------- */
+
+.bessel-help {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--bg-1);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: var(--space-4) 1.5rem;
+  box-shadow: var(--shadow);
+  z-index: 10;
+}
+
+.bessel-help dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.3rem 0.8rem;
+}
+
+.bessel-help dt,
+.bessel-help dd {
+  margin: 0;
+}
+
+.bessel-help-button {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+}
+
+/* Theme toggle ----------------------------------------------------------- */
+
+.bessel-theme-toggle {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+}
+
+/* Tooltip ---------------------------------------------------------------- */
+
+.bessel-tooltip-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.bessel-tooltip {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  background: var(--bg-2);
+  color: var(--text-0);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  font-size: 0.75rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s ease;
+  z-index: 20;
+}
+
+.bessel-tooltip-wrap:hover .bessel-tooltip,
+.bessel-tooltip-wrap:focus-within .bessel-tooltip {
+  opacity: 1;
+}
+
+/* Search box ------------------------------------------------------------- */
+
+.bessel-searchbox-input {
+  width: 100%;
+}
+
+/* Object inspector ------------------------------------------------------- */
+
+.bessel-inspector-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.bessel-inspector-name {
+  font-weight: 600;
+}
+
+.bessel-inspector-kind {
+  color: var(--text-1);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.bessel-inspector-fields {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.15rem var(--space-2);
+  margin: 0;
+}
+
+.bessel-inspector-row {
+  display: contents;
+}
+
+.bessel-inspector-row dt {
+  color: var(--text-1);
+}
+
+.bessel-inspector-row dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.bessel-inspector-empty {
+  color: var(--text-1);
+  margin: 0;
+}
+
+/* Utilities -------------------------------------------------------------- */
+
+.bessel-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

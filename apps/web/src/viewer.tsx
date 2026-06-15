@@ -1,18 +1,22 @@
-// The Cassini-at-Saturn viewer, refactored onto a state store + engine
-// controller. This component is now presentational: it subscribes to slices of
-// the store (useStore) and forwards user actions to the BesselEngine, which owns
-// the scene, clock, SPICE worker, and the RAF loop. Body positions are still
-// precomputed over the demo window so playback interpolates without per-frame
-// worker round-trips.
-import { useCallback, useRef } from 'react';
+// The Cassini-at-Saturn viewer on the modern shell. It owns the state store and
+// the BesselEngine, subscribes to store slices, and lays its controls out into
+// the app shell's dock regions: objects on the left, the viewport in the center,
+// tools on the right, the timeline along the bottom. The component stays
+// presentational; all imperative work lives in the engine.
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { INNER_SYSTEM } from '@bessel/scene';
 import {
   CaptureControls,
   KeyboardHelp,
   ObjectBrowser,
+  ObjectInspector,
+  PanelContainer,
   ReadoutPanel,
+  SearchBox,
   SettingsPanel,
+  ThemeToggle,
   TimelineControls,
+  Tooltip,
   ViewControls,
   useKeyboardShortcuts,
   type CatalogEntry,
@@ -21,6 +25,18 @@ import {
 import { createAppStore, useStore, type AppStore } from './store/index.ts';
 import { useBesselEngine } from './engine/index.ts';
 import { CENTER_TARGETS } from './engine/constants.ts';
+import { AppShell } from './shell/index.ts';
+
+const OBJECT_ENTRIES: readonly CatalogEntry[] = [
+  ...INNER_SYSTEM.map((p) => ({ id: p.name, name: p.name, kind: 'body' as const })),
+  { id: 'Cassini', name: 'Cassini', kind: 'spacecraft' },
+  { id: 'CASSINI_ISS_WAC', name: 'ISS Wide Angle', kind: 'instrument' },
+];
+
+const SPICE_IDS: Readonly<Record<string, string>> = {
+  ...Object.fromEntries(INNER_SYSTEM.map((p) => [p.name, p.spiceId])),
+  Cassini: '-82',
+};
 
 export function BesselViewer(): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -28,6 +44,7 @@ export function BesselViewer(): JSX.Element {
   if (!storeRef.current) storeRef.current = createAppStore();
   const store = storeRef.current;
   const engine = useBesselEngine(canvasRef, store);
+  const [query, setQuery] = useState('');
 
   const status = useStore(store, (s) => s.status);
   const ready = useStore(store, (s) => s.ready);
@@ -47,6 +64,15 @@ export function BesselViewer(): JSX.Element {
   const readouts = useStore(store, (s) => s.readouts);
   const helpOpen = useStore(store, (s) => s.helpOpen);
   const recording = useStore(store, (s) => s.recording);
+  const theme = useStore(store, (s) => s.theme);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
+
+  const toggleTheme = useCallback(() => {
+    store.setState((s) => ({ theme: s.theme === 'dark' ? 'light' : 'dark' }));
+  }, [store]);
 
   const onKeyboardAction = useCallback(
     (action: KeyboardAction): void => engine?.keyboardAction(action),
@@ -54,11 +80,14 @@ export function BesselViewer(): JSX.Element {
   );
   useKeyboardShortcuts(onKeyboardAction);
 
-  const objectEntries: CatalogEntry[] = [
-    ...INNER_SYSTEM.map((p) => ({ id: p.name, name: p.name, kind: 'body' as const })),
-    { id: 'Cassini', name: 'Cassini', kind: 'spacecraft' },
-    { id: 'CASSINI_ISS_WAC', name: 'ISS Wide Angle', kind: 'instrument' },
-  ];
+  const filteredEntries = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return q ? OBJECT_ENTRIES.filter((e) => e.name.toLowerCase().includes(q)) : OBJECT_ENTRIES;
+  }, [query]);
+
+  const focusEntry = OBJECT_ENTRIES.find((e) => e.id === focus);
+  const inspectorFields = [{ label: 'SPICE id', value: SPICE_IDS[focus] ?? '-' }];
+
   const annotations =
     bounds[1] > bounds[0]
       ? [
@@ -70,7 +99,31 @@ export function BesselViewer(): JSX.Element {
         ]
       : [];
 
-  return (
+  const actions = (
+    <Tooltip label="Toggle light / dark theme">
+      <ThemeToggle theme={theme} onToggle={toggleTheme} />
+    </Tooltip>
+  );
+
+  const left = (
+    <>
+      <PanelContainer title="Objects" testId="panel-objects">
+        <SearchBox value={query} onChange={setQuery} placeholder="Filter objects" />
+        <ObjectBrowser
+          entries={filteredEntries}
+          selection={selection}
+          visibility={visibility}
+          onToggleSelect={(id) => engine?.toggleSelectObject(id)}
+          onToggleVisible={(id, visible) => engine?.toggleVisibleObject(id, visible)}
+        />
+      </PanelContainer>
+      <PanelContainer title="Camera" testId="panel-camera">
+        <ViewControls bodies={CENTER_TARGETS} focus={focus} onCenter={(b) => engine?.centerOn(b)} />
+      </PanelContainer>
+    </>
+  );
+
+  const center = (
     <div className="bessel-viewer">
       <canvas
         ref={canvasRef}
@@ -114,37 +167,6 @@ export function BesselViewer(): JSX.Element {
           {selection.length ? `Selected: ${selection.join(', ')}` : 'No selection'}
         </span>
       </div>
-      <div className="bessel-panels">
-        <ObjectBrowser
-          entries={objectEntries}
-          selection={selection}
-          visibility={visibility}
-          onToggleSelect={(id) => engine?.toggleSelectObject(id)}
-          onToggleVisible={(id, visible) => engine?.toggleVisibleObject(id, visible)}
-        />
-        <SettingsPanel settings={settings} onChange={(k, v) => engine?.setSetting(k, v)} />
-        <ReadoutPanel target={focus} readouts={readouts} />
-        <CaptureControls
-          recording={recording}
-          onCaptureStill={() => engine?.captureStill()}
-          onToggleRecording={() => engine?.toggleRecording()}
-        />
-      </div>
-      <ViewControls bodies={CENTER_TARGETS} focus={focus} onCenter={(b) => engine?.centerOn(b)} />
-      <TimelineControls
-        playing={playing}
-        rate={rate}
-        epochLabel={epochLabel}
-        min={bounds[0]}
-        max={bounds[1]}
-        value={et}
-        annotations={annotations}
-        onPlayToggle={() => engine?.togglePlay()}
-        onRateChange={(r) => engine?.setRate(r)}
-        onScrub={(v) => engine?.scrub(v)}
-        onAnnotationSelect={(v) => engine?.scrub(v)}
-      />
-      <KeyboardHelp open={helpOpen} onClose={() => engine?.setHelpOpen(false)} />
       <button
         type="button"
         className="bessel-help-button"
@@ -154,6 +176,54 @@ export function BesselViewer(): JSX.Element {
       >
         ?
       </button>
+      <KeyboardHelp open={helpOpen} onClose={() => engine?.setHelpOpen(false)} />
     </div>
+  );
+
+  const right = (
+    <>
+      <PanelContainer title="Visualization" testId="panel-visualization">
+        <SettingsPanel settings={settings} onChange={(k, v) => engine?.setSetting(k, v)} />
+      </PanelContainer>
+      <PanelContainer title="Selection" testId="panel-selection">
+        <ObjectInspector name={focus} kind={focusEntry?.kind} fields={inspectorFields} />
+        <ReadoutPanel target={focus} readouts={readouts} />
+      </PanelContainer>
+      <PanelContainer title="Capture" testId="panel-capture">
+        <CaptureControls
+          recording={recording}
+          onCaptureStill={() => engine?.captureStill()}
+          onToggleRecording={() => engine?.toggleRecording()}
+        />
+      </PanelContainer>
+    </>
+  );
+
+  const bottom = (
+    <TimelineControls
+      playing={playing}
+      rate={rate}
+      epochLabel={epochLabel}
+      min={bounds[0]}
+      max={bounds[1]}
+      value={et}
+      annotations={annotations}
+      onPlayToggle={() => engine?.togglePlay()}
+      onRateChange={(r) => engine?.setRate(r)}
+      onScrub={(v) => engine?.scrub(v)}
+      onAnnotationSelect={(v) => engine?.scrub(v)}
+    />
+  );
+
+  return (
+    <AppShell
+      title="Bessel"
+      subtitle="Cassini at Saturn"
+      actions={actions}
+      left={left}
+      center={center}
+      right={right}
+      bottom={bottom}
+    />
   );
 }

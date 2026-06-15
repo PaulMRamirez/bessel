@@ -64,6 +64,12 @@ export class BesselEngine {
     this.core = null;
   }
 
+  // Match the renderer drawing buffer to the canvas CSS size as the dock resizes.
+  resize(width: number, height: number): void {
+    if (width <= 0 || height <= 0) return;
+    this.core?.scene.resize(width, height);
+  }
+
   private readonly frame = (ts: number): void => {
     const e = this.core;
     if (!e) return;

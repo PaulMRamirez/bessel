@@ -1,0 +1,80 @@
+/* Design tokens. The dark theme is the default (:root); [data-theme='light']
+   overrides it. Components reference only these variables, never raw colors, so
+   theming is a single attribute flip on the document element. */
+
+:root,
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg-0: #0b0e14;
+  --bg-1: #11161f;
+  --bg-2: #141a26;
+  --panel-bg: rgba(17, 22, 31, 0.92);
+  --hud-bg: rgba(11, 14, 20, 0.72);
+
+  --border: #1c2230;
+  --border-strong: #2a3242;
+
+  --text-0: #e6e9ef;
+  --text-1: #9aa3b6;
+
+  --accent: #5b8cff;
+  --accent-bg: #2a3a66;
+  --accent-text: #ffffff;
+
+  --marker: #ffcc33;
+  --marker-border: #5b4500;
+
+  --shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+}
+
+[data-theme='light'] {
+  color-scheme: light;
+
+  --bg-0: #eef1f7;
+  --bg-1: #ffffff;
+  --bg-2: #e7ecf5;
+  --panel-bg: rgba(255, 255, 255, 0.94);
+  --hud-bg: rgba(255, 255, 255, 0.82);
+
+  --border: #d2d9e6;
+  --border-strong: #b4bdcf;
+
+  --text-0: #182030;
+  --text-1: #51607a;
+
+  --accent: #2f5fe0;
+  --accent-bg: #d7e2ff;
+  --accent-text: #102a66;
+
+  --marker: #c98a00;
+  --marker-border: #7a5500;
+
+  --shadow: 0 8px 28px rgba(20, 30, 60, 0.16);
+}
+
+:root {
+  --radius: 6px;
+  --radius-sm: 4px;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  background: var(--bg-0);
+  color: var(--text-0);
+  font-family: var(--font);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}

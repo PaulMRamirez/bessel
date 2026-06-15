@@ -1,0 +1,102 @@
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { describe, it, expect } from 'vitest';
+import { AppBar } from './AppBar.tsx';
+import { ThemeToggle } from './ThemeToggle.tsx';
+import { PanelContainer } from './PanelContainer.tsx';
+import { Tooltip } from './Tooltip.tsx';
+import { SearchBox } from './SearchBox.tsx';
+import { ObjectInspector } from './ObjectInspector.tsx';
+
+const html = (el: Parameters<typeof renderToStaticMarkup>[0]): string => renderToStaticMarkup(el);
+
+describe('@bessel/ui AppBar', () => {
+  it('renders the brand heading and an actions slot', () => {
+    const out = html(
+      createElement(
+        AppBar,
+        { title: 'Bessel', subtitle: 'Cassini at Saturn' },
+        createElement('button', { type: 'button' }, 'Action'),
+      ),
+    );
+    expect(out).toContain('<h1>Bessel</h1>');
+    expect(out).toContain('Cassini at Saturn');
+    expect(out).toContain('bessel-appbar-actions');
+  });
+});
+
+describe('@bessel/ui ThemeToggle', () => {
+  it('labels the switch by the theme it activates', () => {
+    expect(html(createElement(ThemeToggle, { theme: 'dark', onToggle: () => {} }))).toContain(
+      'aria-label="Switch to light theme"',
+    );
+    expect(html(createElement(ThemeToggle, { theme: 'light', onToggle: () => {} }))).toContain(
+      'aria-label="Switch to dark theme"',
+    );
+  });
+});
+
+describe('@bessel/ui PanelContainer', () => {
+  it('exposes an expanded toggle controlling a region', () => {
+    const out = html(
+      createElement(PanelContainer, { title: 'Objects', testId: 'panel-objects' }, 'body'),
+    );
+    expect(out).toContain('data-testid="panel-objects"');
+    expect(out).toContain('aria-expanded="true"');
+    expect(out).toContain('aria-controls=');
+    expect(out).toContain('Objects');
+  });
+
+  it('starts collapsed when asked', () => {
+    const out = html(
+      createElement(PanelContainer, { title: 'Capture', defaultCollapsed: true }, 'body'),
+    );
+    expect(out).toContain('aria-expanded="false"');
+    expect(out).toContain('hidden=');
+  });
+});
+
+describe('@bessel/ui Tooltip', () => {
+  it('associates the label with the child via aria-describedby', () => {
+    const out = html(
+      createElement(
+        Tooltip,
+        { label: 'Toggle theme' },
+        createElement('button', { type: 'button' }, 'x'),
+      ),
+    );
+    expect(out).toContain('role="tooltip"');
+    expect(out).toContain('aria-describedby=');
+    expect(out).toContain('Toggle theme');
+  });
+});
+
+describe('@bessel/ui SearchBox', () => {
+  it('renders a labelled search input', () => {
+    const out = html(createElement(SearchBox, { value: '', onChange: () => {}, label: 'Find' }));
+    expect(out).toContain('type="search"');
+    expect(out).toContain('data-testid="search-box"');
+    expect(out).toContain('Find');
+  });
+});
+
+describe('@bessel/ui ObjectInspector', () => {
+  it('shows the empty message when nothing is selected', () => {
+    const out = html(createElement(ObjectInspector, { name: null, fields: [] }));
+    expect(out).toContain('No object selected');
+  });
+
+  it('renders the name, kind, and fields when populated', () => {
+    const out = html(
+      createElement(ObjectInspector, {
+        name: 'Saturn',
+        kind: 'body',
+        fields: [{ label: 'SPICE id', value: '699' }],
+      }),
+    );
+    expect(out).toContain('data-testid="inspector-name"');
+    expect(out).toContain('Saturn');
+    expect(out).toContain('SPICE id');
+    expect(out).toContain('699');
+  });
+});

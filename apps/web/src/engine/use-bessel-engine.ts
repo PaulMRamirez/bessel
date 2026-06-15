@@ -20,7 +20,13 @@ export function useBesselEngine(
     setEngine(eng);
     void eng.boot();
     const detachPointer = eng.attachPointer();
+    // Keep the renderer crisp as the resizable dock changes the canvas size.
+    const observer = new ResizeObserver(() => {
+      eng.resize(canvas.clientWidth, canvas.clientHeight);
+    });
+    observer.observe(canvas);
     return () => {
+      observer.disconnect();
       detachPointer();
       eng.dispose();
       setEngine(null);

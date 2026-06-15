@@ -29,3 +29,13 @@ export {
   CaptureError,
   type Recorder,
 } from './capture.ts';
+export { AppBar, type AppBarProps } from './AppBar.tsx';
+export { PanelContainer, type PanelContainerProps } from './PanelContainer.tsx';
+export { ThemeToggle, type ThemeToggleProps, type ThemeName } from './ThemeToggle.tsx';
+export { Tooltip, type TooltipProps } from './Tooltip.tsx';
+export { SearchBox, type SearchBoxProps } from './SearchBox.tsx';
+export {
+  ObjectInspector,
+  type ObjectInspectorProps,
+  type InspectorField,
+} from './ObjectInspector.tsx';
