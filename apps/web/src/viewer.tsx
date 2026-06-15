@@ -110,7 +110,7 @@ export function BesselViewer(): JSX.Element {
     <>
       <PanelContainer title="Mission" testId="panel-mission">
         <CatalogLoader
-          onLoad={(file) => engine?.loadCatalog(file)}
+          onLoad={(file) => void engine?.loadCatalog(file)}
           status={loadedName ? `Loaded ${loadedName}: ${objects.length} objects` : null}
           error={loadError}
         />
@@ -126,7 +126,13 @@ export function BesselViewer(): JSX.Element {
         />
       </PanelContainer>
       <PanelContainer title="Camera" testId="panel-camera">
-        <ViewControls bodies={CENTER_TARGETS} focus={focus} onCenter={(b) => engine?.centerOn(b)} />
+        <ViewControls
+          bodies={CENTER_TARGETS}
+          focus={focus}
+          onCenter={(b) => engine?.centerOn(b)}
+          onViewFromSun={() => engine?.viewFromSun()}
+          onViewAlongVelocity={() => engine?.viewAlongVelocity()}
+        />
       </PanelContainer>
     </>
   );
@@ -202,6 +208,7 @@ export function BesselViewer(): JSX.Element {
           from={measurement?.from ?? null}
           to={measurement?.to ?? null}
           distanceKm={measurement?.distanceKm ?? null}
+          relativeSpeedKmS={measurement?.relativeSpeedKmS ?? null}
           angleDeg={measurement?.angleDeg ?? null}
         />
       </PanelContainer>

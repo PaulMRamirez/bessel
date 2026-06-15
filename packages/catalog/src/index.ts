@@ -43,4 +43,5 @@ export {
   type ValidationResult,
 } from './validator.ts';
 export { resolveCatalogKernels } from './kernels.ts';
+export { PluginRegistry, type MissionPlugin } from './plugins.ts';
 export * from './native-types.ts';

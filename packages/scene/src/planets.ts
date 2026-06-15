@@ -9,8 +9,12 @@ export interface PlanetDef {
   readonly spiceId: string;
   /** Physical mean radius in km. */
   readonly radiusKm: number;
-  /** Base RGB color (0..1) for the procedural texture. */
+  /** Base RGB color (0..1) for the procedural texture (used when no image map). */
   readonly color: readonly [number, number, number];
+  /** Optional image base-map URL; when set, replaces the procedural texture. */
+  readonly texture?: string;
+  /** Optional normal-map image URL for surface relief shading. */
+  readonly normalMap?: string;
 }
 
 export const INNER_SYSTEM: readonly PlanetDef[] = [

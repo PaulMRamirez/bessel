@@ -49,6 +49,8 @@ export interface Measurement {
   readonly from: string;
   readonly to: string;
   readonly distanceKm: number;
+  /** Range rate (km/s): negative is closing, positive is separating, or null. */
+  readonly relativeSpeedKmS: number | null;
   /** Angular separation of the pair seen from the spacecraft, or null. */
   readonly angleDeg: number | null;
 }
@@ -80,6 +82,7 @@ export const initialAppState: AppState = {
   visibility: {},
   readouts: {
     rangeKm: null,
+    altitudeKm: null,
     phaseDeg: null,
     incidenceDeg: null,
     emissionDeg: null,

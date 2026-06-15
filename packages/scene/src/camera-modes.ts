@@ -26,6 +26,29 @@ export function computeTrackCameraPosition(
   return [(back[0] / bm) * distance, (back[1] / bm) * distance, (back[2] / bm) * distance];
 }
 
+/**
+ * Inverse of computeOrbitCameraPosition for the "set the view from a vector"
+ * control (Cosmographia parity): given a world-space direction the camera should
+ * look ALONG (toward the focus), return the azimuth and elevation that place the
+ * camera opposite that direction. A near-zero vector yields a safe default.
+ */
+export function azimuthElevationFromDirection(direction: Km3): {
+  azimuth: number;
+  elevation: number;
+} {
+  const m = Math.hypot(direction[0], direction[1], direction[2]);
+  if (m < 1e-9) return { azimuth: 0, elevation: 0 };
+  // The camera sits opposite the look direction (it looks toward the origin), so
+  // negate the direction to get the camera position direction.
+  const px = -direction[0] / m;
+  const py = -direction[1] / m;
+  const pz = -direction[2] / m;
+  return {
+    azimuth: Math.atan2(pz, px),
+    elevation: Math.asin(Math.max(-1, Math.min(1, py))),
+  };
+}
+
 /** Spherical orbit position from azimuth, elevation, distance (scene units). */
 export function computeOrbitCameraPosition(
   azimuth: number,

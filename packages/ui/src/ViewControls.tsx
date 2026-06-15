@@ -5,6 +5,10 @@ export interface ViewControlsProps {
   readonly bodies: readonly string[];
   readonly focus: string;
   readonly onCenter: (body: string) => void;
+  /** Set the view looking from the Sun toward the focus (vector-set-view). */
+  readonly onViewFromSun?: () => void;
+  /** Set the view looking down the spacecraft velocity, if any. */
+  readonly onViewAlongVelocity?: () => void;
 }
 
 export function ViewControls(props: ViewControlsProps): JSX.Element {
@@ -22,6 +26,26 @@ export function ViewControls(props: ViewControlsProps): JSX.Element {
           {body}
         </button>
       ))}
+      {props.onViewFromSun ? (
+        <button
+          type="button"
+          onClick={props.onViewFromSun}
+          data-testid="view-from-sun"
+          title="Look from the Sun toward the focus"
+        >
+          Sun view
+        </button>
+      ) : null}
+      {props.onViewAlongVelocity ? (
+        <button
+          type="button"
+          onClick={props.onViewAlongVelocity}
+          data-testid="view-along-velocity"
+          title="Look down the spacecraft velocity"
+        >
+          Velocity view
+        </button>
+      ) : null}
     </div>
   );
 }

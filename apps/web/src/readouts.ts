@@ -32,6 +32,17 @@ export async function computeReadouts(
   const pos = await spice.spkpos(targetName, et, 'J2000', 'NONE', observer).catch(() => null);
   const rangeKm = pos ? Math.hypot(pos.position.x, pos.position.y, pos.position.z) : null;
 
+  // Altitude above the target's surface: range minus the mean radius from the PCK
+  // (bodvrd RADII). Attempted only when a range and radii are available, else n/a.
+  let altitudeKm: number | null = null;
+  if (rangeKm !== null) {
+    const radii = await spice.bodvrd(targetName, 'RADII').catch(() => null);
+    if (radii && radii.length === 3) {
+      const meanRadius = (radii[0]! + radii[1]! + radii[2]!) / 3;
+      altitudeKm = rangeKm - meanRadius;
+    }
+  }
+
   let phaseDeg: number | null = null;
   let incidenceDeg: number | null = null;
   let emissionDeg: number | null = null;
@@ -48,5 +59,5 @@ export async function computeReadouts(
     }
   }
   void targetId;
-  return { rangeKm, phaseDeg, incidenceDeg, emissionDeg };
+  return { rangeKm, altitudeKm, phaseDeg, incidenceDeg, emissionDeg };
 }

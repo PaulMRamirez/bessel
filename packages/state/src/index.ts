@@ -42,3 +42,16 @@ export { encodeView, decodeView } from './codec.ts';
 // behavioral gain. They are grouped here as the suite-contract surface.
 export { buildMmgisUrl, type MmgisHandoff, type MmgisMissionConfig } from './mmgis.ts';
 export { exportCzml, type CzmlOptions, type CzmlSample } from './czml.ts';
+
+// Real-time telemetry adapter (Phase 4): predicted-versus-actual overlay from a
+// WebSocket-like source. Pure over the socket and a predictor.
+export {
+  TelemetryAdapter,
+  TelemetryError,
+  parseTelemetryMessage,
+  residualKm,
+  type SocketLike,
+  type TelemetrySample,
+  type PredictedVsActual,
+  type Vec3,
+} from './telemetry.ts';

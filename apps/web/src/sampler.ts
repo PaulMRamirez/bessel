@@ -74,6 +74,23 @@ export function velocityAt(table: EphemerisTable, name: string, et: number): Km3
   return [(b[0] - a[0]) / 2, (b[1] - a[1]) / 2, (b[2] - a[2]) / 2];
 }
 
+/**
+ * Range rate (km/s) between two bodies at positions a and b with velocities va
+ * and vb: the component of relative velocity along the line of sight. Negative is
+ * closing (approaching), positive is separating. Returns 0 for coincident points.
+ */
+export function rangeRate(a: Km3, b: Km3, va: Km3, vb: Km3): number {
+  const dx = a[0] - b[0];
+  const dy = a[1] - b[1];
+  const dz = a[2] - b[2];
+  const dist = Math.hypot(dx, dy, dz);
+  if (dist < 1e-12) return 0;
+  const rvx = va[0] - vb[0];
+  const rvy = va[1] - vb[1];
+  const rvz = va[2] - vb[2];
+  return (dx * rvx + dy * rvy + dz * rvz) / dist;
+}
+
 /** Build a polyline (km, relative to Sun) from a body's samples. */
 export function trajectoryOf(table: EphemerisTable, name: string): Km3[] {
   const flat = table.byBody.get(name);

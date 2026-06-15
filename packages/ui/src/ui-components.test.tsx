@@ -14,7 +14,13 @@ describe('@bessel/ui ReadoutPanel', () => {
     const out = html(
       createElement(ReadoutPanel, {
         target: 'Saturn',
-        readouts: { rangeKm: 1234567, phaseDeg: 42.34, incidenceDeg: null, emissionDeg: 5.1 },
+        readouts: {
+          rangeKm: 1234567,
+          altitudeKm: 1174299,
+          phaseDeg: 42.34,
+          incidenceDeg: null,
+          emissionDeg: 5.1,
+        },
       }),
     );
     expect(out).toContain('1,234,567 km');

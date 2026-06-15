@@ -18,6 +18,8 @@ export interface LoadedCatalog {
   readonly name: string;
   readonly kind: CatalogKind;
   readonly entries: readonly CatalogEntry[];
+  /** The parsed native catalog, present when kind === 'native', for scene rebuild. */
+  readonly catalog?: BesselCatalog;
 }
 
 /** The bundled Cassini demo object list, used until a catalog is loaded. */
@@ -50,6 +52,7 @@ export function parseAnyCatalog(filename: string, text: string): LoadedCatalog {
       name: catalog.name || filename,
       kind: 'native',
       entries: nativeEntries(catalog),
+      catalog,
     };
   }
 

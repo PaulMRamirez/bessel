@@ -5,6 +5,8 @@
 export interface Readouts {
   /** Observer to target range, km. */
   readonly rangeKm: number | null;
+  /** Observer altitude above the target's surface (range minus mean radius), km. */
+  readonly altitudeKm: number | null;
   /** Solar phase angle, degrees. */
   readonly phaseDeg: number | null;
   /** Solar incidence angle, degrees. */
@@ -36,6 +38,8 @@ export function ReadoutPanel(props: ReadoutPanelProps): JSX.Element {
       <dl>
         <dt>Range</dt>
         <dd data-testid="readout-range">{km(readouts.rangeKm)}</dd>
+        <dt>Altitude</dt>
+        <dd data-testid="readout-altitude">{km(readouts.altitudeKm)}</dd>
         <dt>Phase</dt>
         <dd data-testid="readout-phase">{deg(readouts.phaseDeg)}</dd>
         <dt>Incidence</dt>

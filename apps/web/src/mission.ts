@@ -17,12 +17,14 @@ import brightStars from './assets/bright-stars.json';
 import { sampleEphemeris, positionAt, trajectoryOf, type EphemerisTable } from './sampler.ts';
 import { missionWindow } from './mission/duration.ts';
 import { STEPS, FOCUS_DISTANCE } from './engine/constants.ts';
+import type { MissionIdentity } from './generic-mission.ts';
 
 export interface MissionScene {
   readonly spec: SceneSpec;
   readonly table: EphemerisTable;
   readonly spacecraftModel: Object3D | null;
   readonly window: readonly [number, number];
+  readonly identity: MissionIdentity;
 }
 
 export async function buildMissionScene(
@@ -135,7 +137,15 @@ export async function buildMissionScene(
     return null;
   });
 
-  return { spec, table, spacecraftModel, window: [et0, et1] };
+  return {
+    spec,
+    table,
+    spacecraftModel,
+    window: [et0, et1],
+    // The bundled demo is Saturn-centric; the table and specs key Saturn by name
+    // while the catalog center is the SPICE id "6".
+    identity: { spacecraftName: spacecraftName, centerBody: 'Saturn' },
+  };
 }
 
 function safeStars(): ReturnType<typeof parseStarCatalog> | undefined {

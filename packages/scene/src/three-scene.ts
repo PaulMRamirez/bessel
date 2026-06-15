@@ -9,7 +9,6 @@ import {
   AmbientLight,
   BufferGeometry,
   Color,
-  DataTexture,
   DoubleSide,
   Float32BufferAttribute,
   Group,
@@ -22,13 +21,14 @@ import {
   PerspectiveCamera,
   PointLight,
   Raycaster,
-  RGBAFormat,
   Scene,
   SphereGeometry,
+  TextureLoader,
   Vector3,
   WebGLRenderer,
 } from 'three';
 import type { PlanetDef } from './planets.ts';
+import { buildBodyMaterial, proceduralBodyTexture } from './body-material.ts';
 import { pickObjectId } from './picking.ts';
 import { LabelLayer } from './labels.ts';
 import { buildParticleSystem, type ParticleSystemParams } from './particle-system.ts';
@@ -49,7 +49,7 @@ import { buildStarField } from './star-field.ts';
 import { type Star } from './star-catalog.ts';
 import { buildAtmosphere, type AtmosphereParams } from './atmosphere.ts';
 import { buildSunLight } from './shadows.ts';
-import { rowMajor3x3ToMatrix4 } from './orientation.ts';
+import { rowMajor3x3ToMatrix4, applyAttitude } from './orientation.ts';
 import {
   computeOrbitCameraPosition,
   computeTrackCameraPosition,
@@ -58,27 +58,19 @@ import {
 
 export type { Km3 };
 
-function bodyTexture(color: readonly [number, number, number]): DataTexture {
-  const w = 32;
-  const h = 16;
-  const data = new Uint8Array(w * h * 4);
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      // Latitude banding plus a little longitudinal variation, so globes read as
-      // surfaces rather than flat discs without bundling image assets.
-      const band = 0.85 + 0.15 * Math.sin((y / h) * Math.PI * 6);
-      const lon = 0.92 + 0.08 * Math.sin((x / w) * Math.PI * 4);
-      const k = band * lon;
-      const i = (y * w + x) * 4;
-      data[i] = Math.min(255, color[0] * 255 * k);
-      data[i + 1] = Math.min(255, color[1] * 255 * k);
-      data[i + 2] = Math.min(255, color[2] * 255 * k);
-      data[i + 3] = 255;
+// Recursively free GPU resources for an object subtree (geometries and
+// materials), so a scene rebuild does not leak buffers.
+function disposeDeep(root: Object3D): void {
+  root.traverse((child) => {
+    const mesh = child as Partial<Mesh> & Partial<Line>;
+    mesh.geometry?.dispose?.();
+    const material = (mesh as { material?: unknown }).material;
+    if (Array.isArray(material)) {
+      for (const m of material) (m as { dispose?: () => void }).dispose?.();
+    } else {
+      (material as { dispose?: () => void } | undefined)?.dispose?.();
     }
-  }
-  const tex = new DataTexture(data, w, h, RGBAFormat);
-  tex.needsUpdate = true;
-  return tex;
+  });
 }
 
 // Bodies are kept at true scale; this fraction of the camera-to-body distance is
@@ -97,6 +89,7 @@ export class SolarSystemScene {
   private readonly scene = new Scene();
   private readonly camera: PerspectiveCamera;
   private readonly world = new Group();
+  private readonly textureLoader = new TextureLoader();
   private readonly bodies = new Map<string, BodyNode>();
   private readonly positions = new Map<string, Km3>();
   private readonly raycaster = new Raycaster();
@@ -126,6 +119,8 @@ export class SolarSystemScene {
   private directionVectors: Object3D | null = null;
   private atmosphere: Object3D | null = null;
   private spacecraftModel: Object3D | null = null;
+  // The inner model object that CK attitude rotates (the wrapper keeps position).
+  private spacecraftAttitudeTarget: Object3D | null = null;
   // Objects that track a body each frame (rings, axes, DSK mesh, direction vectors).
   private readonly anchored = new Map<Object3D, string>();
   private mode: SceneCameraMode = 'orbit';
@@ -151,12 +146,9 @@ export class SolarSystemScene {
 
   setBodies(defs: readonly PlanetDef[]): void {
     for (const def of defs) {
-      const material = new MeshStandardMaterial({
-        map: bodyTexture(def.color),
-        emissive: new Color(...def.color),
-        emissiveIntensity: def.name === 'Sun' ? 0.9 : 0.08,
-        roughness: 0.9,
-        metalness: 0.0,
+      const material = buildBodyMaterial(def, {
+        loadImageTexture: (url) => this.textureLoader.load(url),
+        proceduralTexture: (color) => proceduralBodyTexture(color),
       });
       const radius = def.radiusKm * SCALE;
       const mesh = new Mesh(new SphereGeometry(radius, 32, 16), material);
@@ -480,8 +472,18 @@ export class SolarSystemScene {
     wrapper.add(object);
     wrapper.position.copy(this.spacecraft.mesh.position);
     this.spacecraftModel = wrapper;
+    this.spacecraftAttitudeTarget = object;
     this.spacecraft = { ...this.spacecraft, mesh: wrapper };
     this.world.add(wrapper);
+  }
+
+  /**
+   * Orient the spacecraft model from a SPICE row-major rotation (CK attitude).
+   * No-op when no model is loaded; the wrapper keeps the position and apparent
+   * size, so only the model's orientation changes.
+   */
+  setSpacecraftAttitude(rotationRowMajor3x3: readonly number[]): void {
+    if (this.spacecraftAttitudeTarget) applyAttitude(this.spacecraftAttitudeTarget, rotationRowMajor3x3);
   }
 
   /** Enable sun-cast shadow mapping (replaces the ambient point light). */
@@ -669,6 +671,55 @@ export class SolarSystemScene {
 
     this.renderer.render(this.scene, this.camera);
     this.labelLayer.update(this.camera);
+  }
+
+  /**
+   * Remove all mission content (bodies, spacecraft, trajectory, decorations,
+   * labels) while keeping the renderer, camera, lights, and label overlay, so a
+   * newly loaded catalog can repopulate the same scene without duplicating the
+   * previous mission. This is the seam engine.loadCatalog uses to re-render an
+   * arbitrary mission in place.
+   */
+  reset(): void {
+    const drop = (obj: Object3D | null): void => {
+      if (!obj) return;
+      this.world.remove(obj);
+      disposeDeep(obj);
+    };
+    for (const node of this.bodies.values()) drop(node.mesh);
+    this.bodies.clear();
+    this.positions.clear();
+    drop(this.spacecraft?.mesh ?? null);
+    this.spacecraft = null;
+    drop(this.spacecraftModel);
+    this.spacecraftModel = null;
+    this.spacecraftAttitudeTarget = null;
+    drop(this.trajectory);
+    this.trajectory = null;
+    drop(this.fovCone);
+    this.fovCone = null;
+    drop(this.footprint);
+    this.footprint = null;
+    drop(this.starField);
+    this.starField = null;
+    drop(this.dskMesh);
+    this.dskMesh = null;
+    drop(this.rings);
+    this.rings = null;
+    drop(this.directionVectors);
+    this.directionVectors = null;
+    drop(this.atmosphere);
+    this.atmosphere = null;
+    for (const obj of this.axes.values()) drop(obj);
+    this.axes.clear();
+    for (const obj of this.particleSystems.values()) drop(obj);
+    this.particleSystems.clear();
+    for (const obj of this.swarms.values()) drop(obj);
+    this.swarms.clear();
+    for (const entry of this.timeSwitched.values()) drop(entry.group);
+    this.timeSwitched.clear();
+    this.anchored.clear();
+    this.labelLayer.setLabels([]);
   }
 
   dispose(): void {

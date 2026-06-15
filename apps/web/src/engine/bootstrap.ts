@@ -14,8 +14,10 @@ import { connectSpice } from '../spice.ts';
 import { KERNEL_ORDER, KERNEL_URLS } from '../kernels.ts';
 import type { EphemerisTable } from '../sampler.ts';
 import { buildMissionScene } from '../mission.ts';
+import type { MissionIdentity } from '../generic-mission.ts';
 import { CASSINI_ISS_WAC, loadInstrumentFov, type InstrumentFov } from '../instruments.ts';
 import type { AppStore } from '../store/index.ts';
+import type { FileSystem } from '@bessel/pal';
 import { applyViewModel } from './apply-view.ts';
 
 export interface EngineCore {
@@ -25,6 +27,11 @@ export interface EngineCore {
   spice: SpiceEngine;
   fov: InstrumentFov | null;
   storage: Storage;
+  fs: FileSystem;
+  // The active mission's spacecraft and center body. Mutable so loading a new
+  // catalog re-points the frame loop (track, FOV, footprint) without a Cassini
+  // hardcode.
+  identity: MissionIdentity;
 }
 
 export async function bootScene(
@@ -59,7 +66,16 @@ export async function bootScene(
 
   await applySharedView(scene, clock, spice, store, isDisposed);
 
-  return { scene, clock, table: mission.table, spice, fov, storage: platform.storage };
+  return {
+    scene,
+    clock,
+    table: mission.table,
+    spice,
+    fov,
+    storage: platform.storage,
+    fs: platform.fs,
+    identity: mission.identity,
+  };
 }
 
 // Reconstruct a shared view from the URL fragment, if present.

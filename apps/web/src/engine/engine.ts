@@ -5,7 +5,7 @@
 // writes derived state (et, epochLabel, readouts, footprint count) back to it.
 // React subscribes to the store; user actions call the methods below.
 
-import { pointerToNdc, type Km3 } from '@bessel/scene';
+import { pointerToNdc, buildScene, azimuthElevationFromDirection, type Km3 } from '@bessel/scene';
 import {
   captureStill,
   downloadBlob,
@@ -15,10 +15,11 @@ import {
   type SettingKey,
 } from '@bessel/ui';
 import { encodeView, decodeView, type ViewModel } from '@bessel/state';
-import { positionAt, velocityAt } from '../sampler.ts';
+import { positionAt, velocityAt, rangeRate } from '../sampler.ts';
 import { fovRim, footprint } from '../instruments.ts';
 import { toggleSelection } from '../selection.ts';
 import { parseAnyCatalog, formatLoadError } from '../catalog-load.ts';
+import { buildCatalogMissionScene } from '../generic-mission.ts';
 import {
   loadBookmarks,
   persistBookmarks,
@@ -44,6 +45,7 @@ export class BesselEngine {
   private labelAccum = 0;
   private instrumentAccum = 0;
   private readoutAccum = 0;
+  private attitudeAccum = 0;
   private recorder: Recorder | null = null;
   private disposed = false;
 
@@ -104,18 +106,21 @@ export class BesselEngine {
     e.scene.setPositions(positions);
     e.scene.updateTimeSwitched(now);
 
-    // Track-along-trajectory camera: follow Cassini down its velocity.
-    if (s.track) {
-      e.scene.setFocusVelocity(velocityAt(e.table, 'Cassini', now));
+    // Track-along-trajectory camera: follow the mission spacecraft down its velocity.
+    const scName = e.identity.spacecraftName;
+    if (s.track && scName) {
+      e.scene.setFocusVelocity(velocityAt(e.table, scName, now));
       e.scene.setCameraMode('track');
     } else {
       e.scene.setCameraMode('orbit');
     }
 
-    // Sensor FOV cone (cheap, every frame) and footprint (throttled, async).
-    if (s.instruments && e.fov) {
-      const scPos = positionAt(e.table, 'Cassini', now);
-      const satPos = positionAt(e.table, 'Saturn', now);
+    // Sensor FOV cone (cheap, every frame) and footprint (throttled, async). Only
+    // the mission that owns the loaded instrument (the Cassini demo) has an fov.
+    if (s.instruments && e.fov && scName) {
+      const center = e.identity.centerBody;
+      const scPos = positionAt(e.table, scName, now);
+      const satPos = positionAt(e.table, center, now);
       e.scene.setFovCone(scPos, fovRim(scPos, satPos, e.fov));
       this.instrumentAccum += dt;
       if (this.instrumentAccum > 0.4) {
@@ -124,11 +129,30 @@ export class BesselEngine {
         void footprint(e.spice, now, fovRef).then(
           (pts) => {
             if (!this.disposed && this.store.getState().instruments) {
-              e.scene.setFootprint(pts, 'Saturn', '#ff33cc');
+              e.scene.setFootprint(pts, center, '#ff33cc');
               this.store.setState({ footprintPoints: pts.length });
             }
           },
           (err: unknown) => console.error('footprint failed', err),
+        );
+      }
+    }
+
+    // Spacecraft attitude from a CK frame (throttled). When no CK is loaded for
+    // the frame, pxform fails and the model keeps its last orientation (honest:
+    // attitude is only real when a CK kernel covers the epoch).
+    const scFrame = e.identity.spacecraftFrame;
+    if (scFrame) {
+      this.attitudeAccum += dt;
+      if (this.attitudeAccum > 0.2) {
+        this.attitudeAccum = 0;
+        void e.spice.pxform(scFrame, 'J2000', now).then(
+          (rot) => {
+            if (!this.disposed) e.scene.setSpacecraftAttitude(rot);
+          },
+          () => {
+            // No CK coverage at this epoch; leave the model orientation unchanged.
+          },
         );
       }
     }
@@ -167,6 +191,12 @@ export class BesselEngine {
     const a = positionAt(e.table, from, et);
     const b = positionAt(e.table, to, et);
     const distanceKm = Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+    const relativeSpeedKmS = rangeRate(
+      a,
+      b,
+      velocityAt(e.table, from, et),
+      velocityAt(e.table, to, et),
+    );
     const angleDeg = this.angleFromObserver(from, to, et);
     if (
       current &&
@@ -177,14 +207,15 @@ export class BesselEngine {
     ) {
       return;
     }
-    this.store.setState({ measurement: { from, to, distanceKm, angleDeg } });
+    this.store.setState({ measurement: { from, to, distanceKm, relativeSpeedKmS, angleDeg } });
   }
 
   // Angular separation of the two objects seen from the spacecraft observer.
   private angleFromObserver(from: string, to: string, et: number): number | null {
     const e = this.core;
-    const observer = 'Cassini';
-    if (!e || from === observer || to === observer || !e.table.byBody.has(observer)) return null;
+    const observer = e?.identity.spacecraftName;
+    if (!e || !observer || from === observer || to === observer || !e.table.byBody.has(observer))
+      return null;
     const o = positionAt(e.table, observer, et);
     const a = positionAt(e.table, from, et);
     const b = positionAt(e.table, to, et);
@@ -264,6 +295,32 @@ export class BesselEngine {
     if (!this.core) return;
     this.core.scene.centerOn(body);
     this.core.scene.setView(0.6, 0.35, FOCUS_DISTANCE[body] ?? DEFAULT_FOCUS_DISTANCE);
+  }
+
+  // Set the camera to look along a world-space direction (Cosmographia's
+  // "set the view from a vector"), keeping the current focus and distance.
+  viewAlong(direction: Km3): void {
+    const e = this.core;
+    if (!e) return;
+    const { azimuth, elevation } = azimuthElevationFromDirection(direction);
+    e.scene.setView(azimuth, elevation, e.scene.getView().distance);
+  }
+
+  // Look from the Sun toward the focus: the look direction is from the focus to
+  // the Sun (which sits at the heliocentric origin), i.e. minus the focus position.
+  viewFromSun(): void {
+    const e = this.core;
+    if (!e) return;
+    const focusPos = positionAt(e.table, e.scene.focusBody, e.clock.state.et);
+    this.viewAlong([-focusPos[0], -focusPos[1], -focusPos[2]]);
+  }
+
+  // Look down-track along the spacecraft velocity, if the mission has a spacecraft.
+  viewAlongVelocity(): void {
+    const e = this.core;
+    const sc = e?.identity.spacecraftName;
+    if (!e || !sc) return;
+    this.viewAlong(velocityAt(e.table, sc, e.clock.state.et));
   }
 
   // Build a ViewModel for the current camera, epoch, and selection.
@@ -347,7 +404,8 @@ export class BesselEngine {
   toggleTrack(): void {
     const next = !this.store.getState().track;
     this.store.setState({ track: next });
-    if (next) this.centerOn('Cassini');
+    const sc = this.core?.identity.spacecraftName;
+    if (next && sc) this.centerOn(sc);
   }
 
   toggleInstruments(): void {
@@ -420,17 +478,71 @@ export class BesselEngine {
   }
 
   // Parse and validate a picked or dropped catalog file. On success the object
-  // list becomes catalog-driven; on failure a located error is shown loudly.
-  loadCatalog(file: { name: string; text: string }): void {
+  // list becomes catalog-driven; for a native catalog the 3D scene is rebuilt
+  // from it (arbitrary-mission rendering). On failure a located error is shown
+  // loudly (CLAUDE.md: never a silent fallback).
+  async loadCatalog(file: { name: string; text: string }): Promise<void> {
+    let loaded;
     try {
-      const loaded = parseAnyCatalog(file.name, file.text);
-      this.store.setState({
-        objects: loaded.entries,
-        loadedName: loaded.name,
-        loadError: null,
-      });
+      loaded = parseAnyCatalog(file.name, file.text);
     } catch (err) {
       this.store.setState({ loadError: formatLoadError(err) });
+      return;
+    }
+    this.store.setState({ objects: loaded.entries, loadedName: loaded.name, loadError: null });
+
+    const e = this.core;
+    // Cosmographia single-spacecraft catalogs update only the object list for now;
+    // a native catalog with a spacecraft time window re-renders the scene
+    // generically. A bodies-only catalog (no window to sample over) updates only
+    // the object list, never a loud error.
+    const hasWindow = !!loaded.catalog?.spacecraft?.[0]?.arcs?.[0]?.timeRange;
+    if (!e || loaded.kind !== 'native' || !loaded.catalog || !hasWindow) return;
+    try {
+      this.store.setState({ status: 'Building mission' });
+      const mission = await buildCatalogMissionScene(e.spice, loaded.catalog, (status) =>
+        this.store.setState({ status }),
+      );
+      if (this.disposed) return;
+      e.scene.reset();
+      buildScene(e.scene, mission.spec);
+      // Swap the live mission state the frame loop reads each tick.
+      e.table = mission.table;
+      e.identity = mission.identity;
+      e.fov = null;
+      const [et0, et1] = mission.window;
+      e.clock.setEpoch(et0);
+      this.store.setState({
+        bounds: [et0, et1],
+        et: et0,
+        focus: mission.identity.centerBody,
+        selection: [mission.identity.centerBody],
+        footprintPoints: 0,
+        fovOk: false,
+        status: 'Ready',
+      });
+    } catch (err) {
+      this.store.setState({ status: 'Ready', loadError: formatLoadError(err) });
+    }
+  }
+
+  // Furnish an uploaded kernel's bytes to SPICE so an arbitrary mission whose
+  // kernels are not bundled can be rendered, and persist it to OPFS (best effort)
+  // so a reload finds it. Returns a loud error string on failure, else null.
+  async uploadKernel(name: string, bytes: Uint8Array): Promise<string | null> {
+    const e = this.core;
+    if (!e) return 'Engine not ready';
+    try {
+      await e.spice.furnsh(name, bytes);
+      await e.fs.writeFile(`/kernels/${name}`, bytes).catch((err: unknown) => {
+        // Persistence is best-effort; the kernel is already usable this session.
+        console.error('kernel persist failed', err);
+      });
+      return null;
+    } catch (err) {
+      const message = formatLoadError(err);
+      this.store.setState({ loadError: message });
+      return message;
     }
   }
 

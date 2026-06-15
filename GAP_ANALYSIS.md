@@ -8,6 +8,10 @@ prior art, the rendering ecosystem, the tri-target tooling, and Paul's adjacent
 systems), states the gap between each and Bessel's requirements, and names
 what Bessel must build. It is the evidence base for the scope in SPEC.md.
 
+For the auditable, feature-by-feature parity check (verified against the live
+cosmoguide.org and against the code, with a prioritized closure plan), see
+docs/PARITY_MATRIX.md.
+
 ---
 
 ## 1. SPICE-Enhanced Cosmographia (the incumbent)
