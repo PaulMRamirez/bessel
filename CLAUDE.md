@@ -1,9 +1,8 @@
 # CLAUDE.md
 
 Canonical agent context for Bessel. This is the file Claude Code reads at the
-start of every session. AGENTS.md is a thin pointer to this file for other agent
-harnesses. The authoritative requirements live in SPEC.md; this file is the
-in-session operating manual.
+start of every session. The authoritative requirements live in SPEC.md; this
+file is the in-session operating manual.
 
 ---
 
@@ -15,7 +14,7 @@ via Capacitor, and as a desktop app via Electron. It reads Cosmographia-compatib
 catalogs, drives geometry from CSPICE compiled to WebAssembly, and renders with
 Three.js. License: Apache-2.0.
 
-Read first: VISION.md and SPEC.md for intent and the verifiable command catalog,
+Read first: SPEC.md for the requirements and the verifiable command catalog,
 then docs/PARITY_MATRIX.md for the current implemented status. ADRs in docs/adr/
 record the binding decisions.
 
@@ -72,8 +71,8 @@ loads a fixture and checks for a non-empty WebGL frame, never by judgement.
 - Never weaken type checking. No blanket any and no ts-ignore to pass typecheck,
   except with an inline comment justifying a genuine external-types gap.
 - Never disable lint rules to pass; fix the root cause.
-- Never modify docs/adr/, this file, AGENTS.md, VISION.md, or SPEC.md during a
-  feature goal. Decisions change deliberately, not as a side effect.
+- Never modify docs/adr/, this file, or SPEC.md during a feature goal. Decisions
+  change deliberately, not as a side effect.
 - Never commit secrets or kernels-as-data. See .claudeignore.
 - If ambiguous, add a // TODO: <question> comment and continue; raise a checkpoint
   only for decisions not covered by the active goal file.

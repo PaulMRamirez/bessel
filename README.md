@@ -55,21 +55,18 @@ inner system, Saturn, and Cassini).
 
 ## Where to start
 
-1. VISION.md: why Bessel exists and what it is.
-2. SPEC.md: the master specification and the verifiable command catalog.
-3. docs/PARITY_MATRIX.md: the feature-by-feature parity check against
+1. SPEC.md: the master specification and the verifiable command catalog.
+2. docs/PARITY_MATRIX.md: the feature-by-feature parity check against
    Cosmographia, with the current implemented status.
-4. docs/catalog-schema.md: the native catalog schema for authoring missions.
-5. docs/adr/: the binding architecture decisions.
-6. REFERENCES.md: curated sources.
+3. docs/catalog-schema.md: the native catalog schema for authoring missions.
+4. docs/adr/: the binding architecture decisions.
+5. REFERENCES.md: curated sources.
 
 ## Project configuration
 
-- CLAUDE.md: canonical agent context (AGENTS.md is a thin pointer for other
-  harnesses): tech stack, the verifiable command catalog, the dependency rule,
-  and the working conventions.
+- CLAUDE.md: canonical agent context: tech stack, the verifiable command
+  catalog, the dependency rule, and the working conventions.
 - docs/adr/: the binding architecture decisions.
-- .claude/commands/: `/verify` runs the gate and the post-change review checks.
 - .claudeignore: secrets and bulk kernel data the agent must not touch.
 - .github/workflows/ci.yml: CI running the same gate vocabulary as `pnpm verify`.
 - .size-limit.json, lighthouserc.json: the efficiency budgets (hard gates).

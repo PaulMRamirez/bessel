@@ -3,7 +3,7 @@
 Status: Draft v1.0
 Date: 2026-06-07
 Owner: Paul Ramirez
-Companion documents: VISION.md, REFERENCES.md, docs/adr/, docs/PARITY_MATRIX.md (implemented status)
+Companion documents: REFERENCES.md, docs/adr/, docs/PARITY_MATRIX.md (implemented status)
 
 This specification is written to be executed. Every phase in Section 9 states a
 completion condition as runnable commands so that a Claude Code `/goal` session,
@@ -134,10 +134,9 @@ bessel/
                   #   (Android deferred from gates; architecture unchanged, ADR-0002)
   kernels/        # sample meta-kernels + a fetch script (large data git-ignored)
   e2e/            # Playwright cross-target end-to-end tests
-  docs/           # vision, spec, guide, gap analysis, references, adr, goals
-  .claude/        # commands and settings for the /goal workflow
+  docs/           # spec companion docs: adr, parity matrix, catalog schema, integrations
+  .claude/        # settings
   CLAUDE.md       # canonical agent context (Claude Code reads this)
-  AGENTS.md       # thin pointer to CLAUDE.md for other harnesses
   .claudeignore
 ```
 

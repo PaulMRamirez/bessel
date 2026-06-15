@@ -14,9 +14,8 @@ Date: 2026-06-14
 > render and the axe scan, size, audit:prod, lhci, release:dry).
 
 This is the auditable, feature-by-feature parity check promised in ADR-0006 and
-SPEC.md Section 11. Where VISION.md argues *why* Bessel exists, this document
-states *exactly* what Cosmographia does, whether Bessel has it, and where the
-evidence is.
+SPEC.md Section 11. It states *exactly* what Cosmographia does, whether Bessel
+has it, and where the evidence is.
 
 Method:
 - Cosmographia baseline (the "should match" column) was verified against the
