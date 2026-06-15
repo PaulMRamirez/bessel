@@ -7,14 +7,15 @@ test('loading a native catalog populates the object browser', async ({ page }) =
   await page.goto('/');
   await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
 
-  // The bundled Cassini demo is shown until a catalog is loaded.
-  await expect(page.getByTestId('select-Cassini')).toBeVisible();
+  // Boot is neutral: the inner solar system, no spacecraft (the Cassini demo is a
+  // loadable sample, not baked in).
+  await expect(page.getByTestId('select-Saturn')).toBeVisible();
+  await expect(page.getByTestId('select-Cassini')).toHaveCount(0);
 
   await page.getByTestId('catalog-file-input').setInputFiles('e2e/fixtures/sample-mission.json');
 
-  await expect(page.getByTestId('select-titan')).toBeVisible({ timeout: 5_000 });
-  await expect(page.getByTestId('select-enceladus')).toBeVisible();
-  await expect(page.getByTestId('select-Cassini')).toHaveCount(0);
+  await expect(page.getByTestId('select-Titan')).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByTestId('select-Enceladus')).toBeVisible();
   await expect(page.getByTestId('load-error')).toHaveText('');
 });
 

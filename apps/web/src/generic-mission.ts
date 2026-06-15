@@ -12,30 +12,60 @@
 
 import {
   INNER_SYSTEM,
+  loadSpacecraftModel,
   parseStarCatalog,
   type PlanetDef,
   type SceneSpec,
   type Km3,
   type Star,
   type RingSpec,
+  type AtmosphereSpec,
+  type AxisTriadSpec,
+  type DirectionVectorsSpec,
   type KeplerianSwarmSpec,
   type ParticleSystemSpec,
   type TimeSwitchedSpec,
 } from '@bessel/scene';
 import { linearRamp } from '@bessel/color';
-import type { BesselCatalog, CatalogBody, CatalogSpacecraft, Geometry } from '@bessel/catalog';
+import type {
+  BesselCatalog,
+  CatalogBody,
+  CatalogInstrument,
+  CatalogSpacecraft,
+  Geometry,
+} from '@bessel/catalog';
 import type { SpiceEngine } from '@bessel/spice';
+import type { Object3D } from 'three';
 import brightStars from './assets/bright-stars.json';
-import { sampleEphemeris, trajectoryOf, type EphemerisTable } from './sampler.ts';
+import { sampleEphemeris, positionAt, trajectoryOf, type EphemerisTable } from './sampler.ts';
 import { missionWindow } from './mission/duration.ts';
 import { STEPS, FOCUS_DISTANCE, DEFAULT_FOCUS_DISTANCE } from './engine/constants.ts';
+
+/** Default sampling window (UTC) for a neutral mission with no spacecraft arc. */
+const DEFAULT_WINDOW: readonly [string, string] = ['2004-06-22T00:00:00', '2004-08-22T00:00:00'];
 
 /** Which spacecraft and center body the active mission tracks. */
 export interface MissionIdentity {
   readonly spacecraftName: string | null;
+  /** Spacecraft SPICE id (the observer for readouts), e.g. "-82", if any. */
+  readonly spacecraftId?: string;
   readonly centerBody: string;
   /** SPICE frame for the spacecraft attitude (CK), driven via pxform, if any. */
   readonly spacecraftFrame?: string;
+}
+
+/** A catalog-declared instrument resolved to the ids the FOV/footprint code needs. */
+export interface InstrumentDescriptor {
+  /** Sensor SPICE id for getfov, e.g. -82361. */
+  readonly sensorId: number;
+  /** Observer (spacecraft) SPICE id for sincpt, e.g. "-82". */
+  readonly observerId: string;
+  /** Target body SPICE id for getfov/sincpt, e.g. "699". */
+  readonly targetId: string;
+  /** Target body-fixed frame for sincpt, e.g. "IAU_SATURN". */
+  readonly targetFrame: string;
+  /** Table key the FOV cone and footprint anchor to (a body name, e.g. "Saturn"). */
+  readonly anchorName: string;
 }
 
 export interface MissionScene {
@@ -43,6 +73,10 @@ export interface MissionScene {
   readonly table: EphemerisTable;
   readonly window: readonly [number, number];
   readonly identity: MissionIdentity;
+  /** Loaded glTF spacecraft model, if the spacecraft declares a Mesh geometry. */
+  readonly spacecraftModel?: Object3D | null;
+  /** The first catalog instrument, resolved, or null if the mission has none. */
+  readonly instrument?: InstrumentDescriptor | null;
 }
 
 const INNER_BY_NAME = new Map(INNER_SYSTEM.map((p) => [p.name.toLowerCase(), p]));
@@ -149,6 +183,9 @@ export function assembleSceneSpec(input: {
   readonly trajectoryAnchor: string;
   readonly stars?: readonly Star[];
   readonly rings: readonly RingSpec[];
+  readonly atmospheres?: readonly AtmosphereSpec[];
+  readonly axisTriads?: readonly AxisTriadSpec[];
+  readonly directionVectors?: readonly DirectionVectorsSpec[];
   readonly keplerianSwarms: readonly KeplerianSwarmSpec[];
   readonly particleSystems: readonly ParticleSystemSpec[];
   readonly timeSwitched: readonly TimeSwitchedSpec[];
@@ -175,6 +212,11 @@ export function assembleSceneSpec(input: {
       : {}),
     ...(input.stars ? { starField: input.stars } : {}),
     rings: input.rings,
+    ...(input.atmospheres && input.atmospheres.length > 0 ? { atmospheres: input.atmospheres } : {}),
+    ...(input.axisTriads && input.axisTriads.length > 0 ? { axisTriads: input.axisTriads } : {}),
+    ...(input.directionVectors && input.directionVectors.length > 0
+      ? { directionVectors: input.directionVectors }
+      : {}),
     keplerianSwarms: input.keplerianSwarms,
     particleSystems: input.particleSystems,
     timeSwitched: input.timeSwitched,
@@ -183,10 +225,15 @@ export function assembleSceneSpec(input: {
   };
 }
 
+const scName = (sc: CatalogSpacecraft): string => sc.name ?? sc.id;
+
 /**
  * Orchestrate a generic mission: sample SPICE for every catalog body and the
- * first spacecraft, then assemble a SceneSpec. Throws on a missing time window
- * or an unresolved body (loud failure, never a silent re-center).
+ * first spacecraft, then assemble a rich SceneSpec (bodies, trajectory, rings,
+ * atmospheres, axis triads, direction vectors, swarms, glTF mesh, and the first
+ * instrument). With no spacecraft it renders a neutral bodies-only scene over a
+ * default window. Throws on a spacecraft with no time window or an unresolved
+ * body (loud failure, never a silent re-center).
  */
 export async function buildCatalogMissionScene(
   spice: SpiceEngine,
@@ -204,7 +251,7 @@ export async function buildCatalogMissionScene(
 
   onStatus('Sampling ephemerides');
   const sampleRefs = bodies.map((b) => ({ name: b.name, spiceId: b.spiceId }));
-  if (spacecraft) sampleRefs.push({ name: spacecraft.name ?? spacecraft.id, spiceId: spacecraft.id });
+  if (spacecraft) sampleRefs.push({ name: scName(spacecraft), spiceId: spacecraft.id });
   const table = await sampleEphemeris(spice, sampleRefs, et0, et1, STEPS);
 
   // Spacecraft trajectory sampled in its center frame so the polyline shows the
@@ -218,13 +265,13 @@ export async function buildCatalogMissionScene(
     centerBody = resolveCenterName(center, bodies);
     const orbit = await sampleEphemeris(
       spice,
-      [{ name: spacecraft.name ?? spacecraft.id, spiceId: spacecraft.id }],
+      [{ name: scName(spacecraft), spiceId: spacecraft.id }],
       et0,
       et1,
       STEPS,
       center,
     );
-    trajectoryPoints = trajectoryOf(orbit, spacecraft.name ?? spacecraft.id);
+    trajectoryPoints = trajectoryOf(orbit, scName(spacecraft));
     const ramp = linearRamp('trail', { r: 0.12, g: 0.17, b: 0.38 }, { r: 0.55, g: 0.78, b: 1 });
     trajectoryColors = trajectoryPoints.map((_, i) => {
       const c = ramp.color(i, [0, Math.max(1, trajectoryPoints.length - 1)]);
@@ -232,36 +279,60 @@ export async function buildCatalogMissionScene(
     });
   }
 
-  // Map every catalog body's geometry onto the decorative scene specs.
+  // Map every catalog body's geometry and orientation onto the scene specs.
   const rings: RingSpec[] = [];
   const keplerianSwarms: KeplerianSwarmSpec[] = [];
   const particleSystems: ParticleSystemSpec[] = [];
   const timeSwitched: TimeSwitchedSpec[] = [];
+  const axisTriads: AxisTriadSpec[] = [];
+  const atmospheres: AtmosphereSpec[] = [];
   for (const body of catalog.bodies ?? []) {
     const name = body.name ?? body.id;
-    const g = body.geometry;
-    if (!g) continue;
     const radius = bodyRadiusKm(body);
-    const ring = ringSpecFromGeometry(name, g);
-    if (ring) rings.push(ring);
-    const swarm = swarmSpecFromGeometry(`${name}-swarm`, name, g, radius);
-    if (swarm) keplerianSwarms.push(swarm);
-    const particles = particleSpecFromGeometry(`${name}-particles`, name, g, radius);
-    if (particles) particleSystems.push(particles);
-    const switched = timeSwitchedFromGeometry(`${name}-switched`, name, g, radius, et0, et1, spice);
-    if (switched) timeSwitched.push(await switched);
+    // A body-fixed orientation frame drives ring orientation and an axis triad.
+    const rotation = await bodyRotation(spice, body, et0);
+    if (rotation) {
+      axisTriads.push({ id: `${name}-axes`, body: name, rotationRowMajor3x3: rotation, lengthKm: radius * 2 });
+    }
+    const g = body.geometry;
+    if (g) {
+      const ring = ringSpecFromGeometry(name, g, rotation);
+      if (ring) rings.push(ring);
+      const swarm = swarmSpecFromGeometry(`${name}-swarm`, name, g, radius, rotation);
+      if (swarm) keplerianSwarms.push(swarm);
+      const particles = particleSpecFromGeometry(`${name}-particles`, name, g, radius);
+      if (particles) particleSystems.push(particles);
+      const switched = timeSwitchedFromGeometry(`${name}-switched`, name, g, radius, et0, et1, spice);
+      if (switched) timeSwitched.push(await switched);
+      const atmo = atmosphereSpecFromBody(name, g, radius, table, et0);
+      if (atmo) atmospheres.push(atmo);
+    }
+  }
+
+  // A direction vector toward the Sun (the heliocentric origin) for the spacecraft.
+  const directionVectors: DirectionVectorsSpec[] = [];
+  if (spacecraft) {
+    const scStart = positionAt(table, scName(spacecraft), et0);
+    directionVectors.push({
+      anchorBody: scName(spacecraft),
+      specs: [{ label: 'to-Sun', dirKm: [-scStart[0], -scStart[1], -scStart[2]], color: 0xffd27f }],
+      lengthKm: 200000,
+    });
   }
 
   const cameraDistance = FOCUS_DISTANCE[centerBody] ?? DEFAULT_FOCUS_DISTANCE;
   const stars = safeStars();
   const spec = assembleSceneSpec({
     bodies,
-    spacecraftName: spacecraft ? (spacecraft.name ?? spacecraft.id) : null,
+    spacecraftName: spacecraft ? scName(spacecraft) : null,
     trajectoryPoints,
     ...(trajectoryColors ? { trajectoryColors } : {}),
     trajectoryAnchor: centerBody,
     ...(stars ? { stars } : {}),
     rings,
+    atmospheres,
+    axisTriads,
+    directionVectors,
     keplerianSwarms,
     particleSystems,
     timeSwitched,
@@ -269,6 +340,8 @@ export async function buildCatalogMissionScene(
     cameraDistance,
   });
 
+  const spacecraftModel = spacecraft ? await loadMeshModel(spacecraft) : null;
+  const instrument = resolveInstrument(catalog, spacecraft, centerBody, bodies);
   const spacecraftFrame =
     spacecraft?.orientation?.type === 'Spice' ? spacecraft.orientation.frame : undefined;
   return {
@@ -277,10 +350,78 @@ export async function buildCatalogMissionScene(
     window,
     identity: {
       spacecraftName: spec.spacecraft?.name ?? null,
+      ...(spacecraft ? { spacecraftId: spacecraft.id } : {}),
       centerBody,
       ...(spacecraftFrame ? { spacecraftFrame } : {}),
     },
+    spacecraftModel,
+    instrument,
   };
+}
+
+/** Body-fixed rotation (pxform frame -> J2000) when the body declares a Spice frame. */
+async function bodyRotation(
+  spice: SpiceEngine,
+  body: CatalogBody,
+  et: number,
+): Promise<readonly number[] | undefined> {
+  const frame = body.orientation?.type === 'Spice' ? body.orientation.frame : undefined;
+  if (!frame) return undefined;
+  try {
+    return await spice.pxform(frame, 'J2000', et);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Atmosphere shell for a Globe that declares one; sun direction is minus the body position. */
+function atmosphereSpecFromBody(
+  name: string,
+  g: Geometry,
+  radius: number,
+  table: EphemerisTable,
+  et0: number,
+): AtmosphereSpec | null {
+  if (g.type !== 'Globe' || !g.atmosphere) return null;
+  const innerKm = g.atmosphere.innerRadius ?? radius;
+  const outerKm = g.atmosphere.outerRadius ?? innerKm * 1.05;
+  const pos = positionAt(table, name, et0);
+  return { body: name, innerKm, outerKm, sunDirection: [-pos[0], -pos[1], -pos[2]], visible: false };
+}
+
+/** Load a glTF spacecraft model from a Mesh geometry source URL, or null. */
+async function loadMeshModel(spacecraft: CatalogSpacecraft): Promise<Object3D | null> {
+  const g = spacecraft.geometry;
+  if (!g || g.type !== 'Mesh' || !g.source || typeof fetch !== 'function') return null;
+  try {
+    const text = await (await fetch(g.source)).text();
+    return await loadSpacecraftModel(text, 200);
+  } catch (err) {
+    console.error('spacecraft model load failed', err);
+    return null;
+  }
+}
+
+/** Resolve the first catalog instrument to the ids the FOV/footprint code needs. */
+function resolveInstrument(
+  catalog: BesselCatalog,
+  spacecraft: CatalogSpacecraft | null,
+  centerBody: string,
+  bodies: readonly PlanetDef[],
+): InstrumentDescriptor | null {
+  const inst: CatalogInstrument | undefined = catalog.instruments?.[0];
+  if (!inst || !spacecraft) return null;
+  const sensorId = Number(inst.sensor);
+  const targetId = inst.targets[0];
+  if (!Number.isFinite(sensorId) || !targetId) return null;
+  // Prefer the center body's declared orientation frame, else the IAU convention.
+  const centerCat = (catalog.bodies ?? []).find((b) => (b.name ?? b.id) === centerBody);
+  const targetFrame =
+    centerCat?.orientation?.type === 'Spice' && centerCat.orientation.frame
+      ? centerCat.orientation.frame
+      : `IAU_${centerBody.toUpperCase()}`;
+  void bodies;
+  return { sensorId, observerId: spacecraft.id, targetId, targetFrame, anchorName: centerBody };
 }
 
 function timeSwitchedFromGeometry(
@@ -310,7 +451,14 @@ async function resolveWindow(
   spice: SpiceEngine,
   spacecraft: CatalogSpacecraft | null,
 ): Promise<readonly [number, number]> {
-  const range = spacecraft?.arcs?.[0]?.timeRange;
+  // No spacecraft: a neutral bodies-only scene over the default window.
+  if (!spacecraft) {
+    const e0 = await spice.str2et(toSpiceUtc(DEFAULT_WINDOW[0]));
+    const e1 = await spice.str2et(toSpiceUtc(DEFAULT_WINDOW[1]));
+    return missionWindow(e0, e1, 1800);
+  }
+  // A spacecraft present without a time window cannot be sampled: fail loudly.
+  const range = spacecraft.arcs?.[0]?.timeRange;
   if (!range) {
     throw new Error(
       'Mission has no time window: the first spacecraft needs an arc with a timeRange to bound sampling',

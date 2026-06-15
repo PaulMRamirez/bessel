@@ -1,6 +1,7 @@
 import { test, expect, type Locator } from '@playwright/test';
+import { loadCassiniSample } from './sample.ts';
 
-// Phase 0 acceptance (SPEC Section 9): load the fixture catalog, assert the
+// Phase 0 acceptance (SPEC Section 9): load the Cassini sample mission, assert the
 // trajectory renders (a non-empty WebGL frame), and assert that advancing the
 // timeline changes the rendered frame. "Renders" is measured by reading the
 // canvas, never by visual judgement.
@@ -37,6 +38,7 @@ test('poc-cassini renders the trajectory and the timeline changes the frame', as
   // The SPICE worker loads CSPICE-WASM and samples the ephemerides before the
   // scene is ready; allow generous time for the first load.
   await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
+  await loadCassiniSample(page);
 
   const viewport = page.getByTestId('viewport');
   await expect(viewport).toHaveAttribute('data-ready', 'true');
@@ -58,6 +60,7 @@ test('poc-cassini renders the trajectory and the timeline changes the frame', as
 test('the track-along-trajectory camera mode renders a non-empty frame', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
+  await loadCassiniSample(page);
   const viewport = page.getByTestId('viewport');
 
   await page.getByTestId('toggle-track').click();

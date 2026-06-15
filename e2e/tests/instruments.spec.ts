@@ -1,7 +1,8 @@
 import { test, expect, type Locator, type Page } from '@playwright/test';
+import { loadCassiniSample } from './sample.ts';
 
 // Phase 1 acceptance (SPEC Section 9): FOV cone rendering and footprint rendering
-// on the Cassini fixture mission. The FOV cone (cyan) comes from getfov; the
+// on the Cassini sample mission. The FOV cone (cyan) comes from getfov; the
 // footprint (yellow) comes from sincpt onto Saturn.
 
 interface ColorStats {
@@ -55,6 +56,7 @@ test.describe('Cassini instruments', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
     await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
+    await loadCassiniSample(page);
     await scrubToSoi(page);
     await page.waitForTimeout(300);
   });

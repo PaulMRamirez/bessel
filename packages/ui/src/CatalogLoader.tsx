@@ -5,10 +5,18 @@
 
 import { useRef, useState, type DragEvent } from 'react';
 
+export interface CatalogSample {
+  readonly label: string;
+  readonly url: string;
+}
+
 export interface CatalogLoaderProps {
   readonly onLoad: (file: { name: string; text: string }) => void;
   readonly status?: string | null;
   readonly error?: string | null;
+  /** Bundled sample missions offered as one-click loads (e.g. Cassini at Saturn). */
+  readonly samples?: readonly CatalogSample[];
+  readonly onLoadSample?: (url: string) => void;
 }
 
 export function CatalogLoader(props: CatalogLoaderProps): JSX.Element {
@@ -41,6 +49,17 @@ export function CatalogLoader(props: CatalogLoaderProps): JSX.Element {
         Load catalog
       </button>
       <span className="bessel-loader-hint">or drop a file</span>
+      {props.samples?.map((sample) => (
+        <button
+          key={sample.url}
+          type="button"
+          className="bessel-loader-sample"
+          onClick={() => props.onLoadSample?.(sample.url)}
+          data-testid={`load-sample-${sample.url.split('/').pop()}`}
+        >
+          {sample.label}
+        </button>
+      ))}
       <input
         ref={inputRef}
         type="file"

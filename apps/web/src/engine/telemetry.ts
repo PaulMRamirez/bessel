@@ -21,12 +21,15 @@ export function pushReadouts(
   spice: SpiceEngine,
   store: AppStore,
   focusName: string,
+  observerId: string | null,
   et: number,
   isDisposed: () => boolean,
 ): void {
-  // Geometry readouts for the focused body, relative to Cassini (observer -82).
-  if (focusName === 'Cassini') return;
-  void computeReadouts(spice, focusName, focusName, et, '-82').then((r) => {
+  // Geometry readouts for the focused body, relative to the mission spacecraft.
+  // With no spacecraft observer (a neutral scene) there is nothing to measure
+  // from, so the readouts stay n/a rather than showing a wrong value.
+  if (!observerId) return;
+  void computeReadouts(spice, focusName, focusName, et, observerId).then((r) => {
     if (!isDisposed()) store.setState({ readouts: r });
   });
 }

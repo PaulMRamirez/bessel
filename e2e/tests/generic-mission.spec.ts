@@ -15,18 +15,17 @@ test('loading a native catalog rebuilds the rendered scene generically', async (
   const viewport = page.getByTestId('viewport');
   await expect(viewport).toHaveAttribute('data-ready', 'true');
 
-  // The bundled Cassini demo renders first.
+  // The neutral inner-solar-system scene renders first.
   const before = await frameStats(viewport);
   expect(before.nonBackground).toBeGreaterThan(200);
 
   await page.getByTestId('catalog-file-input').setInputFiles('e2e/fixtures/native-cassini.json');
 
   // The generic builder samples SPICE and rebuilds: the object browser becomes
-  // catalog-driven (the catalog spacecraft "Probe" id "-82", not the demo
-  // "Cassini"), and the Saturn body (id "6") is present.
-  await expect(page.getByTestId('select--82')).toHaveText('Probe', { timeout: 30_000 });
-  await expect(page.getByTestId('select-6')).toHaveText('Saturn');
-  await expect(page.getByTestId('select-Cassini')).toHaveCount(0);
+  // catalog-driven (the catalog spacecraft "Probe" and the Saturn body, keyed by
+  // their display names so selection resolves against the scene).
+  await expect(page.getByTestId('select-Probe')).toHaveText('Probe', { timeout: 30_000 });
+  await expect(page.getByTestId('select-Saturn')).toHaveText('Saturn');
   await expect(page.getByTestId('load-error')).toHaveText('');
 
   // Status returns to Ready and the rebuilt scene still renders a non-empty frame.

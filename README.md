@@ -18,6 +18,23 @@ This is the planning and execution scaffold, written to be built with Claude
 Code's `/goal` workflow. It is documentation and agent configuration, not yet the
 implementation. The implementation is produced by running the phase goals.
 
+## Sample missions
+
+The web app boots into a neutral inner-solar-system scene; no mission is baked
+in. Missions are data: load a Cosmographia or native Bessel catalog through the
+Mission panel (the "Load catalog" button, or drag and drop a JSON file), and the
+generic builder renders it (bodies, spacecraft, trajectory, the seven geometry
+types, rings, atmosphere, axis triads, direction vectors, the instrument field
+of view and footprint, and a glTF model).
+
+A worked example ships as a one-click sample: "Load Cassini at Saturn" in the
+Mission panel loads `apps/web/public/samples/cassini-saturn.json`, a native
+catalog that drives the Cassini-at-Saturn scene (Saturn globe with rings and an
+atmosphere, the Cassini trajectory and glTF model, and the ISS wide-angle FOV
+cone and footprint) entirely from catalog data. Copy and edit that file as a
+starting point for your own mission; the kernels its bodies need must be
+furnished (the bundled demo kernels cover the inner system, Saturn, and Cassini).
+
 ## Where to start
 
 1. VISION.md: why Bessel exists and what it is.

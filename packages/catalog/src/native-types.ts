@@ -42,6 +42,7 @@ export type Geometry =
       readonly texture?: string;
       readonly nightTexture?: string;
       readonly normalMap?: string;
+      readonly atmosphere?: GlobeAtmosphere;
       readonly rings?: GeometryRings;
     }
   | GeometryRings
@@ -54,6 +55,13 @@ export interface GeometryRings {
   readonly innerRadius?: number;
   readonly outerRadius?: number;
   readonly texture?: string;
+}
+
+export interface GlobeAtmosphere {
+  /** Inner shell radius (km); defaults to the body mean radius. */
+  readonly innerRadius?: number;
+  /** Outer shell radius (km); defaults to a small fraction above the surface. */
+  readonly outerRadius?: number;
 }
 
 export interface TimeSwitchedSegment {

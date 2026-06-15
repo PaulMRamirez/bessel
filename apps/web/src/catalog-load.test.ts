@@ -11,8 +11,9 @@ describe('parseAnyCatalog', () => {
     const loaded = parseAnyCatalog('test.json', text);
     expect(loaded.kind).toBe('native');
     expect(loaded.name).toBe('Test Mission');
-    expect(loaded.entries.map((e) => e.id)).toEqual(['saturn', 'titan']);
-    // A body without a name falls back to its id.
+    // The entry id is the display name (so selection matches the scene body key);
+    // a body without a name falls back to its id.
+    expect(loaded.entries.map((e) => e.id)).toEqual(['Saturn', 'titan']);
     expect(loaded.entries.find((e) => e.id === 'titan')?.name).toBe('titan');
   });
 

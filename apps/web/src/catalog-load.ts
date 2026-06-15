@@ -22,11 +22,9 @@ export interface LoadedCatalog {
   readonly catalog?: BesselCatalog;
 }
 
-/** The bundled Cassini demo object list, used until a catalog is loaded. */
+/** The neutral boot object list (inner solar system), shown until a mission loads. */
 export const DEFAULT_OBJECT_ENTRIES: readonly CatalogEntry[] = [
   ...INNER_SYSTEM.map((p) => ({ id: p.name, name: p.name, kind: 'body' as const })),
-  { id: 'Cassini', name: 'Cassini', kind: 'spacecraft' },
-  { id: 'CASSINI_ISS_WAC', name: 'ISS Wide Angle', kind: 'instrument' },
 ];
 
 export function parseAnyCatalog(filename: string, text: string): LoadedCatalog {
@@ -64,11 +62,15 @@ export function parseAnyCatalog(filename: string, text: string): LoadedCatalog {
 
 function nativeEntries(catalog: BesselCatalog): CatalogEntry[] {
   const entries: CatalogEntry[] = [];
+  // The entry id must match the scene/ephemeris body key (the display name), so
+  // selection, centering, and measurement resolve against the rendered scene.
   for (const b of catalog.bodies ?? []) {
-    entries.push({ id: b.id, name: b.name ?? b.id, kind: 'body' });
+    const name = b.name ?? b.id;
+    entries.push({ id: name, name, kind: 'body' });
   }
   for (const s of catalog.spacecraft ?? []) {
-    entries.push({ id: s.id, name: s.name ?? s.id, kind: 'spacecraft' });
+    const name = s.name ?? s.id;
+    entries.push({ id: name, name, kind: 'spacecraft' });
   }
   for (const inst of catalog.instruments ?? []) {
     entries.push({ id: inst.id, name: inst.id, kind: 'instrument' });

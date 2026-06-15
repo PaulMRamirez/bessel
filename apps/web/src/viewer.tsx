@@ -111,6 +111,8 @@ export function BesselViewer(): JSX.Element {
       <PanelContainer title="Mission" testId="panel-mission">
         <CatalogLoader
           onLoad={(file) => void engine?.loadCatalog(file)}
+          samples={[{ label: 'Load Cassini at Saturn', url: '/samples/cassini-saturn.json' }]}
+          onLoadSample={(url) => void engine?.loadCatalogUrl(url)}
           status={loadedName ? `Loaded ${loadedName}: ${objects.length} objects` : null}
           error={loadError}
         />

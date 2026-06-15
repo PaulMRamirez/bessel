@@ -27,7 +27,7 @@ import {
   type Bookmark,
 } from '../bookmarks.ts';
 import type { AppStore } from '../store/index.ts';
-import { bootScene, type EngineCore } from './bootstrap.ts';
+import { bootScene, loadInstrument, type EngineCore } from './bootstrap.ts';
 import { applyViewModel } from './apply-view.ts';
 
 // True when two optional angles are equal or both absent (within tolerance).
@@ -116,20 +116,20 @@ export class BesselEngine {
     }
 
     // Sensor FOV cone (cheap, every frame) and footprint (throttled, async). Only
-    // the mission that owns the loaded instrument (the Cassini demo) has an fov.
-    if (s.instruments && e.fov && scName) {
-      const center = e.identity.centerBody;
+    // a mission that declares an instrument (e.g. the Cassini sample) has one.
+    if (s.instruments && e.instrument && scName) {
+      const inst = e.instrument;
+      const anchor = inst.descriptor.anchorName;
       const scPos = positionAt(e.table, scName, now);
-      const satPos = positionAt(e.table, center, now);
-      e.scene.setFovCone(scPos, fovRim(scPos, satPos, e.fov));
+      const targetPos = positionAt(e.table, anchor, now);
+      e.scene.setFovCone(scPos, fovRim(scPos, targetPos, inst.fov));
       this.instrumentAccum += dt;
       if (this.instrumentAccum > 0.4) {
         this.instrumentAccum = 0;
-        const fovRef = e.fov;
-        void footprint(e.spice, now, fovRef).then(
+        void footprint(e.spice, now, inst.fov, inst.descriptor).then(
           (pts) => {
             if (!this.disposed && this.store.getState().instruments) {
-              e.scene.setFootprint(pts, center, '#ff33cc');
+              e.scene.setFootprint(pts, anchor, '#ff33cc');
               this.store.setState({ footprintPoints: pts.length });
             }
           },
@@ -168,7 +168,9 @@ export class BesselEngine {
     this.readoutAccum += dt;
     if (this.readoutAccum > 0.3) {
       this.readoutAccum = 0;
-      pushReadouts(e.spice, this.store, e.scene.focusBody, now, this.isDisposed);
+      const focus = e.scene.focusBody;
+      const observer = focus === e.identity.spacecraftName ? null : (e.identity.spacecraftId ?? null);
+      pushReadouts(e.spice, this.store, focus, observer, now, this.isDisposed);
       this.updateMeasurement(now);
     }
     this.raf = requestAnimationFrame(this.frame);
@@ -413,8 +415,9 @@ export class BesselEngine {
     this.store.setState({ instruments: next });
     if (this.core && !next) {
       // Clear the FOV cone and footprint when instruments are turned off.
+      const anchor = this.core.instrument?.descriptor.anchorName ?? 'Sun';
       this.core.scene.setFovCone([0, 0, 0], []);
-      this.core.scene.setFootprint([], 'Saturn');
+      this.core.scene.setFootprint([], anchor);
       this.store.setState({ footprintPoints: 0 });
     }
   }
@@ -506,10 +509,11 @@ export class BesselEngine {
       if (this.disposed) return;
       e.scene.reset();
       buildScene(e.scene, mission.spec);
+      if (mission.spacecraftModel) e.scene.setSpacecraftModel(mission.spacecraftModel);
       // Swap the live mission state the frame loop reads each tick.
       e.table = mission.table;
       e.identity = mission.identity;
-      e.fov = null;
+      e.instrument = await loadInstrument(e.spice, mission.instrument ?? null);
       const [et0, et1] = mission.window;
       e.clock.setEpoch(et0);
       this.store.setState({
@@ -518,11 +522,24 @@ export class BesselEngine {
         focus: mission.identity.centerBody,
         selection: [mission.identity.centerBody],
         footprintPoints: 0,
-        fovOk: false,
+        fovOk: !!e.instrument,
         status: 'Ready',
       });
     } catch (err) {
       this.store.setState({ status: 'Ready', loadError: formatLoadError(err) });
+    }
+  }
+
+  // Fetch a bundled sample catalog by URL and load it (e.g. the Cassini sample).
+  async loadCatalogUrl(url: string): Promise<void> {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Sample not found at ${url} (${res.status})`);
+      const text = await res.text();
+      const name = url.split('/').pop() ?? url;
+      await this.loadCatalog({ name, text });
+    } catch (err) {
+      this.store.setState({ loadError: formatLoadError(err) });
     }
   }
 

@@ -1,14 +1,11 @@
-// Phase 1 instrument geometry: the Cassini ISS field of view (getfov) rendered as
-// a cone toward Saturn, and its observation footprint on Saturn via surface
-// intercept (sincpt). Real attitude (CK) is a later phase; here the boresight is
-// pointed nadir (spacecraft to Saturn) so the FOV and footprint are physical
-// while staying within the committed kernel set.
+// Instrument geometry, driven by a catalog-declared instrument: the sensor field
+// of view (getfov) rendered as a cone toward the target, and its observation
+// footprint on the target body via surface intercept (sincpt). The boresight is
+// pointed nadir (spacecraft to target) unless a CK supplies real attitude. The
+// observer, target, and frame come from the FootprintContext, so nothing here is
+// mission-specific.
 import type { SpiceEngine, Vec3 } from '@bessel/spice';
 import type { Km3 } from '@bessel/scene';
-
-// The wide-angle camera (3.5 degrees) gives a legible cone and footprint; the
-// narrow-angle camera (-82360) is a 0.35 degree pencil. Both come from getfov.
-export const CASSINI_ISS_WAC = -82361;
 
 type V3 = [number, number, number];
 
@@ -29,6 +26,16 @@ const toV3 = (v: Vec3): V3 => [v.x, v.y, v.z];
 export interface InstrumentFov {
   readonly boresight: V3;
   readonly bounds: readonly V3[];
+}
+
+/** Where an instrument points: the SPICE ids and body-fixed frame for footprints. */
+export interface FootprintContext {
+  /** Observer (the spacecraft) SPICE id, e.g. "-82". */
+  readonly observerId: string;
+  /** Target body SPICE id for getfov/sincpt, e.g. "699". */
+  readonly targetId: string;
+  /** Target body-fixed frame for sincpt, e.g. "IAU_SATURN". */
+  readonly targetFrame: string;
 }
 
 export async function loadInstrumentFov(spice: SpiceEngine, instId: number): Promise<InstrumentFov> {
@@ -74,35 +81,37 @@ export function fovRim(spacecraftKm: Km3, saturnKm: Km3, fov: InstrumentFov): Km
 }
 
 /**
- * Observation footprint: intercept each FOV corner ray on Saturn (699) and return
- * the surface points in J2000 relative to Saturn's centre (km), ready to anchor at
- * Saturn in the scene.
+ * Observation footprint: intercept each FOV corner ray on the target body and
+ * return the surface points in J2000 relative to the target centre (km), ready to
+ * anchor at the target in the scene. Observer, target, and frame come from the
+ * instrument context, so this works for any catalog-declared instrument.
  */
 export async function footprint(
   spice: SpiceEngine,
   et: number,
   fov: InstrumentFov,
+  ctx: FootprintContext,
 ): Promise<Km3[]> {
-  // Point nadir using the real Cassini-to-Saturn direction at et, not the
+  // Point nadir using the real spacecraft-to-target direction at et, not the
   // interpolated table: near periapsis the spacecraft moves too fast for linear
   // interpolation to keep the boresight on the target.
-  const dir = await spice.spkpos('699', et, 'J2000', 'NONE', '-82');
+  const dir = await spice.spkpos(ctx.targetId, et, 'J2000', 'NONE', ctx.observerId);
   const frame = frameFromZ(norm([dir.position.x, dir.position.y, dir.position.z]));
   const points: Km3[] = [];
   for (const b of fov.bounds) {
     const ray = norm(toWorld(b, frame));
     const hit = await spice.sincpt(
       'ELLIPSOID',
-      '699',
+      ctx.targetId,
       et,
-      'IAU_SATURN',
+      ctx.targetFrame,
       'NONE',
-      '-82',
+      ctx.observerId,
       'J2000',
       { x: ray[0], y: ray[1], z: ray[2] },
     );
     if (!hit.found) return [];
-    const rot = await spice.pxform('IAU_SATURN', 'J2000', hit.trgepc);
+    const rot = await spice.pxform(ctx.targetFrame, 'J2000', hit.trgepc);
     const p = hit.point;
     // J2000 surface point relative to Saturn centre (row-major 3x3 times point).
     points.push([

@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { loadCassiniSample } from './sample.ts';
 
 // Phase 2 acceptance (SPEC Section 9): an accessibility scan with zero serious or
 // critical violations on the main view, and a second load that works offline
@@ -26,6 +27,9 @@ test('the main view has no serious or critical accessibility violations', async 
 test('object browser, settings, readouts, and multi-select are wired', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
+  // The Cassini sample focuses Saturn and provides the spacecraft observer the
+  // geometry readouts measure from.
+  await loadCassiniSample(page);
 
   // Geometry readout: range to the focused body (Saturn) becomes a finite value.
   await expect
