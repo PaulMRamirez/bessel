@@ -34,6 +34,7 @@ export interface SceneTarget {
   ): void;
   setAtmosphereVisible(visible: boolean): void;
   setDirectionVectors(anchorBody: string, specs: readonly DirectionSpec[], lengthKm: number): void;
+  setLabels(specs: readonly { id: string; text: string; anchorBody: string }[]): void;
   centerOn(name: string): void;
   setView(azimuth: number, elevation: number, distance: number): void;
 }
@@ -76,6 +77,10 @@ export function buildScene(target: SceneTarget, spec: SceneSpec): void {
 
   for (const dir of spec.directionVectors ?? []) {
     target.setDirectionVectors(dir.anchorBody, dir.specs, dir.lengthKm);
+  }
+
+  if (spec.labels) {
+    target.setLabels(spec.labels);
   }
 
   if (spec.camera) {

@@ -42,7 +42,9 @@ export {
   type AtmosphereSpec,
   type DirectionVectorsSpec,
   type CameraSpec,
+  type LabelSpec,
   type Rotation3x3,
 } from './scene-spec.ts';
 export { buildScene, type SceneTarget } from './scene-builder.ts';
 export { pickObjectId, pointerToNdc } from './picking.ts';
+export { LabelLayer, projectToScreen, type LabelTarget } from './labels.ts';

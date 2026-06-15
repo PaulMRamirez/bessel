@@ -270,6 +270,7 @@ export class BesselEngine {
     const scene = this.core?.scene;
     if (!scene) return;
     if (key === 'trajectory') scene.setTrajectoryVisible(value);
+    else if (key === 'labels') scene.setLabelsVisible(value);
     else if (key === 'fov') scene.setFovVisible(value);
     else if (key === 'footprint') scene.setFootprintVisible(value);
     else if (key === 'axes') scene.setAxesVisible(value);

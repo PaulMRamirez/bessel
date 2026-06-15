@@ -82,6 +82,10 @@ export async function buildMissionScene(
         lengthKm: 200000,
       },
     ],
+    labels: [
+      ...INNER_SYSTEM.map((p) => ({ id: p.name, text: p.name, anchorBody: p.name })),
+      { id: spacecraftName, text: spacecraftName, anchorBody: spacecraftName },
+    ],
     camera: { focus: 'Saturn', azimuth: 0.6, elevation: 0.35, distance: FOCUS_DISTANCE['Saturn'] ?? 0.7 },
   };
 

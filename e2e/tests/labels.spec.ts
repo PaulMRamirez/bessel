@@ -1,0 +1,20 @@
+import { test, expect } from '@playwright/test';
+
+// Phase C: bodies and the spacecraft carry name labels rendered as a DOM overlay
+// that tracks them, and the Labels setting toggles the whole layer.
+
+test('object labels render over the viewport and toggle off', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
+
+  // Saturn is the focus and sits at the screen center, so its label is on screen.
+  await expect(page.locator('.bessel-label', { hasText: 'Saturn' })).toBeVisible({
+    timeout: 5_000,
+  });
+
+  await page.getByTestId('setting-labels').uncheck();
+  await expect(page.locator('.bessel-label-layer')).toBeHidden();
+
+  await page.getByTestId('setting-labels').check();
+  await expect(page.locator('.bessel-label-layer')).toBeVisible();
+});

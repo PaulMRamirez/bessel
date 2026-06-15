@@ -30,6 +30,7 @@ import {
 } from 'three';
 import type { PlanetDef } from './planets.ts';
 import { pickObjectId } from './picking.ts';
+import { LabelLayer } from './labels.ts';
 
 import {
   SCALE,
@@ -96,6 +97,7 @@ export class SolarSystemScene {
   private readonly bodies = new Map<string, BodyNode>();
   private readonly positions = new Map<string, Km3>();
   private readonly raycaster = new Raycaster();
+  private readonly labelLayer = new LabelLayer();
   private spacecraft: { name: string; mesh: Object3D; radius: number } | null = null;
   private trajectory: Line | null = null;
   private trajectoryAnchor = 'Sun';
@@ -131,6 +133,8 @@ export class SolarSystemScene {
     this.scene.add(new AmbientLight(0xffffff, 0.55));
     const sun = new PointLight(0xfff4e0, 2.2, 0, 0.0);
     this.world.add(sun);
+    // The label overlay sits above the canvas in the same positioned container.
+    canvas.parentElement?.appendChild(this.labelLayer.dom);
     this.resize(canvas.width, canvas.height);
   }
 
@@ -471,10 +475,27 @@ export class SolarSystemScene {
     };
   }
 
+  /** Attach name labels to bodies or the spacecraft, anchored by object name. */
+  setLabels(specs: readonly { id: string; text: string; anchorBody: string }[]): void {
+    const targets = [];
+    for (const spec of specs) {
+      const object =
+        this.bodies.get(spec.anchorBody)?.mesh ??
+        (this.spacecraft?.name === spec.anchorBody ? this.spacecraft.mesh : null);
+      if (object) targets.push({ id: spec.id, text: spec.text, object });
+    }
+    this.labelLayer.setLabels(targets);
+  }
+
+  setLabelsVisible(visible: boolean): void {
+    this.labelLayer.setVisible(visible);
+  }
+
   resize(width: number, height: number): void {
     this.renderer.setSize(width, height, false);
     this.camera.aspect = width / Math.max(1, height);
     this.camera.updateProjectionMatrix();
+    this.labelLayer.setSize(width, height);
   }
 
   render(): void {
@@ -516,9 +537,11 @@ export class SolarSystemScene {
     if (this.spacecraft) apply(this.spacecraft.mesh, this.spacecraft.radius);
 
     this.renderer.render(this.scene, this.camera);
+    this.labelLayer.update(this.camera);
   }
 
   dispose(): void {
+    this.labelLayer.dispose();
     this.renderer.dispose();
   }
 }

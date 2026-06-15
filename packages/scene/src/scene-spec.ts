@@ -58,6 +58,12 @@ export interface CameraSpec {
   readonly distance: number;
 }
 
+export interface LabelSpec {
+  readonly id: string;
+  readonly text: string;
+  readonly anchorBody: string;
+}
+
 /** Everything needed to populate a SolarSystemScene, as inert data. */
 export interface SceneSpec {
   readonly bodies: readonly PlanetDef[];
@@ -68,5 +74,6 @@ export interface SceneSpec {
   readonly axisTriads?: readonly AxisTriadSpec[];
   readonly atmospheres?: readonly AtmosphereSpec[];
   readonly directionVectors?: readonly DirectionVectorsSpec[];
+  readonly labels?: readonly LabelSpec[];
   readonly camera?: CameraSpec;
 }

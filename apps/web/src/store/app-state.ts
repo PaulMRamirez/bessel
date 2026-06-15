@@ -56,6 +56,7 @@ export const initialAppState: AppState = {
   fovOk: false,
   settings: {
     trajectory: true,
+    labels: true,
     fov: true,
     footprint: true,
     axes: true,
