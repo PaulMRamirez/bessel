@@ -60,7 +60,7 @@ export function parseAnyCatalog(filename: string, text: string): LoadedCatalog {
   );
 }
 
-function nativeEntries(catalog: BesselCatalog): CatalogEntry[] {
+export function nativeEntries(catalog: BesselCatalog): CatalogEntry[] {
   const entries: CatalogEntry[] = [];
   // The entry id must match the scene/ephemeris body key (the display name), so
   // selection, centering, and measurement resolve against the rendered scene.

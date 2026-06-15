@@ -41,6 +41,8 @@ export interface AppState {
   loadError: string | null;
   // Measurement: distance between the first two selected objects.
   measurement: Measurement | null;
+  // Telemetry: latest predicted-versus-actual residual (km), or null.
+  telemetryResidualKm: number | null;
   // Saved views.
   bookmarks: readonly Bookmark[];
 }
@@ -94,6 +96,7 @@ export const initialAppState: AppState = {
   loadedName: null,
   loadError: null,
   measurement: null,
+  telemetryResidualKm: null,
   bookmarks: [],
 };
 

@@ -45,7 +45,7 @@ describe('buildScene', () => {
     expect(target.calls['setBodies']?.[0]?.[0]).toBe(INNER_SYSTEM);
     expect(target.calls['setSpacecraft']?.[0]).toEqual(['Cassini', undefined]);
     expect(target.calls['setTrajectory']?.[0]).toEqual([[[1, 2, 3]], 'Saturn', undefined]);
-    expect(target.calls['setRings']?.[0]).toEqual(['Saturn', 100, 200, undefined]);
+    expect(target.calls['setRings']?.[0]).toEqual(['Saturn', 100, 200, undefined, undefined]);
     expect(target.calls['centerOn']?.[0]).toEqual(['Saturn']);
     expect(target.calls['setView']?.[0]).toEqual([0.6, 0.35, 0.7]);
   });

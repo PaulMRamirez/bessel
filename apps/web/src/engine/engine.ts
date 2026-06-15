@@ -5,7 +5,13 @@
 // writes derived state (et, epochLabel, readouts, footprint count) back to it.
 // React subscribes to the store; user actions call the methods below.
 
-import { pointerToNdc, buildScene, azimuthElevationFromDirection, type Km3 } from '@bessel/scene';
+import {
+  pointerToNdc,
+  buildScene,
+  azimuthElevationFromDirection,
+  uniformRotationQuaternion,
+  type Km3,
+} from '@bessel/scene';
 import {
   captureStill,
   downloadBlob,
@@ -14,12 +20,15 @@ import {
   type Recorder,
   type SettingKey,
 } from '@bessel/ui';
-import { encodeView, decodeView, type ViewModel } from '@bessel/state';
+import { encodeView, decodeView, TelemetryAdapter, type ViewModel } from '@bessel/state';
+import type { PluginRegistry, BesselCatalog } from '@bessel/catalog';
 import { positionAt, velocityAt, rangeRate } from '../sampler.ts';
 import { fovRim, footprint } from '../instruments.ts';
 import { toggleSelection } from '../selection.ts';
-import { parseAnyCatalog, formatLoadError } from '../catalog-load.ts';
+import { parseAnyCatalog, nativeEntries, formatLoadError } from '../catalog-load.ts';
 import { buildCatalogMissionScene } from '../generic-mission.ts';
+import { createScript } from '../scripting.ts';
+import { MockTelemetrySocket } from '../telemetry-mock.ts';
 import {
   loadBookmarks,
   persistBookmarks,
@@ -46,6 +55,8 @@ export class BesselEngine {
   private instrumentAccum = 0;
   private readoutAccum = 0;
   private attitudeAccum = 0;
+  private telemetryAccum = 0;
+  private telemetry: { socket: MockTelemetrySocket; adapter: TelemetryAdapter } | null = null;
   private recorder: Recorder | null = null;
   private disposed = false;
 
@@ -74,6 +85,7 @@ export class BesselEngine {
 
   dispose(): void {
     this.disposed = true;
+    this.stopTelemetry();
     if (this.core) {
       cancelAnimationFrame(this.raf);
       this.core.scene.dispose();
@@ -138,15 +150,23 @@ export class BesselEngine {
       }
     }
 
-    // Spacecraft attitude from a CK frame (throttled). When no CK is loaded for
-    // the frame, pxform fails and the model keeps its last orientation (honest:
-    // attitude is only real when a CK kernel covers the epoch).
-    const scFrame = e.identity.spacecraftFrame;
-    if (scFrame) {
+    // Spacecraft attitude from the catalog: a fixed quaternion, a uniform spin
+    // (both cheap, every frame), or a SPICE/CK frame (a worker round-trip, so
+    // throttled; when no CK covers the epoch pxform fails and the model keeps its
+    // last orientation).
+    const att = e.identity.attitude;
+    if (att?.kind === 'fixed') {
+      e.scene.setSpacecraftAttitudeQuaternion(att.quaternion);
+    } else if (att?.kind === 'uniform') {
+      e.scene.setSpacecraftAttitudeQuaternion(
+        uniformRotationQuaternion(att.axis, att.ratePerSec, now, att.epochEt),
+      );
+    } else if (att?.kind === 'spice') {
       this.attitudeAccum += dt;
       if (this.attitudeAccum > 0.2) {
         this.attitudeAccum = 0;
-        void e.spice.pxform(scFrame, 'J2000', now).then(
+        const frame = att.frame;
+        void e.spice.pxform(frame, 'J2000', now).then(
           (rot) => {
             if (!this.disposed) e.scene.setSpacecraftAttitude(rot);
           },
@@ -172,6 +192,21 @@ export class BesselEngine {
       const observer = focus === e.identity.spacecraftName ? null : (e.identity.spacecraftId ?? null);
       pushReadouts(e.spice, this.store, focus, observer, now, this.isDisposed);
       this.updateMeasurement(now);
+    }
+    // Mock telemetry: emit a synthetic "actual" near the predicted position and
+    // publish the latest predicted-versus-actual residual.
+    this.telemetryAccum += dt;
+    if (this.telemetry && this.telemetryAccum > 0.5) {
+      this.telemetryAccum = 0;
+      const sc = e.identity.spacecraftName;
+      if (sc) {
+        const p = positionAt(e.table, sc, now);
+        this.telemetry.socket.emit(
+          JSON.stringify({ et: now, position: [p[0] + 2, p[1] - 1, p[2] + 0.5] }),
+        );
+        const latest = this.telemetry.adapter.latest();
+        if (latest) this.store.setState({ telemetryResidualKm: latest.residualKm });
+      }
     }
     this.raf = requestAnimationFrame(this.frame);
   };
@@ -447,7 +482,7 @@ export class BesselEngine {
     else if (key === 'axes') scene.setAxesVisible(value);
     else if (key === 'stars') scene.setStarFieldVisible(value);
     else if (key === 'atmosphere') scene.setAtmosphereVisible(value);
-    else if (key === 'shadows' && value) scene.enableShadows(60268);
+    else if (key === 'shadows' && value) scene.enableShadows(scene.focusBodyRadiusKm());
   }
 
   toggleSelectObject(id: string): void {
@@ -494,16 +529,43 @@ export class BesselEngine {
     }
     this.store.setState({ objects: loaded.entries, loadedName: loaded.name, loadError: null });
 
-    const e = this.core;
     // Cosmographia single-spacecraft catalogs update only the object list for now;
     // a native catalog with a spacecraft time window re-renders the scene
     // generically. A bodies-only catalog (no window to sample over) updates only
     // the object list, never a loud error.
     const hasWindow = !!loaded.catalog?.spacecraft?.[0]?.arcs?.[0]?.timeRange;
-    if (!e || loaded.kind !== 'native' || !loaded.catalog || !hasWindow) return;
+    if (loaded.kind === 'native' && loaded.catalog && hasWindow) {
+      await this.renderNativeMission(loaded.catalog);
+    }
+  }
+
+  // Load a mission from the plugin registry: lazily activate the plugin (fetch
+  // and parse its catalog, once) and render it, surfacing the registry in the UI.
+  async loadMission(registry: PluginRegistry, id: string): Promise<void> {
+    const plugin = registry.get(id);
+    if (!plugin) return;
+    try {
+      this.store.setState({ status: `Loading ${plugin.name}` });
+      const catalog = await registry.activate(id);
+      this.store.setState({
+        objects: nativeEntries(catalog),
+        loadedName: catalog.name ?? plugin.name,
+        loadError: null,
+      });
+      await this.renderNativeMission(catalog);
+    } catch (err) {
+      this.store.setState({ status: 'Ready', loadError: formatLoadError(err) });
+    }
+  }
+
+  // Rebuild the rendered scene from a parsed native catalog. Shared by the file
+  // loader and the plugin registry; the object list is set by the caller.
+  private async renderNativeMission(catalog: BesselCatalog): Promise<void> {
+    const e = this.core;
+    if (!e) return;
     try {
       this.store.setState({ status: 'Building mission' });
-      const mission = await buildCatalogMissionScene(e.spice, loaded.catalog, (status) =>
+      const mission = await buildCatalogMissionScene(e.spice, catalog, (status) =>
         this.store.setState({ status }),
       );
       if (this.disposed) return;
@@ -514,6 +576,7 @@ export class BesselEngine {
       e.table = mission.table;
       e.identity = mission.identity;
       e.instrument = await loadInstrument(e.spice, mission.instrument ?? null);
+      this.startTelemetry();
       const [et0, et1] = mission.window;
       e.clock.setEpoch(et0);
       this.store.setState({
@@ -527,6 +590,36 @@ export class BesselEngine {
       });
     } catch (err) {
       this.store.setState({ status: 'Ready', loadError: formatLoadError(err) });
+    }
+  }
+
+  // Run a short scripted tour over the viewer (surfaces the scripting API).
+  runTour(): void {
+    const script = createScript(this, this.store);
+    script.setTimeRate(3600).unpause().viewFromSun();
+  }
+
+  // Start a mock predicted-versus-actual telemetry feed for the active spacecraft
+  // (surfaces the TelemetryAdapter). The frame loop emits synthetic frames.
+  private startTelemetry(): void {
+    this.stopTelemetry();
+    const e = this.core;
+    const sc = e?.identity.spacecraftName;
+    if (!e || !sc) {
+      this.store.setState({ telemetryResidualKm: null });
+      return;
+    }
+    const socket = new MockTelemetrySocket();
+    const adapter = new TelemetryAdapter(socket, (et) =>
+      this.core ? positionAt(this.core.table, sc, et) : [0, 0, 0],
+    );
+    this.telemetry = { socket, adapter };
+  }
+
+  private stopTelemetry(): void {
+    if (this.telemetry) {
+      this.telemetry.adapter.dispose();
+      this.telemetry = null;
     }
   }
 

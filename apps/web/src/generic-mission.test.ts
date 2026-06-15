@@ -89,6 +89,16 @@ describe('geometry -> spec mapping', () => {
     expect(ringSpecFromGeometry('B', { type: 'Rings', innerRadius: 100, outerRadius: 50 })).toBeNull();
   });
 
+  it('carries a ring image texture through to the ring spec', () => {
+    const ring = ringSpecFromGeometry('Saturn', {
+      type: 'Rings',
+      innerRadius: 1,
+      outerRadius: 2,
+      texture: 'rings.png',
+    });
+    expect(ring?.texture).toBe('rings.png');
+  });
+
   it('maps a KeplerianSwarm to a swarm spec carrying its color', () => {
     const swarm = swarmSpecFromGeometry('s', 'Belt', { type: 'KeplerianSwarm', color: '#ffaa00' }, 1000);
     expect(swarm?.params.color).toBe('#ffaa00');
@@ -132,6 +142,25 @@ describe('buildCatalogMissionScene (orchestration with a mock SPICE)', () => {
     expect(mission.spec.keplerianSwarms).toHaveLength(1);
     expect(mission.spec.trajectory?.points.length).toBeGreaterThan(0);
     expect(mission.table.byBody.has('Probe')).toBe(true);
+  });
+
+  it('resolves a UniformRotation orientation into a uniform attitude spec', async () => {
+    const spun: BesselCatalog = {
+      version: '1.0',
+      bodies: [{ id: 'Saturn', name: 'Saturn' }],
+      spacecraft: [
+        {
+          id: 'Probe',
+          name: 'Probe',
+          orientation: { type: 'UniformRotation', axis: [0, 1, 0], ratePerSec: 0.05 },
+          arcs: [
+            { timeRange: { start: '2000-01-01', stop: '2010-01-01' }, trajectory: { type: 'Spice' } },
+          ],
+        },
+      ],
+    };
+    const mission = await buildCatalogMissionScene(mockSpice(), spun);
+    expect(mission.identity.attitude).toMatchObject({ kind: 'uniform', ratePerSec: 0.05 });
   });
 
   it('fails loudly when the first spacecraft has no time window', async () => {

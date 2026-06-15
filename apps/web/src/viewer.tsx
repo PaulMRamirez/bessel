@@ -13,6 +13,7 @@ import {
   MeasurePanel,
   ObjectBrowser,
   ObjectInspector,
+  OpsPanel,
   PanelContainer,
   ReadoutPanel,
   SearchBox,
@@ -26,7 +27,7 @@ import {
 } from '@bessel/ui';
 import { createAppStore, useStore, type AppStore } from './store/index.ts';
 import { useBesselEngine } from './engine/index.ts';
-import { CENTER_TARGETS } from './engine/constants.ts';
+import { createMissionRegistry } from './missions.ts';
 import { AppShell } from './shell/index.ts';
 
 const SPICE_IDS: Readonly<Record<string, string>> = {
@@ -61,6 +62,7 @@ export function BesselViewer(): JSX.Element {
   const helpOpen = useStore(store, (s) => s.helpOpen);
   const recording = useStore(store, (s) => s.recording);
   const theme = useStore(store, (s) => s.theme);
+  const telemetryResidualKm = useStore(store, (s) => s.telemetryResidualKm);
   const objects = useStore(store, (s) => s.objects);
   const loadedName = useStore(store, (s) => s.loadedName);
   const loadError = useStore(store, (s) => s.loadError);
@@ -85,6 +87,20 @@ export function BesselViewer(): JSX.Element {
     const q = query.trim().toLowerCase();
     return q ? objects.filter((e) => e.name.toLowerCase().includes(q)) : objects;
   }, [query, objects]);
+
+  // "Center on" targets come from the loaded mission (bodies and spacecraft), so
+  // there is no hardcoded body list and they update when a catalog loads.
+  const centerTargets = useMemo(
+    () => objects.filter((e) => e.kind !== 'instrument').map((e) => e.name),
+    [objects],
+  );
+
+  // The bundled missions come from the plugin registry (surfacing it in the shell).
+  const registryRef = useRef(createMissionRegistry());
+  const missions = useMemo(
+    () => registryRef.current.list().map((p) => ({ id: p.id, name: p.name })),
+    [],
+  );
 
   const focusEntry = objects.find((e) => e.id === focus);
   const inspectorFields = [{ label: 'SPICE id', value: SPICE_IDS[focus] ?? '-' }];
@@ -129,7 +145,7 @@ export function BesselViewer(): JSX.Element {
       </PanelContainer>
       <PanelContainer title="Camera" testId="panel-camera">
         <ViewControls
-          bodies={CENTER_TARGETS}
+          bodies={centerTargets}
           focus={focus}
           onCenter={(b) => engine?.centerOn(b)}
           onViewFromSun={() => engine?.viewFromSun()}
@@ -212,6 +228,14 @@ export function BesselViewer(): JSX.Element {
           distanceKm={measurement?.distanceKm ?? null}
           relativeSpeedKmS={measurement?.relativeSpeedKmS ?? null}
           angleDeg={measurement?.angleDeg ?? null}
+        />
+      </PanelContainer>
+      <PanelContainer title="Operations" testId="panel-ops">
+        <OpsPanel
+          missions={missions}
+          onLoadMission={(id) => void engine?.loadMission(registryRef.current, id)}
+          onRunTour={() => engine?.runTour()}
+          telemetryResidualKm={telemetryResidualKm}
         />
       </PanelContainer>
       <PanelContainer title="Saved views" testId="panel-views">

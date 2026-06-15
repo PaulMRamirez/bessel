@@ -49,7 +49,7 @@ import { buildStarField } from './star-field.ts';
 import { type Star } from './star-catalog.ts';
 import { buildAtmosphere, type AtmosphereParams } from './atmosphere.ts';
 import { buildSunLight } from './shadows.ts';
-import { rowMajor3x3ToMatrix4, applyAttitude } from './orientation.ts';
+import { rowMajor3x3ToMatrix4, applyAttitude, applyQuaternion } from './orientation.ts';
 import {
   computeOrbitCameraPosition,
   computeTrackCameraPosition,
@@ -307,8 +307,10 @@ export class SolarSystemScene {
     innerRadiusKm: number,
     outerRadiusKm: number,
     rotationRowMajor3x3?: readonly number[],
+    texture?: string,
   ): void {
-    const mesh = buildRingMesh(innerRadiusKm, outerRadiusKm);
+    const map = texture ? this.textureLoader.load(texture) : undefined;
+    const mesh = buildRingMesh(innerRadiusKm, outerRadiusKm, undefined, map);
     if (rotationRowMajor3x3) mesh.setRotationFromMatrix(rowMajor3x3ToMatrix4(rotationRowMajor3x3));
     this.replaceAnchored(this.rings, mesh, anchorBody);
     this.rings = mesh;
@@ -484,6 +486,16 @@ export class SolarSystemScene {
    */
   setSpacecraftAttitude(rotationRowMajor3x3: readonly number[]): void {
     if (this.spacecraftAttitudeTarget) applyAttitude(this.spacecraftAttitudeTarget, rotationRowMajor3x3);
+  }
+
+  /** Orient the spacecraft model by a quaternion (Fixed or UniformRotation attitude). */
+  setSpacecraftAttitudeQuaternion(q: readonly [number, number, number, number]): void {
+    if (this.spacecraftAttitudeTarget) applyQuaternion(this.spacecraftAttitudeTarget, q);
+  }
+
+  /** Physical radius (km) of the focused body, for sizing the shadow frustum etc. */
+  focusBodyRadiusKm(): number {
+    return this.bodies.get(this.focus)?.def.radiusKm ?? 1000;
   }
 
   /** Enable sun-cast shadow mapping (replaces the ambient point light). */

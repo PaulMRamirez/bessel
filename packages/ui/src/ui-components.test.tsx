@@ -6,8 +6,38 @@ import { ReadoutPanel } from './ReadoutPanel.tsx';
 import { SettingsPanel } from './SettingsPanel.tsx';
 import { TimelineControls } from './TimelineControls.tsx';
 import { KeyboardHelp } from './KeyboardHelp.tsx';
+import { OpsPanel } from './OpsPanel.tsx';
 
 const html = (el: Parameters<typeof renderToStaticMarkup>[0]): string => renderToStaticMarkup(el);
+
+describe('@bessel/ui OpsPanel', () => {
+  it('lists registry missions and shows the telemetry residual', () => {
+    const out = html(
+      createElement(OpsPanel, {
+        missions: [{ id: 'cassini-saturn', name: 'Cassini at Saturn' }],
+        onLoadMission: () => {},
+        onRunTour: () => {},
+        telemetryResidualKm: 2.29,
+      }),
+    );
+    expect(out).toContain('data-testid="mission-cassini-saturn"');
+    expect(out).toContain('Cassini at Saturn');
+    expect(out).toContain('data-testid="run-tour"');
+    expect(out).toContain('Telemetry residual: 2.29 km');
+  });
+
+  it('shows no-telemetry state when the residual is null', () => {
+    const out = html(
+      createElement(OpsPanel, {
+        missions: [],
+        onLoadMission: () => {},
+        onRunTour: () => {},
+        telemetryResidualKm: null,
+      }),
+    );
+    expect(out).toContain('Telemetry: none');
+  });
+});
 
 describe('@bessel/ui ReadoutPanel', () => {
   it('formats values and shows n/a for null', () => {

@@ -41,6 +41,7 @@ export {
 } from './ObjectInspector.tsx';
 export { CatalogLoader, type CatalogLoaderProps } from './CatalogLoader.tsx';
 export { MeasurePanel, type MeasurePanelProps } from './MeasurePanel.tsx';
+export { OpsPanel, type OpsPanelProps, type MissionOption } from './OpsPanel.tsx';
 export {
   BookmarksPanel,
   type BookmarksPanelProps,

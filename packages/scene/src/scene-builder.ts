@@ -28,6 +28,7 @@ export interface SceneTarget {
     innerRadiusKm: number,
     outerRadiusKm: number,
     rotationRowMajor3x3?: readonly number[],
+    texture?: string,
   ): void;
   setAxisTriad(
     name: string,
@@ -73,7 +74,7 @@ export function buildScene(target: SceneTarget, spec: SceneSpec): void {
   }
 
   for (const ring of spec.rings ?? []) {
-    target.setRings(ring.body, ring.innerKm, ring.outerKm, ring.rotationRowMajor3x3);
+    target.setRings(ring.body, ring.innerKm, ring.outerKm, ring.rotationRowMajor3x3, ring.texture);
   }
 
   for (const triad of spec.axisTriads ?? []) {

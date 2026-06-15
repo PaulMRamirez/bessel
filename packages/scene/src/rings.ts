@@ -11,6 +11,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   RGBAFormat,
+  type Texture,
 } from 'three';
 import { SCALE } from './geometry-builders.ts';
 
@@ -67,11 +68,16 @@ function bandedRingTexture(color: readonly [number, number, number]): DataTextur
   return tex;
 }
 
-/** Build a ring mesh (translucent, double-sided, banded) for a planet. */
+/**
+ * Build a ring mesh (translucent, double-sided) for a planet. Uses the provided
+ * image texture when given (a catalog ring texture), else the procedural banded
+ * texture so rings always read without bundling assets.
+ */
 export function buildRingMesh(
   innerRadiusKm: number,
   outerRadiusKm: number,
   color: readonly [number, number, number] = [0.86, 0.8, 0.66],
+  texture?: Texture,
 ): Mesh {
   const v = buildRingVertices(innerRadiusKm, outerRadiusKm);
   const geometry = new BufferGeometry();
@@ -80,7 +86,7 @@ export function buildRingMesh(
   geometry.setIndex(v.indices);
   geometry.computeVertexNormals();
   const material = new MeshBasicMaterial({
-    map: bandedRingTexture(color),
+    map: texture ?? bandedRingTexture(color),
     color: new Color(1, 1, 1),
     transparent: true,
     opacity: 0.85,

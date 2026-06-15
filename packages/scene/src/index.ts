@@ -26,7 +26,12 @@ export {
 } from './star-catalog.ts';
 export { rayleighCoefficients, buildAtmosphereUniforms, buildAtmosphere } from './atmosphere.ts';
 export { computeShadowFrustum, buildSunLight } from './shadows.ts';
-export { rowMajor3x3ToMatrix4, applyAttitude } from './orientation.ts';
+export {
+  rowMajor3x3ToMatrix4,
+  applyAttitude,
+  applyQuaternion,
+  uniformRotationQuaternion,
+} from './orientation.ts';
 export { loadSpacecraftModel, normalizeModelRadius, SpacecraftModelError } from './spacecraft-model.ts';
 export {
   computeTrackCameraPosition,

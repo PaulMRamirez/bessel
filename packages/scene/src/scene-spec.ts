@@ -35,6 +35,8 @@ export interface RingSpec {
   readonly innerKm: number;
   readonly outerKm: number;
   readonly rotationRowMajor3x3?: Rotation3x3;
+  /** Optional image texture URL for the ring band. */
+  readonly texture?: string;
 }
 
 export interface AxisTriadSpec {

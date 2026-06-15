@@ -22,9 +22,15 @@ export interface Trajectory {
 }
 
 export interface Orientation {
-  readonly type: 'Spice' | 'Fixed' | 'UniformRotation';
+  readonly type: 'Spice' | 'Fixed' | 'UniformRotation' | 'TwoVector';
   readonly frame?: string;
   readonly quaternion?: readonly [number, number, number, number];
+  /** UniformRotation spin axis (body frame). */
+  readonly axis?: readonly [number, number, number];
+  /** UniformRotation spin rate, radians per second. */
+  readonly ratePerSec?: number;
+  /** UniformRotation reference epoch (UTC); defaults to the mission start. */
+  readonly epoch?: string;
 }
 
 export interface Arc {

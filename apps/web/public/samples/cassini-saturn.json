@@ -15,8 +15,14 @@
       "geometry": {
         "type": "Globe",
         "radii": [60268.0, 60268.0, 54364.0],
+        "texture": "/samples/textures/saturn.png",
         "atmosphere": { "innerRadius": 60268.0, "outerRadius": 66000.0 },
-        "rings": { "type": "Rings", "innerRadius": 74500.0, "outerRadius": 140220.0 }
+        "rings": {
+          "type": "Rings",
+          "innerRadius": 74500.0,
+          "outerRadius": 140220.0,
+          "texture": "/samples/textures/saturn-rings.png"
+        }
       }
     }
   ],
@@ -24,6 +30,7 @@
     {
       "id": "-82",
       "name": "Cassini",
+      "orientation": { "type": "UniformRotation", "axis": [0, 1, 0], "ratePerSec": 0.05 },
       "geometry": { "type": "Mesh", "source": "/samples/cassini.gltf", "scale": 1.0 },
       "arcs": [
         {

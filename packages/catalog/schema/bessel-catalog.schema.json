@@ -166,7 +166,8 @@
           "enum": [
             "Spice",
             "Fixed",
-            "TwoVector"
+            "TwoVector",
+            "UniformRotation"
           ]
         },
         "frame": {
@@ -174,6 +175,23 @@
         },
         "quaternion": {
           "$ref": "#/$defs/quaternion"
+        },
+        "axis": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3,
+          "description": "UniformRotation spin axis (body frame)."
+        },
+        "ratePerSec": {
+          "type": "number",
+          "description": "UniformRotation spin rate, radians per second."
+        },
+        "epoch": {
+          "type": "string",
+          "description": "UniformRotation reference epoch (UTC); defaults to the mission start."
         }
       },
       "required": [

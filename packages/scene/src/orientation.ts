@@ -25,3 +25,30 @@ export function applyAttitude(object: Object3D, rotationRowMajor3x3: readonly nu
   const q = new Quaternion().setFromRotationMatrix(rowMajor3x3ToMatrix4(rotationRowMajor3x3));
   object.quaternion.copy(q);
 }
+
+/** Orient an object by a quaternion [x, y, z, w] (a Fixed catalog orientation). */
+export function applyQuaternion(
+  object: Object3D,
+  quaternion: readonly [number, number, number, number],
+): void {
+  object.quaternion.set(quaternion[0], quaternion[1], quaternion[2], quaternion[3]).normalize();
+}
+
+/**
+ * Quaternion for a uniform spin about an axis (a UniformRotation orientation):
+ * angle = ratePerSec * (et - epoch). Returns [x, y, z, w]; a degenerate axis
+ * yields the identity rotation.
+ */
+export function uniformRotationQuaternion(
+  axis: readonly [number, number, number],
+  ratePerSec: number,
+  et: number,
+  epoch: number,
+): [number, number, number, number] {
+  const m = Math.hypot(axis[0], axis[1], axis[2]);
+  if (m < 1e-12) return [0, 0, 0, 1];
+  const angle = ratePerSec * (et - epoch);
+  const half = angle / 2;
+  const s = Math.sin(half) / m;
+  return [axis[0] * s, axis[1] * s, axis[2] * s, Math.cos(half)];
+}

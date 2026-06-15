@@ -44,14 +44,25 @@ import { STEPS, FOCUS_DISTANCE, DEFAULT_FOCUS_DISTANCE } from './engine/constant
 /** Default sampling window (UTC) for a neutral mission with no spacecraft arc. */
 const DEFAULT_WINDOW: readonly [string, string] = ['2004-06-22T00:00:00', '2004-08-22T00:00:00'];
 
+/** How the spacecraft model is oriented each frame, from the catalog. */
+export type AttitudeSpec =
+  | { readonly kind: 'spice'; readonly frame: string }
+  | { readonly kind: 'fixed'; readonly quaternion: readonly [number, number, number, number] }
+  | {
+      readonly kind: 'uniform';
+      readonly axis: readonly [number, number, number];
+      readonly ratePerSec: number;
+      readonly epochEt: number;
+    };
+
 /** Which spacecraft and center body the active mission tracks. */
 export interface MissionIdentity {
   readonly spacecraftName: string | null;
   /** Spacecraft SPICE id (the observer for readouts), e.g. "-82", if any. */
   readonly spacecraftId?: string;
   readonly centerBody: string;
-  /** SPICE frame for the spacecraft attitude (CK), driven via pxform, if any. */
-  readonly spacecraftFrame?: string;
+  /** Spacecraft attitude source (CK frame, fixed quaternion, or uniform spin). */
+  readonly attitude?: AttitudeSpec;
 }
 
 /** A catalog-declared instrument resolved to the ids the FOV/footprint code needs. */
@@ -122,7 +133,13 @@ export function ringSpecFromGeometry(
   const innerKm = rings.innerRadius ?? 0;
   const outerKm = rings.outerRadius ?? 0;
   if (outerKm <= innerKm) return null;
-  return { body, innerKm, outerKm, ...(rotationRowMajor3x3 ? { rotationRowMajor3x3 } : {}) };
+  return {
+    body,
+    innerKm,
+    outerKm,
+    ...(rotationRowMajor3x3 ? { rotationRowMajor3x3 } : {}),
+    ...(rings.texture ? { texture: rings.texture } : {}),
+  };
 }
 
 /** A KeplerianSwarm geometry maps to a swarm spec with sensible default orbit spread. */
@@ -342,8 +359,7 @@ export async function buildCatalogMissionScene(
 
   const spacecraftModel = spacecraft ? await loadMeshModel(spacecraft) : null;
   const instrument = resolveInstrument(catalog, spacecraft, centerBody, bodies);
-  const spacecraftFrame =
-    spacecraft?.orientation?.type === 'Spice' ? spacecraft.orientation.frame : undefined;
+  const attitude = await resolveAttitude(spice, spacecraft, et0);
   return {
     spec,
     table,
@@ -352,11 +368,28 @@ export async function buildCatalogMissionScene(
       spacecraftName: spec.spacecraft?.name ?? null,
       ...(spacecraft ? { spacecraftId: spacecraft.id } : {}),
       centerBody,
-      ...(spacecraftFrame ? { spacecraftFrame } : {}),
+      ...(attitude ? { attitude } : {}),
     },
     spacecraftModel,
     instrument,
   };
+}
+
+/** Resolve a spacecraft orientation into an attitude source the engine applies. */
+async function resolveAttitude(
+  spice: SpiceEngine,
+  spacecraft: CatalogSpacecraft | null,
+  et0: number,
+): Promise<AttitudeSpec | undefined> {
+  const o = spacecraft?.orientation;
+  if (!o) return undefined;
+  if (o.type === 'Spice' && o.frame) return { kind: 'spice', frame: o.frame };
+  if (o.type === 'Fixed' && o.quaternion) return { kind: 'fixed', quaternion: o.quaternion };
+  if (o.type === 'UniformRotation' && o.axis && typeof o.ratePerSec === 'number') {
+    const epochEt = o.epoch ? await safeEt(spice, o.epoch, et0) : et0;
+    return { kind: 'uniform', axis: o.axis, ratePerSec: o.ratePerSec, epochEt };
+  }
+  return undefined;
 }
 
 /** Body-fixed rotation (pxform frame -> J2000) when the body declares a Spice frame. */
