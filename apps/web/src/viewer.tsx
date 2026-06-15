@@ -64,7 +64,7 @@ const FOCUS_DISTANCE: Readonly<Record<string, number>> = {
   Sun: 2200,
   Earth: 320,
   Jupiter: 1200,
-  Saturn: 0.45,
+  Saturn: 0.7,
   Cassini: 0.35,
 };
 
@@ -199,7 +199,7 @@ export function BesselViewer(): JSX.Element {
         }
 
         scene.centerOn('Saturn');
-        scene.setView(0.6, 0.35, FOCUS_DISTANCE['Saturn'] ?? 0.45);
+        scene.setView(0.6, 0.35, FOCUS_DISTANCE['Saturn'] ?? 0.7);
 
         const fov = await loadInstrumentFov(spice, CASSINI_ISS_WAC).catch((err: unknown) => {
           console.error('getfov failed', err);

@@ -327,15 +327,21 @@ export class SolarSystemScene {
     if (!this.scene.children.includes(this.camera)) this.scene.add(this.camera);
   }
 
-  /** Replace the spacecraft marker with a loaded model (keeps the marker on failure). */
+  /**
+   * Replace the spacecraft marker with a loaded model (keeps the marker on
+   * failure). The model is wrapped in a group so the per-frame apparent-size scale
+   * is applied to the wrapper while the model keeps its own normalization scale.
+   */
   setSpacecraftModel(object: Object3D): void {
     if (!this.spacecraft) return;
     if (this.spacecraftModel) this.world.remove(this.spacecraftModel);
     this.world.remove(this.spacecraft.mesh);
-    object.position.copy(this.spacecraft.mesh.position);
-    this.spacecraftModel = object;
-    this.spacecraft = { ...this.spacecraft, mesh: object };
-    this.world.add(object);
+    const wrapper = new Group();
+    wrapper.add(object);
+    wrapper.position.copy(this.spacecraft.mesh.position);
+    this.spacecraftModel = wrapper;
+    this.spacecraft = { ...this.spacecraft, mesh: wrapper };
+    this.world.add(wrapper);
   }
 
   /** Enable sun-cast shadow mapping (replaces the ambient point light). */

@@ -54,12 +54,19 @@ function toWorld(v: V3, frame: { x: V3; y: V3; z: V3 }): V3 {
   return add(add(scale(frame.x, v[0]), scale(frame.y, v[1])), scale(frame.z, v[2]));
 }
 
-/** FOV cone rim points (km, heliocentric) reaching from the spacecraft to Saturn. */
+// The cone is a bounded pointing indicator: extending it all the way to a target
+// millions of km away makes it fill the view edge-on. Cap the length so it reads
+// as a cone from the spacecraft; when the target is close the cap exceeds the
+// range so the cone still reaches the surface near the footprint.
+const FOV_CONE_MAX_KM = 350_000;
+
+/** FOV cone rim points (km, heliocentric) emanating from the spacecraft toward Saturn. */
 export function fovRim(spacecraftKm: Km3, saturnKm: Km3, fov: InstrumentFov): Km3[] {
   const sc = spacecraftKm as unknown as V3;
   const sat = saturnKm as unknown as V3;
   const frame = nadirFrame(sc, sat);
-  const length = Math.hypot(sat[0] - sc[0], sat[1] - sc[1], sat[2] - sc[2]);
+  const range = Math.hypot(sat[0] - sc[0], sat[1] - sc[1], sat[2] - sc[2]);
+  const length = Math.min(range, FOV_CONE_MAX_KM);
   return fov.bounds.map((b) => {
     const ray = norm(toWorld(b, frame));
     return add(sc, scale(ray, length)) as Km3;

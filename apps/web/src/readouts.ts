@@ -9,6 +9,8 @@ const RAD2DEG = 180 / Math.PI;
 
 /** Body-fixed frame for a body name, or null when none is expected. */
 function bodyFrame(name: string): string | null {
+  // The Sun is the light source: illumination angles on it are degenerate, so it
+  // is omitted and its phase/incidence/emission readouts stay n/a.
   const frames: Record<string, string> = {
     Saturn: 'IAU_SATURN',
     Earth: 'IAU_EARTH',
@@ -16,7 +18,6 @@ function bodyFrame(name: string): string | null {
     Jupiter: 'IAU_JUPITER',
     Venus: 'IAU_VENUS',
     Mercury: 'IAU_MERCURY',
-    Sun: 'IAU_SUN',
   };
   return frames[name] ?? null;
 }

@@ -65,8 +65,9 @@ test.describe('Cassini instruments', () => {
     await page.getByTestId('toggle-instruments').click();
     await page.waitForTimeout(800);
     const after = await colorStats(viewport);
-    // The cyan FOV cone adds a visible translucent region.
-    expect(after.cyan).toBeGreaterThan(before.cyan + 200);
+    // The cyan FOV cone adds a visible translucent region over the blue baseline
+    // (trajectory and axis triad). The cone contributes a few hundred cyan pixels.
+    expect(after.cyan).toBeGreaterThan(before.cyan + 120);
   });
 
   test('footprint renders on Saturn from a surface intercept', async ({ page }) => {

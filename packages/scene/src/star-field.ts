@@ -37,10 +37,12 @@ export function buildStarField(stars: readonly Star[]): Points {
   const { positions } = buildStarPoints(stars);
   const geometry = new BufferGeometry();
   geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
+  // Constant 1.6 px points (no distance attenuation): at the 5e5-unit celestial
+  // sphere radius an attenuated size collapses to sub-pixel and the stars vanish.
   const material = new PointsMaterial({
     color: 0xffffff,
-    size: STAR_SPHERE * 0.004,
-    sizeAttenuation: true,
+    size: 1.6,
+    sizeAttenuation: false,
     depthWrite: false,
   });
   const points = new Points(geometry, material);
