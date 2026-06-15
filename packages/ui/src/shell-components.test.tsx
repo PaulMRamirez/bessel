@@ -8,6 +8,7 @@ import { Tooltip } from './Tooltip.tsx';
 import { SearchBox } from './SearchBox.tsx';
 import { ObjectInspector } from './ObjectInspector.tsx';
 import { MeasurePanel } from './MeasurePanel.tsx';
+import { BookmarksPanel } from './BookmarksPanel.tsx';
 
 const html = (el: Parameters<typeof renderToStaticMarkup>[0]): string => renderToStaticMarkup(el);
 
@@ -115,5 +116,36 @@ describe('@bessel/ui MeasurePanel', () => {
     expect(out).toContain('1,500,000,000 km');
     expect(out).toContain('AU');
     expect(out).toContain('Saturn');
+  });
+});
+
+describe('@bessel/ui BookmarksPanel', () => {
+  const noop = (): void => undefined;
+
+  it('shows an empty state with no bookmarks', () => {
+    const out = html(
+      createElement(BookmarksPanel, {
+        bookmarks: [],
+        onSave: noop,
+        onApply: noop,
+        onDelete: noop,
+      }),
+    );
+    expect(out).toContain('No saved views yet');
+    expect(out).toContain('data-testid="bookmark-save"');
+  });
+
+  it('lists each bookmark with an apply and a delete control', () => {
+    const out = html(
+      createElement(BookmarksPanel, {
+        bookmarks: [{ id: 'a', name: 'Earth view' }],
+        onSave: noop,
+        onApply: noop,
+        onDelete: noop,
+      }),
+    );
+    expect(out).toContain('data-testid="bookmarks-list"');
+    expect(out).toContain('Earth view');
+    expect(out).toContain('aria-label="Delete Earth view"');
   });
 });

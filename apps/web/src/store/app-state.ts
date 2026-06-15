@@ -5,6 +5,7 @@
 
 import type { CatalogEntry, Readouts, VisualizationSettings } from '@bessel/ui';
 import { DEFAULT_OBJECT_ENTRIES } from '../catalog-load.ts';
+import type { Bookmark } from '../bookmarks.ts';
 import { createStore, type Store } from './create-store.ts';
 
 export interface AppState {
@@ -40,6 +41,8 @@ export interface AppState {
   loadError: string | null;
   // Measurement: distance between the first two selected objects.
   measurement: Measurement | null;
+  // Saved views.
+  bookmarks: readonly Bookmark[];
 }
 
 export interface Measurement {
@@ -86,6 +89,7 @@ export const initialAppState: AppState = {
   loadedName: null,
   loadError: null,
   measurement: null,
+  bookmarks: [],
 };
 
 export type AppStore = Store<AppState>;

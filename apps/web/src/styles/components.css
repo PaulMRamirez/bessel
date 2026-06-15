@@ -537,6 +537,57 @@ button[aria-pressed='true'] {
   margin: 0;
 }
 
+/* Saved views ------------------------------------------------------------ */
+
+.bessel-bookmark-form {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.bessel-bookmark-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.bessel-bookmarks-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.bessel-bookmark-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.bessel-bookmark-apply {
+  flex: 1;
+  text-align: left;
+  background: transparent;
+  border-color: transparent;
+}
+
+.bessel-bookmark-apply:hover {
+  background: var(--bg-2);
+  border-color: var(--border-strong);
+}
+
+.bessel-bookmark-delete {
+  padding: 0 0.4rem;
+  line-height: 1;
+}
+
+.bessel-bookmarks-empty {
+  color: var(--text-1);
+  margin: 0;
+  font-size: 0.78rem;
+}
+
 /* Utilities -------------------------------------------------------------- */
 
 .bessel-visually-hidden {

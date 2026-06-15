@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { INNER_SYSTEM } from '@bessel/scene';
 import {
+  BookmarksPanel,
   CaptureControls,
   CatalogLoader,
   KeyboardHelp,
@@ -64,6 +65,7 @@ export function BesselViewer(): JSX.Element {
   const loadedName = useStore(store, (s) => s.loadedName);
   const loadError = useStore(store, (s) => s.loadError);
   const measurement = useStore(store, (s) => s.measurement);
+  const bookmarks = useStore(store, (s) => s.bookmarks);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -200,6 +202,14 @@ export function BesselViewer(): JSX.Element {
           from={measurement?.from ?? null}
           to={measurement?.to ?? null}
           distanceKm={measurement?.distanceKm ?? null}
+        />
+      </PanelContainer>
+      <PanelContainer title="Saved views" testId="panel-views">
+        <BookmarksPanel
+          bookmarks={bookmarks}
+          onSave={(name) => void engine?.saveBookmark(name)}
+          onApply={(id) => void engine?.applyBookmark(id)}
+          onDelete={(id) => void engine?.deleteBookmark(id)}
         />
       </PanelContainer>
       <PanelContainer title="Capture" testId="panel-capture">

@@ -14,13 +14,20 @@ import {
   type Recorder,
   type SettingKey,
 } from '@bessel/ui';
-import { encodeView, type ViewModel } from '@bessel/state';
+import { encodeView, decodeView, type ViewModel } from '@bessel/state';
 import { positionAt, velocityAt } from '../sampler.ts';
 import { fovRim, footprint } from '../instruments.ts';
 import { toggleSelection } from '../selection.ts';
 import { parseAnyCatalog, formatLoadError } from '../catalog-load.ts';
+import {
+  loadBookmarks,
+  persistBookmarks,
+  newBookmarkId,
+  type Bookmark,
+} from '../bookmarks.ts';
 import type { AppStore } from '../store/index.ts';
 import { bootScene, type EngineCore } from './bootstrap.ts';
+import { applyViewModel } from './apply-view.ts';
 import { pushEpochLabel, pushReadouts } from './telemetry.ts';
 import { FOCUS_DISTANCE, DEFAULT_FOCUS_DISTANCE, RATE_STEPS } from './constants.ts';
 
@@ -47,6 +54,7 @@ export class BesselEngine {
       if (this.disposed) return;
       this.raf = requestAnimationFrame(this.frame);
       this.store.setState({ status: 'Ready', ready: true });
+      void this.loadBookmarksFromStorage();
     } catch (err) {
       if (!this.disposed) {
         this.store.setState({
@@ -233,12 +241,13 @@ export class BesselEngine {
     this.core.scene.setView(0.6, 0.35, FOCUS_DISTANCE[body] ?? DEFAULT_FOCUS_DISTANCE);
   }
 
-  async share(): Promise<void> {
+  // Build a ViewModel for the current camera, epoch, and selection.
+  private async buildViewModel(): Promise<ViewModel | null> {
     const e = this.core;
-    if (!e) return;
+    if (!e) return null;
     const v = e.scene.getView();
     const utc = await e.spice.et2utc(e.clock.state.et, 'ISOC', 3);
-    const view: ViewModel = {
+    return {
       t: `${utc}Z`,
       camera: {
         mode: 'center',
@@ -251,12 +260,58 @@ export class BesselEngine {
       visibility: {},
       plugins: [],
     };
+  }
+
+  async share(): Promise<void> {
+    const view = await this.buildViewModel();
+    if (!view) return;
     window.location.hash = encodeView(view);
     try {
       await navigator.clipboard?.writeText(window.location.href);
     } catch {
       // Clipboard may be unavailable; the URL hash is still updated.
     }
+  }
+
+  private async loadBookmarksFromStorage(): Promise<void> {
+    const e = this.core;
+    if (!e) return;
+    const bookmarks = await loadBookmarks(e.storage);
+    if (!this.disposed) this.store.setState({ bookmarks });
+  }
+
+  async saveBookmark(name: string): Promise<void> {
+    const e = this.core;
+    const trimmed = name.trim();
+    if (!e || !trimmed) return;
+    const view = await this.buildViewModel();
+    if (!view) return;
+    const bookmark: Bookmark = { id: newBookmarkId(), name: trimmed, hash: encodeView(view) };
+    const next = [...this.store.getState().bookmarks, bookmark];
+    this.store.setState({ bookmarks: next });
+    await persistBookmarks(e.storage, next);
+  }
+
+  async applyBookmark(id: string): Promise<void> {
+    const e = this.core;
+    if (!e) return;
+    const bookmark = this.store.getState().bookmarks.find((b) => b.id === id);
+    if (!bookmark) return;
+    try {
+      const view = decodeView(bookmark.hash);
+      await applyViewModel(e.scene, e.clock, e.spice, this.store, view, this.isDisposed);
+      window.location.hash = bookmark.hash;
+    } catch (err) {
+      console.error('failed to apply bookmark', err);
+    }
+  }
+
+  async deleteBookmark(id: string): Promise<void> {
+    const e = this.core;
+    if (!e) return;
+    const next = this.store.getState().bookmarks.filter((b) => b.id !== id);
+    this.store.setState({ bookmarks: next });
+    await persistBookmarks(e.storage, next);
   }
 
   scrub(value: number): void {

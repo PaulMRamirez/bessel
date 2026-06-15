@@ -7,6 +7,7 @@
 import { createWebPlatform } from '@bessel/pal-web';
 import { SolarSystemScene, buildScene } from '@bessel/scene';
 import type { SpiceEngine } from '@bessel/spice';
+import type { Storage } from '@bessel/pal';
 import { Clock } from '@bessel/timeline';
 import { decodeView } from '@bessel/state';
 import { connectSpice } from '../spice.ts';
@@ -15,6 +16,7 @@ import type { EphemerisTable } from '../sampler.ts';
 import { buildMissionScene } from '../mission.ts';
 import { CASSINI_ISS_WAC, loadInstrumentFov, type InstrumentFov } from '../instruments.ts';
 import type { AppStore } from '../store/index.ts';
+import { applyViewModel } from './apply-view.ts';
 
 export interface EngineCore {
   scene: SolarSystemScene;
@@ -22,6 +24,7 @@ export interface EngineCore {
   table: EphemerisTable;
   spice: SpiceEngine;
   fov: InstrumentFov | null;
+  storage: Storage;
 }
 
 export async function bootScene(
@@ -56,7 +59,7 @@ export async function bootScene(
 
   await applySharedView(scene, clock, spice, store, isDisposed);
 
-  return { scene, clock, table: mission.table, spice, fov };
+  return { scene, clock, table: mission.table, spice, fov, storage: platform.storage };
 }
 
 // Reconstruct a shared view from the URL fragment, if present.
@@ -70,18 +73,7 @@ async function applySharedView(
   if (window.location.hash.length <= 1) return;
   try {
     const view = decodeView(window.location.hash);
-    if (view.t) {
-      const sharedEt = await spice.str2et(view.t.replace('Z', ''));
-      if (isDisposed()) return;
-      clock.setEpoch(sharedEt);
-      store.setState({ et: sharedEt });
-    }
-    if (view.camera.target) scene.centerOn(view.camera.target);
-    scene.setView(view.camera.azimuth, view.camera.elevation, view.camera.distance);
-    store.setState({
-      focus: view.camera.target ?? scene.focusBody,
-      selection: view.selection,
-    });
+    await applyViewModel(scene, clock, spice, store, view, isDisposed);
   } catch (err) {
     console.error('failed to apply shared view', err);
   }
