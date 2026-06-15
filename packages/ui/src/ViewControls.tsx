@@ -15,7 +15,7 @@ export interface ViewControlsProps {
 
 export function ViewControls(props: ViewControlsProps): JSX.Element {
   return (
-    <div className="bessel-viewcontrols" role="group" aria-label="Camera targets">
+    <div className="bessel-camera-controls" role="group" aria-label="Camera targets">
       <span>Center on:</span>
       {props.bodies.map((body) => (
         <button

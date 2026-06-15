@@ -9,7 +9,7 @@ import {
   parseCosmographiaCatalog,
   type BesselCatalog,
 } from '@bessel/catalog';
-import { INNER_SYSTEM } from '@bessel/scene';
+import { SOLAR_SYSTEM } from '@bessel/scene';
 import type { CatalogEntry } from '@bessel/ui';
 
 export type CatalogKind = 'native' | 'cosmographia';
@@ -24,7 +24,7 @@ export interface LoadedCatalog {
 
 /** The neutral boot object list (inner solar system), shown until a mission loads. */
 export const DEFAULT_OBJECT_ENTRIES: readonly CatalogEntry[] = [
-  ...INNER_SYSTEM.map((p) => ({ id: p.name, name: p.name, kind: 'body' as const })),
+  ...SOLAR_SYSTEM.map((p) => ({ id: p.name, name: p.name, kind: 'body' as const })),
 ];
 
 export function parseAnyCatalog(filename: string, text: string): LoadedCatalog {

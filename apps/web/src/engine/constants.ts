@@ -5,7 +5,7 @@
 export const STEPS = 120;
 
 export const FOCUS_DISTANCE: Readonly<Record<string, number>> = {
-  Sun: 2200,
+  Sun: 7000, // frame the whole system out to Pluto's orbit (~39 AU)
   Earth: 320,
   Jupiter: 1200,
   Saturn: 0.7,

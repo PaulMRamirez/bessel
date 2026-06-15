@@ -149,6 +149,15 @@
   max-width: calc(100% - 6rem);
 }
 
+/* Camera target + view controls live inside the left Camera panel (not floating),
+   so they wrap freely without overlapping the floating instruments toolbar. */
+.bessel-camera-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
 .bessel-selection {
   color: var(--text-1);
   font-size: 0.8rem;

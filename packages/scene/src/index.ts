@@ -3,7 +3,7 @@
 // renders textured planet globes and a spacecraft trajectory polyline.
 
 export { SolarSystemScene, type Km3 } from './three-scene.ts';
-export { INNER_SYSTEM, type PlanetDef } from './planets.ts';
+export { SOLAR_SYSTEM, type PlanetDef } from './planets.ts';
 export {
   SCALE,
   KM_PER_UNIT,

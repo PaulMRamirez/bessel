@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { buildScene, type SceneTarget } from './scene-builder.ts';
 import type { SceneSpec } from './scene-spec.ts';
-import { INNER_SYSTEM } from './planets.ts';
+import { SOLAR_SYSTEM } from './planets.ts';
 
 function recordingTarget(): SceneTarget & { calls: Record<string, unknown[][]> } {
   const calls: Record<string, unknown[][]> = {};
@@ -35,7 +35,7 @@ describe('buildScene', () => {
   it('applies bodies and an optional spacecraft, trajectory, rings, and camera', () => {
     const target = recordingTarget();
     const spec: SceneSpec = {
-      bodies: INNER_SYSTEM,
+      bodies: SOLAR_SYSTEM,
       spacecraft: { name: 'Cassini' },
       trajectory: { points: [[1, 2, 3]], anchorBody: 'Saturn' },
       rings: [{ body: 'Saturn', innerKm: 100, outerKm: 200 }],
@@ -43,7 +43,7 @@ describe('buildScene', () => {
     };
     buildScene(target, spec);
 
-    expect(target.calls['setBodies']?.[0]?.[0]).toBe(INNER_SYSTEM);
+    expect(target.calls['setBodies']?.[0]?.[0]).toBe(SOLAR_SYSTEM);
     expect(target.calls['setSpacecraft']?.[0]).toEqual(['Cassini', undefined]);
     expect(target.calls['setTrajectory']?.[0]).toEqual([[[1, 2, 3]], 'Saturn', undefined]);
     expect(target.calls['setRings']?.[0]).toEqual(['Saturn', 100, 200, undefined, undefined]);
@@ -90,7 +90,7 @@ describe('buildScene', () => {
       throw new Error('bad buffer');
     });
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    buildScene(target, { bodies: INNER_SYSTEM, starField: [], camera: { focus: 'Sun', azimuth: 0, elevation: 0, distance: 1 } });
+    buildScene(target, { bodies: SOLAR_SYSTEM, starField: [], camera: { focus: 'Sun', azimuth: 0, elevation: 0, distance: 1 } });
     // The camera still gets applied after the star field failure.
     expect(target.calls['setView']).toHaveLength(1);
     errSpy.mockRestore();

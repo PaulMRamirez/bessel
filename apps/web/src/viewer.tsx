@@ -4,7 +4,7 @@
 // tools on the right, the timeline along the bottom. The component stays
 // presentational; all imperative work lives in the engine.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { INNER_SYSTEM } from '@bessel/scene';
+import { SOLAR_SYSTEM } from '@bessel/scene';
 import {
   BookmarksPanel,
   CaptureControls,
@@ -31,7 +31,7 @@ import { createMissionRegistry } from './missions.ts';
 import { AppShell } from './shell/index.ts';
 
 const SPICE_IDS: Readonly<Record<string, string>> = Object.fromEntries(
-  INNER_SYSTEM.map((p) => [p.name, p.spiceId]),
+  SOLAR_SYSTEM.map((p) => [p.name, p.spiceId]),
 );
 
 export function BesselViewer(): JSX.Element {

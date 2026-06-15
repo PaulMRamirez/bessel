@@ -11,7 +11,7 @@
 // long as the loaded kernels cover it. Unresolved bodies fail loudly.
 
 import {
-  INNER_SYSTEM,
+  SOLAR_SYSTEM,
   loadSpacecraftModel,
   orbitEllipse,
   parseStarCatalog,
@@ -46,8 +46,9 @@ import { STEPS, FOCUS_DISTANCE, DEFAULT_FOCUS_DISTANCE } from './engine/constant
 /** Default sampling window (UTC) for a neutral mission with no spacecraft arc. */
 const DEFAULT_WINDOW: readonly [string, string] = ['2004-06-22T00:00:00', '2004-08-22T00:00:00'];
 
-/** Sun gravitational parameter (km^3/s^2), the fallback when PCK GM is unavailable. */
+/** Gravitational parameters (km^3/s^2), the fallback when PCK GM is unavailable. */
 const GM_SUN = 1.32712440018e11;
+const GM_EARTH = 398600.435436;
 
 /** How the spacecraft model is oriented each frame, from the catalog. */
 export type AttitudeSpec =
@@ -95,7 +96,7 @@ export interface MissionScene {
   readonly instrument?: InstrumentDescriptor | null;
 }
 
-const INNER_BY_NAME = new Map(INNER_SYSTEM.map((p) => [p.name.toLowerCase(), p]));
+const INNER_BY_NAME = new Map(SOLAR_SYSTEM.map((p) => [p.name.toLowerCase(), p]));
 
 const DEFAULT_BODY_COLOR: readonly [number, number, number] = [0.6, 0.62, 0.66];
 const DEFAULT_BODY_RADIUS_KM = 1000;
@@ -271,7 +272,7 @@ export async function buildCatalogMissionScene(
   // Bodies: catalog-declared, else the inner-system table so the scene is never
   // empty. The Sun is always present as the heliocentric origin and light.
   const catalogDefs = (catalog.bodies ?? []).map(catalogBodyToPlanetDef);
-  const bodies = catalogDefs.length > 0 ? withSun(catalogDefs) : INNER_SYSTEM;
+  const bodies = catalogDefs.length > 0 ? withSun(catalogDefs) : SOLAR_SYSTEM;
 
   onStatus('Sampling ephemerides');
   const sampleRefs = bodies.map((b) => ({ name: b.name, spiceId: b.spiceId }));
@@ -404,37 +405,54 @@ async function resolveAttitude(
   return undefined;
 }
 
-/** Osculating orbit ellipse (around the Sun) for each body except the Sun. */
+/**
+ * Osculating orbit ellipse for each body: around the Sun, except the Moon, which
+ * orbits Earth. Drawn from one state vector so a full orbit renders without
+ * ephemeris over the whole period.
+ */
 async function buildOrbits(
   spice: SpiceEngine,
   bodies: readonly PlanetDef[],
   et0: number,
 ): Promise<OrbitSpec[]> {
-  let mu = GM_SUN;
-  try {
-    const gm = await spice.bodvrd('SUN', 'GM');
-    if (gm && gm.length > 0 && Number.isFinite(gm[0])) mu = gm[0]!;
-  } catch {
-    // Use the constant fallback.
-  }
+  const muSun = await gmOf(spice, 'SUN', GM_SUN);
+  const muEarth = await gmOf(spice, 'EARTH', GM_EARTH);
+  const hasEarth = bodies.some((x) => x.name === 'Earth');
   const orbits: OrbitSpec[] = [];
   for (const b of bodies) {
     if (b.name.toLowerCase() === 'sun' || b.spiceId === '10') continue;
+    // The Moon orbits Earth; every other body orbits the Sun.
+    const moon = b.spiceId === '301';
+    if (moon && !hasEarth) continue;
+    const centerId = moon ? '399' : '10';
+    const anchorBody = moon ? 'Earth' : 'Sun';
+    const mu = moon ? muEarth : muSun;
     try {
-      const st = await spice.spkezr(b.spiceId, et0, 'J2000', 'NONE', '10');
+      const st = await spice.spkezr(b.spiceId, et0, 'J2000', 'NONE', centerId);
       const points = orbitEllipse(
         [st.position.x, st.position.y, st.position.z],
         [st.velocity.x, st.velocity.y, st.velocity.z],
         mu,
       );
       if (points.length > 1) {
-        orbits.push({ id: `${b.name}-orbit`, anchorBody: 'Sun', points, color: dimColor(b.color) });
+        orbits.push({ id: `${b.name}-orbit`, anchorBody, points, color: dimColor(b.color) });
       }
     } catch {
       // No usable state for this body (e.g. outside the loaded ephemeris): skip it.
     }
   }
   return orbits;
+}
+
+/** A body's GM (km^3/s^2) from the PCK, or a fallback when bodvrd has no GM. */
+async function gmOf(spice: SpiceEngine, body: string, fallback: number): Promise<number> {
+  try {
+    const gm = await spice.bodvrd(body, 'GM');
+    if (gm && gm.length > 0 && Number.isFinite(gm[0])) return gm[0]!;
+  } catch {
+    // Use the constant fallback.
+  }
+  return fallback;
 }
 
 /** A dim hex color from a body's base RGB, for the faint orbit line. */
@@ -578,7 +596,7 @@ function resolveCenterName(center: string, bodies: readonly PlanetDef[]): string
 
 function withSun(defs: readonly PlanetDef[]): readonly PlanetDef[] {
   if (defs.some((d) => d.name.toLowerCase() === 'sun' || d.spiceId === '10')) return defs;
-  return [INNER_SYSTEM[0]!, ...defs];
+  return [SOLAR_SYSTEM[0]!, ...defs];
 }
 
 function safeStars(): readonly Star[] | undefined {
