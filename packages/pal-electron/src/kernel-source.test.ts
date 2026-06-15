@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { kernelSourceContract } from '@bessel/pal/testing';
-import { NodeKernelSource } from './index.ts';
+import { NodeKernelSource } from './node.ts';
 
 const fixturesDir = fileURLToPath(new URL('../../../kernels/fixtures/', import.meta.url));
 

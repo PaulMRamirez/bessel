@@ -1,6 +1,7 @@
 import { app, BrowserWindow } from 'electron';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { registerIpcHandlers } from './ipc-handlers.ts';
 
 const dir = dirname(fileURLToPath(import.meta.url));
 
@@ -10,7 +11,7 @@ function createWindow(): void {
     height: 800,
     backgroundColor: '#0b0e14',
     webPreferences: {
-      preload: join(dir, '../preload/preload.mjs'),
+      preload: join(dir, '../preload/preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
     },
@@ -25,6 +26,7 @@ function createWindow(): void {
 }
 
 void app.whenReady().then(() => {
+  registerIpcHandlers();
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

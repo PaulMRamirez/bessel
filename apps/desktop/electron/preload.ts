@@ -1,13 +1,21 @@
-import { contextBridge } from 'electron';
+import { contextBridge, ipcRenderer } from 'electron';
+import { BESSEL_IPC, type BesselBridge } from '@bessel/pal-electron';
 
-// The typed IPC surface pal-electron consumes. Phase 1 adds kernel and filesystem
-// channels; Phase 3 adds meta-kernel resolution, native dialogs, and the Python
-// bridge. Kept minimal and explicit so the desktop bridge stays auditable.
-const api = {
-  platform: 'electron' as const,
+// Typed pass-through bridge: every method forwards to the matching ipcMain handler.
+// contextIsolation stays on; no business logic lives here.
+const api: BesselBridge = {
+  platform: 'electron',
   versions: process.versions,
+  listKernels: () => ipcRenderer.invoke(BESSEL_IPC.listKernels),
+  resolveKernel: (name) => ipcRenderer.invoke(BESSEL_IPC.resolveKernel, name),
+  readKernel: (id) => ipcRenderer.invoke(BESSEL_IPC.readKernel, id),
+  readKernelRange: (id, offset, length) =>
+    ipcRenderer.invoke(BESSEL_IPC.readKernelRange, id, offset, length),
+  resolveMetaKernel: (tmPath) => ipcRenderer.invoke(BESSEL_IPC.resolveMetaKernel, tmPath),
+  openDialog: (options) => ipcRenderer.invoke(BESSEL_IPC.openDialog, options),
+  saveDialog: (options) => ipcRenderer.invoke(BESSEL_IPC.saveDialog, options),
+  runPython: (request) => ipcRenderer.invoke(BESSEL_IPC.runPython, request),
+  pythonAvailable: () => ipcRenderer.invoke(BESSEL_IPC.pythonAvailable),
 };
 
 contextBridge.exposeInMainWorld('bessel', api);
-
-export type BesselDesktopApi = typeof api;

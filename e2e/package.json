@@ -5,6 +5,7 @@
   "type": "module",
   "devDependencies": {
     "@axe-core/playwright": "^4.10.1",
-    "@playwright/test": "^1.49.1"
+    "@playwright/test": "^1.49.1",
+    "electron": "^33.2.1"
   }
 }

@@ -261,8 +261,9 @@ export class SolarSystemScene {
     vertices: readonly number[],
     plates: readonly number[],
     rotationRowMajor3x3?: readonly number[],
+    scale?: number,
   ): void {
-    const mesh = buildDskMesh(vertices, plates);
+    const mesh = buildDskMesh(vertices, plates, undefined, scale);
     mesh.name = name;
     if (rotationRowMajor3x3) mesh.setRotationFromMatrix(rowMajor3x3ToMatrix4(rotationRowMajor3x3));
     this.replaceAnchored(this.dskMesh, mesh, anchorBody);

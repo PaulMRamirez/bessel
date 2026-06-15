@@ -22,5 +22,16 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+      testIgnore: /electron-.*\.spec\.ts/,
+    },
+    {
+      // Electron tests launch the built desktop app directly (no web server).
+      name: 'electron',
+      testMatch: /electron-.*\.spec\.ts/,
+    },
+  ],
 });

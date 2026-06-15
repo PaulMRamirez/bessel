@@ -2,7 +2,7 @@ import { isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
 import { PalError } from '@bessel/pal';
-import { resolveLoadableKernels, resolveMetaKernel } from './index.ts';
+import { resolveLoadableKernels, resolveMetaKernel } from './node.ts';
 
 const fixture = (name: string) =>
   fileURLToPath(new URL(`./__fixtures__/${name}`, import.meta.url));
