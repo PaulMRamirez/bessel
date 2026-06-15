@@ -6,14 +6,15 @@ import { cloneElement, useId, type ReactElement } from 'react';
 
 export interface TooltipProps {
   readonly label: string;
-  readonly children: ReactElement<{ 'aria-describedby'?: string }>;
+  /** A single focusable element; it receives aria-describedby pointing at the label. */
+  readonly children: ReactElement;
 }
 
 export function Tooltip(props: TooltipProps): JSX.Element {
   const id = useId();
   return (
     <span className="bessel-tooltip-wrap">
-      {cloneElement(props.children, { 'aria-describedby': id })}
+      {cloneElement(props.children, { 'aria-describedby': id } as Partial<unknown>)}
       <span role="tooltip" id={id} className="bessel-tooltip">
         {props.label}
       </span>

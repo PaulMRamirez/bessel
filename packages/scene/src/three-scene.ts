@@ -21,6 +21,7 @@ import {
   type Object3D,
   PerspectiveCamera,
   PointLight,
+  Raycaster,
   RGBAFormat,
   Scene,
   SphereGeometry,
@@ -28,6 +29,7 @@ import {
   WebGLRenderer,
 } from 'three';
 import type { PlanetDef } from './planets.ts';
+import { pickObjectId } from './picking.ts';
 
 import {
   SCALE,
@@ -93,6 +95,7 @@ export class SolarSystemScene {
   private readonly world = new Group();
   private readonly bodies = new Map<string, BodyNode>();
   private readonly positions = new Map<string, Km3>();
+  private readonly raycaster = new Raycaster();
   private spacecraft: { name: string; mesh: Object3D; radius: number } | null = null;
   private trajectory: Line | null = null;
   private trajectoryAnchor = 'Sun';
@@ -142,6 +145,7 @@ export class SolarSystemScene {
       });
       const radius = def.radiusKm * SCALE;
       const mesh = new Mesh(new SphereGeometry(radius, 32, 16), material);
+      mesh.userData['objectId'] = def.name;
       this.bodies.set(def.name, { def, mesh, radius });
       this.world.add(mesh);
     }
@@ -155,6 +159,7 @@ export class SolarSystemScene {
     });
     const radius = radiusKm * SCALE;
     const mesh = new Mesh(new SphereGeometry(radius, 12, 8), material);
+    mesh.userData['objectId'] = name;
     this.spacecraft = { name, mesh, radius };
     this.world.add(mesh);
   }
@@ -420,6 +425,21 @@ export class SolarSystemScene {
 
   centerOn(name: string): void {
     if (this.bodies.has(name) || this.spacecraft?.name === name) this.focus = name;
+  }
+
+  /**
+   * Pick the nearest body or spacecraft under a normalized device coordinate
+   * (x, y in [-1, 1]). Returns the objectId, or null if the ray misses. Uses the
+   * meshes as rendered (camera-relative, apparent-size scaled), so it matches
+   * what the user sees on screen.
+   */
+  pickObjectAt(ndcX: number, ndcY: number): string | null {
+    const candidates: Object3D[] = [];
+    for (const node of this.bodies.values()) {
+      if (node.mesh.visible) candidates.push(node.mesh);
+    }
+    if (this.spacecraft && this.spacecraft.mesh.visible) candidates.push(this.spacecraft.mesh);
+    return pickObjectId(this.raycaster, this.camera, ndcX, ndcY, candidates);
   }
 
   get focusBody(): string {

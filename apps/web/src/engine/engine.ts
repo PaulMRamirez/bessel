@@ -5,7 +5,7 @@
 // writes derived state (et, epochLabel, readouts, footprint count) back to it.
 // React subscribes to the store; user actions call the methods below.
 
-import type { Km3 } from '@bessel/scene';
+import { pointerToNdc, type Km3 } from '@bessel/scene';
 import {
   captureStill,
   downloadBlob,
@@ -133,24 +133,31 @@ export class BesselEngine {
     this.raf = requestAnimationFrame(this.frame);
   };
 
-  // Pointer-drag orbit and wheel zoom. Returns a cleanup function.
+  // Pointer-drag orbit, wheel zoom, and click-to-pick. Returns a cleanup function.
   attachPointer(): () => void {
     const canvas = this.canvas;
     let dragging = false;
     let px = 0;
     let py = 0;
+    let moved = 0;
     const down = (ev: PointerEvent): void => {
       dragging = true;
       px = ev.clientX;
       py = ev.clientY;
+      moved = 0;
     };
     const move = (ev: PointerEvent): void => {
       if (!dragging || !this.core) return;
-      this.core.scene.orbitBy((ev.clientX - px) * 0.005, (ev.clientY - py) * 0.005);
+      const dx = ev.clientX - px;
+      const dy = ev.clientY - py;
+      moved += Math.abs(dx) + Math.abs(dy);
+      this.core.scene.orbitBy(dx * 0.005, dy * 0.005);
       px = ev.clientX;
       py = ev.clientY;
     };
-    const up = (): void => {
+    const up = (ev: PointerEvent): void => {
+      // A press that did not drag is a click: pick the object under the cursor.
+      if (dragging && moved < 5) this.pickAt(ev.clientX, ev.clientY);
       dragging = false;
     };
     const wheel = (ev: WheelEvent): void => {
@@ -167,6 +174,25 @@ export class BesselEngine {
       window.removeEventListener('pointerup', up);
       canvas.removeEventListener('wheel', wheel);
     };
+  }
+
+  // Pick the body or spacecraft under a screen position and center on it. Misses
+  // (clicks on empty space) leave the selection unchanged.
+  pickAt(clientX: number, clientY: number): void {
+    const core = this.core;
+    if (!core) return;
+    const rect = this.canvas.getBoundingClientRect();
+    if (
+      clientX < rect.left ||
+      clientX > rect.right ||
+      clientY < rect.top ||
+      clientY > rect.bottom
+    ) {
+      return;
+    }
+    const ndc = pointerToNdc(clientX, clientY, rect);
+    const id = core.scene.pickObjectAt(ndc.x, ndc.y);
+    if (id) this.centerOn(id);
   }
 
   centerOn(body: string): void {

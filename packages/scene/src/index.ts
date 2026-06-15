@@ -45,3 +45,4 @@ export {
   type Rotation3x3,
 } from './scene-spec.ts';
 export { buildScene, type SceneTarget } from './scene-builder.ts';
+export { pickObjectId, pointerToNdc } from './picking.ts';

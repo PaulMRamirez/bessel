@@ -39,7 +39,7 @@ describe('@bessel/ui ThemeToggle', () => {
 describe('@bessel/ui PanelContainer', () => {
   it('exposes an expanded toggle controlling a region', () => {
     const out = html(
-      createElement(PanelContainer, { title: 'Objects', testId: 'panel-objects' }, 'body'),
+      createElement(PanelContainer, { title: 'Objects', testId: 'panel-objects', children: 'body' }),
     );
     expect(out).toContain('data-testid="panel-objects"');
     expect(out).toContain('aria-expanded="true"');
@@ -49,7 +49,7 @@ describe('@bessel/ui PanelContainer', () => {
 
   it('starts collapsed when asked', () => {
     const out = html(
-      createElement(PanelContainer, { title: 'Capture', defaultCollapsed: true }, 'body'),
+      createElement(PanelContainer, { title: 'Capture', defaultCollapsed: true, children: 'body' }),
     );
     expect(out).toContain('aria-expanded="false"');
     expect(out).toContain('hidden=');
@@ -59,11 +59,10 @@ describe('@bessel/ui PanelContainer', () => {
 describe('@bessel/ui Tooltip', () => {
   it('associates the label with the child via aria-describedby', () => {
     const out = html(
-      createElement(
-        Tooltip,
-        { label: 'Toggle theme' },
-        createElement('button', { type: 'button' }, 'x'),
-      ),
+      createElement(Tooltip, {
+        label: 'Toggle theme',
+        children: createElement('button', { type: 'button' }, 'x'),
+      }),
     );
     expect(out).toContain('role="tooltip"');
     expect(out).toContain('aria-describedby=');
