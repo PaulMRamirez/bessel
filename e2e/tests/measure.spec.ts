@@ -15,4 +15,6 @@ test('measuring the distance between two selected objects', async ({ page }) => 
   // Saturn to Earth is on the order of 10^9 km, so the AU value is shown too.
   await expect(page.getByTestId('measure-distance')).toContainText('km', { timeout: 5_000 });
   await expect(page.getByTestId('measure-distance')).toContainText('AU');
+  // The angular separation seen from the spacecraft is also shown.
+  await expect(page.getByTestId('measure-angle')).toContainText('deg apart');
 });

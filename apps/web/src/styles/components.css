@@ -532,6 +532,12 @@ button[aria-pressed='true'] {
   margin-top: 0.1rem;
 }
 
+.bessel-measure-angle {
+  color: var(--text-1);
+  font-size: 0.78rem;
+  margin-top: 0.1rem;
+}
+
 .bessel-measure-empty {
   color: var(--text-1);
   margin: 0;

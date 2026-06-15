@@ -49,6 +49,8 @@ export interface Measurement {
   readonly from: string;
   readonly to: string;
   readonly distanceKm: number;
+  /** Angular separation of the pair seen from the spacecraft, or null. */
+  readonly angleDeg: number | null;
 }
 
 export const initialAppState: AppState = {

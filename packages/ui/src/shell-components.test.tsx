@@ -110,12 +110,19 @@ describe('@bessel/ui MeasurePanel', () => {
 
   it('formats the distance with commas and an AU value when large', () => {
     const out = html(
-      createElement(MeasurePanel, { from: 'Saturn', to: 'Earth', distanceKm: 1_500_000_000 }),
+      createElement(MeasurePanel, {
+        from: 'Saturn',
+        to: 'Earth',
+        distanceKm: 1_500_000_000,
+        angleDeg: 12.345,
+      }),
     );
     expect(out).toContain('data-testid="measure-distance"');
     expect(out).toContain('1,500,000,000 km');
     expect(out).toContain('AU');
     expect(out).toContain('Saturn');
+    expect(out).toContain('data-testid="measure-angle"');
+    expect(out).toContain('12.35 deg');
   });
 });
 

@@ -202,6 +202,7 @@ export function BesselViewer(): JSX.Element {
           from={measurement?.from ?? null}
           to={measurement?.to ?? null}
           distanceKm={measurement?.distanceKm ?? null}
+          angleDeg={measurement?.angleDeg ?? null}
         />
       </PanelContainer>
       <PanelContainer title="Saved views" testId="panel-views">

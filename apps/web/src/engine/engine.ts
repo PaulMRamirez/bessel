@@ -28,6 +28,12 @@ import {
 import type { AppStore } from '../store/index.ts';
 import { bootScene, type EngineCore } from './bootstrap.ts';
 import { applyViewModel } from './apply-view.ts';
+
+// True when two optional angles are equal or both absent (within tolerance).
+function anglesClose(a: number | null, b: number | null): boolean {
+  if (a === null || b === null) return a === b;
+  return Math.abs(a - b) < 0.05;
+}
 import { pushEpochLabel, pushReadouts } from './telemetry.ts';
 import { FOCUS_DISTANCE, DEFAULT_FOCUS_DISTANCE, RATE_STEPS } from './constants.ts';
 
@@ -161,15 +167,34 @@ export class BesselEngine {
     const a = positionAt(e.table, from, et);
     const b = positionAt(e.table, to, et);
     const distanceKm = Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+    const angleDeg = this.angleFromObserver(from, to, et);
     if (
       current &&
       current.from === from &&
       current.to === to &&
-      Math.abs(current.distanceKm - distanceKm) < 1
+      Math.abs(current.distanceKm - distanceKm) < 1 &&
+      anglesClose(current.angleDeg, angleDeg)
     ) {
       return;
     }
-    this.store.setState({ measurement: { from, to, distanceKm } });
+    this.store.setState({ measurement: { from, to, distanceKm, angleDeg } });
+  }
+
+  // Angular separation of the two objects seen from the spacecraft observer.
+  private angleFromObserver(from: string, to: string, et: number): number | null {
+    const e = this.core;
+    const observer = 'Cassini';
+    if (!e || from === observer || to === observer || !e.table.byBody.has(observer)) return null;
+    const o = positionAt(e.table, observer, et);
+    const a = positionAt(e.table, from, et);
+    const b = positionAt(e.table, to, et);
+    const va: [number, number, number] = [a[0] - o[0], a[1] - o[1], a[2] - o[2]];
+    const vb: [number, number, number] = [b[0] - o[0], b[1] - o[1], b[2] - o[2]];
+    const la = Math.hypot(va[0], va[1], va[2]);
+    const lb = Math.hypot(vb[0], vb[1], vb[2]);
+    if (la === 0 || lb === 0) return null;
+    const cos = (va[0] * vb[0] + va[1] * vb[1] + va[2] * vb[2]) / (la * lb);
+    return (Math.acos(Math.max(-1, Math.min(1, cos))) * 180) / Math.PI;
   }
 
   // Pointer-drag orbit, wheel zoom, and click-to-pick. Returns a cleanup function.

@@ -8,6 +8,8 @@ export interface MeasurePanelProps {
   readonly from: string | null;
   readonly to: string | null;
   readonly distanceKm: number | null;
+  /** Angular separation seen from the spacecraft, degrees, or null. */
+  readonly angleDeg?: number | null;
 }
 
 function formatDistance(km: number): string {
@@ -32,6 +34,11 @@ export function MeasurePanel(props: MeasurePanelProps): JSX.Element {
       <div className="bessel-measure-value" data-testid="measure-distance">
         {formatDistance(props.distanceKm)}
       </div>
+      {props.angleDeg !== null && props.angleDeg !== undefined ? (
+        <div className="bessel-measure-angle" data-testid="measure-angle">
+          {props.angleDeg.toFixed(2)} deg apart from Cassini
+        </div>
+      ) : null}
     </div>
   );
 }
