@@ -850,6 +850,28 @@ button[aria-pressed='true'] {
   stroke-width: 1.5;
 }
 
+/* Shared parameter controls at the top of the Analysis workbench. */
+.bessel-analysis-params {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding-bottom: var(--space-2);
+  margin-bottom: var(--space-1);
+  border-bottom: 1px solid var(--border);
+}
+
+.bessel-analysis-params label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.7rem;
+  color: var(--text-1);
+}
+
+.bessel-analysis-params input {
+  width: 6rem;
+}
+
 /* The data-provider workbench form and report table. */
 .bessel-report-form {
   display: flex;

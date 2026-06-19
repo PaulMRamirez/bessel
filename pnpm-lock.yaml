@@ -51,6 +51,15 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.19.21)(terser@5.48.0)
 
+  apps/cli:
+    dependencies:
+      '@bessel/pal-node':
+        specifier: workspace:*
+        version: link:../../packages/pal-node
+      '@bessel/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+
   apps/desktop:
     dependencies:
       '@bessel/pal':
@@ -319,6 +328,15 @@ importers:
         specifier: workspace:*
         version: link:../pal-web
 
+  packages/pal-node:
+    dependencies:
+      '@bessel/pal':
+        specifier: workspace:*
+        version: link:../pal
+      '@bessel/pal-electron':
+        specifier: workspace:*
+        version: link:../pal-electron
+
   packages/pal-web:
     dependencies:
       '@bessel/pal':
@@ -357,6 +375,21 @@ importers:
       '@types/three':
         specifier: ^0.171.0
         version: 0.171.0
+
+  packages/sdk:
+    dependencies:
+      '@bessel/interop':
+        specifier: workspace:*
+        version: link:../interop
+      '@bessel/pal':
+        specifier: workspace:*
+        version: link:../pal
+      '@bessel/propagator':
+        specifier: workspace:*
+        version: link:../propagator
+      '@bessel/spice':
+        specifier: workspace:*
+        version: link:../spice
 
   packages/sensors:
     dependencies:

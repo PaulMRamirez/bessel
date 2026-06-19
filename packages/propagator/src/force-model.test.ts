@@ -13,6 +13,8 @@ import { publishEphemeris, secularRatesJ2, type EphemerisTable } from './element
 import { createForceModel } from './force/model.ts';
 import { pointMass } from './force/point-mass.ts';
 import { zonalHarmonics } from './force/zonal.ts';
+import { thirdBody } from './force/third-body.ts';
+import type { ForceContext, ForceTerm } from './force/types.ts';
 
 const fixture = (name: string) =>
   new Uint8Array(readFileSync(fileURLToPath(new URL(`../../../kernels/fixtures/${name}`, import.meta.url))));
@@ -117,5 +119,62 @@ describe('Cowell + J2 vs secularRatesJ2', () => {
     expect(got.position.x).toBeCloseTo(table.x[15]!, 3);
     expect(got.position.y).toBeCloseTo(table.y[15]!, 3);
     expect(got.position.z).toBeCloseTo(table.z[15]!, 3);
+  });
+});
+
+describe('Force-model acceleration partials (da/dr)', () => {
+  // An independent central-difference of a term's acceleration, the reference the
+  // analytic partials() must reproduce (and the FD fallback is checked against itself).
+  const fdRef = (term: ForceTerm, ctx: ForceContext): number[] => {
+    const dadr = new Array<number>(9);
+    for (let j = 0; j < 3; j++) {
+      const r = [ctx.r[0], ctx.r[1], ctx.r[2]];
+      const h = Math.max(1, Math.abs(r[j]!)) * 1e-6;
+      const rp = [...r] as [number, number, number];
+      const rm = [...r] as [number, number, number];
+      rp[j] = r[j]! + h;
+      rm[j] = r[j]! - h;
+      const ap = term.acceleration({ et: ctx.et, r: rp, v: ctx.v });
+      const am = term.acceleration({ et: ctx.et, r: rm, v: ctx.v });
+      for (let i = 0; i < 3; i++) dadr[i * 3 + j] = (ap[i]! - am[i]!) / (2 * h);
+    }
+    return dadr;
+  };
+  const ctx: ForceContext = { et: 0, r: [7000, 1200, -400], v: [1, 7, 0.5] };
+
+  it('point-mass analytic da/dr matches a finite-difference reference', () => {
+    const term = pointMass(EARTH.gm);
+    const a = term.partials!(ctx).dadr;
+    const ref = fdRef(term, ctx);
+    for (let i = 0; i < 9; i++) expect(a[i]!).toBeCloseTo(ref[i]!, 9);
+  });
+
+  it('third-body analytic da/dr matches a finite-difference reference', () => {
+    const sun = thirdBody('SUN', 1.327e11, () => [1.4e8, 3e7, -2e7]);
+    const a = sun.partials!(ctx).dadr;
+    const ref = fdRef(sun, ctx);
+    for (let i = 0; i < 9; i++) expect(a[i]!).toBeCloseTo(ref[i]!, 12);
+  });
+
+  it('the model sums each term da/dr and falls back to FD for the zonal term', () => {
+    const pm = pointMass(EARTH.gm);
+    const zonal = zonalHarmonics(EARTH, { j2: EARTH.j2 });
+    const model = createForceModel([pm, zonal]);
+    const summed = model.partials(ctx).dadr;
+    const expected = new Array<number>(9).fill(0);
+    const pmRef = fdRef(pm, ctx);
+    const zRef = fdRef(zonal, ctx);
+    for (let i = 0; i < 9; i++) expected[i] = pmRef[i]! + zRef[i]!;
+    // Analytic point-mass + FD zonal vs an independent FD of each; loose (FD vs FD).
+    for (let i = 0; i < 9; i++) expect(summed[i]!).toBeCloseTo(expected[i]!, 6);
+  });
+
+  it('da/dr is symmetric for a conservative (gravity-only) model', () => {
+    // d(-grad U)/dr is the negative Hessian of a scalar potential, hence symmetric.
+    const model = createForceModel([pointMass(EARTH.gm), zonalHarmonics(EARTH, { j2: EARTH.j2, j3: 2.5e-6 })]);
+    const m = model.partials(ctx).dadr;
+    expect(m[1]!).toBeCloseTo(m[3]!, 6); // (0,1) vs (1,0)
+    expect(m[2]!).toBeCloseTo(m[6]!, 6); // (0,2) vs (2,0)
+    expect(m[5]!).toBeCloseTo(m[7]!, 6); // (1,2) vs (2,1)
   });
 });

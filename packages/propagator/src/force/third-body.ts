@@ -8,7 +8,7 @@
 // trajectory is deferred (no committed fixture); only geometric sanity is asserted.
 // (STK_PARITY_SPEC §4.2.)
 
-import type { ForceTerm, Vector3 } from './types.ts';
+import type { AccelPartials, ForceTerm, Mat3, Vector3 } from './types.ts';
 
 /** A synchronous third-body position (km, relative to the central body) at an epoch. */
 export type PositionAt = (et: number) => Vector3;
@@ -29,6 +29,25 @@ export function thirdBody(name: string, gm: number, positionAt: PositionAt): For
         gm * (dy / d3 - s[1] / s3),
         gm * (dz / d3 - s[2] / s3),
       ];
+    },
+    // da/dr about the relative vector q = s - r: gm/|q|^3 (3 q q^T/|q|^2 - I). The
+    // indirect (-gm s/|s|^3) term is constant in r and drops out. Exact, no FD.
+    partials(ctx): AccelPartials {
+      const s = positionAt(ctx.et);
+      const [rx, ry, rz] = ctx.r;
+      const qx = s[0] - rx;
+      const qy = s[1] - ry;
+      const qz = s[2] - rz;
+      const q2 = qx * qx + qy * qy + qz * qz;
+      const q = Math.sqrt(q2);
+      const c = -gm / (q2 * q); // d(gm q/|q|^3)/dr carries -gm/|q|^3 from dq/dr = -I
+      const d = 3 / q2;
+      const dadr: Mat3 = [
+        c * (1 - d * qx * qx), c * (-d * qx * qy), c * (-d * qx * qz),
+        c * (-d * qy * qx), c * (1 - d * qy * qy), c * (-d * qy * qz),
+        c * (-d * qz * qx), c * (-d * qz * qy), c * (1 - d * qz * qz),
+      ];
+      return { dadr };
     },
   };
 }

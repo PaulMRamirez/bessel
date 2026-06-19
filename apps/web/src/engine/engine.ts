@@ -84,6 +84,17 @@ function iauFrameFor(body: string): string {
 
 const preventDefault = (ev: Event): void => ev.preventDefault();
 
+/** Optional time-span override (seconds) for a span-based analysis tool. */
+export interface AnalysisSpan {
+  readonly spanSec?: number;
+  readonly stepSec?: number;
+}
+
+/** A span override plus an optional target object (for range/access). */
+export interface AnalysisTargetSpan extends AnalysisSpan {
+  readonly target?: string;
+}
+
 /** A data-provider workbench request: a provider over an observer/target pair + grid. */
 export interface ReportConfig {
   readonly kind: ProviderKind;
@@ -533,7 +544,7 @@ export class BesselEngine {
    * one day from the current epoch, occulted by the mission center body, and store
    * them for the analysis panel. Requires a loaded spacecraft mission.
    */
-  async computeEclipse(): Promise<void> {
+  async computeEclipse(opts: AnalysisSpan = {}): Promise<void> {
     const e = this.core;
     if (!e) return;
     const sc = e.identity.spacecraftName;
@@ -543,14 +554,14 @@ export class BesselEngine {
       return;
     }
     const t0 = e.clock.state.et;
-    const span: [number, number] = [t0, t0 + 86400];
+    const span: [number, number] = [t0, t0 + (opts.spanSec ?? 86400)];
     try {
       const ecl = await eclipseIntervals(e.spice, {
         observer: sc,
         body,
         bodyFrame: `IAU_${body.toUpperCase()}`,
         span,
-        step: 120,
+        step: opts.stepSec ?? 120,
       });
       if (!this.disposed) this.store.setState({ eclipseUmbra: ecl.umbra, eclipseSpan: span });
     } catch (err) {
@@ -565,7 +576,7 @@ export class BesselEngine {
    * Uses the batched spkpos path (one worker round-trip for all samples). Requires a
    * loaded spacecraft mission.
    */
-  async computeRange(): Promise<void> {
+  async computeRange(opts: AnalysisTargetSpan = {}): Promise<void> {
     const e = this.core;
     if (!e) return;
     const sc = e.identity.spacecraftName;
@@ -574,18 +585,19 @@ export class BesselEngine {
       this.store.setState({ rangeSeries: null });
       return;
     }
+    const target = opts.target ?? body;
     const t0 = e.clock.state.et;
     try {
       // F3: one cancellable evalSeries job computes the range column over the grid in
       // a single worker round-trip (the interpreter reduces position to range in the
       // worker), instead of shipping n*3 coordinates back to be reduced here.
       const series = await e.spice.evalSeries({
-        grid: { start: t0, stop: t0 + 86400, step: 360 },
-        providers: [{ kind: 'range', observer: sc, target: body }],
+        grid: { start: t0, stop: t0 + (opts.spanSec ?? 86400), step: opts.stepSec ?? 360 },
+        providers: [{ kind: 'range', observer: sc, target }],
       });
       if (!this.disposed) {
         this.store.setState({
-          rangeSeries: { et: series.et, value: series.columns[0]!, label: `${sc} to ${body} (km)` },
+          rangeSeries: { et: series.et, value: series.columns[0]!, label: `${sc} to ${target} (km)` },
         });
       }
     } catch (err) {
@@ -600,7 +612,7 @@ export class BesselEngine {
    * link-budget physics for a representative DSN 34 m X-band station. Plotted as a
    * time series. Requires a spacecraft mission.
    */
-  async computeLinkBudget(): Promise<void> {
+  async computeLinkBudget(opts: AnalysisSpan = {}): Promise<void> {
     const e = this.core;
     if (!e) return;
     const sc = e.identity.spacecraftName;
@@ -609,9 +621,10 @@ export class BesselEngine {
       return;
     }
     const t0 = e.clock.state.et;
+    const spanSec = opts.spanSec ?? 86400;
     const samples = 240;
     const et = new Float64Array(samples);
-    for (let i = 0; i < samples; i++) et[i] = t0 + (i / (samples - 1)) * 86400;
+    for (let i = 0; i < samples; i++) et[i] = t0 + (i / (samples - 1)) * spanSec;
     try {
       // Earth relative to the spacecraft at each epoch, reduced to a downlink range.
       const xyz = await e.spice.spkposBatch('EARTH', et, 'J2000', 'NONE', sc);
@@ -642,7 +655,7 @@ export class BesselEngine {
    * through @bessel/access, the geometry-finder + window-algebra path). The result is
    * the sunlit window; its complement is the eclipse. Requires a spacecraft mission.
    */
-  async computeAccess(): Promise<void> {
+  async computeAccess(opts: AnalysisTargetSpan = {}): Promise<void> {
     const e = this.core;
     if (!e) return;
     const sc = e.identity.spacecraftName;
@@ -651,14 +664,15 @@ export class BesselEngine {
       this.store.setState({ accessWindow: null, accessSpan: null });
       return;
     }
+    const target = opts.target ?? 'SUN';
     const t0 = e.clock.state.et;
-    const span: [number, number] = [t0, t0 + 86400];
+    const span: [number, number] = [t0, t0 + (opts.spanSec ?? 86400)];
     try {
       const window = await computeAccess(e.spice, {
         observer: sc,
-        target: 'SUN',
+        target,
         span,
-        step: 120,
+        step: opts.stepSec ?? 120,
         constraints: [
           { kind: 'lineOfSight', body, bodyFrame: `IAU_${body.toUpperCase()}` },
         ],
@@ -670,7 +684,7 @@ export class BesselEngine {
         this.store.setState({
           accessWindow: window,
           accessSpan: span,
-          accessLabel: `${sc} to Sun`,
+          accessLabel: `${sc} to ${target}`,
           accessFom: {
             percentCoverage: fom.percentCoverage,
             accessCount: fom.accessCount,
@@ -690,7 +704,7 @@ export class BesselEngine {
    * assumed encounter covariance (@bessel/conjunction). A demonstration of the close-
    * approach + Pc math on the loaded pair. Requires a spacecraft mission.
    */
-  async computeConjunction(): Promise<void> {
+  async computeConjunction(opts: { secondary?: string } = {}): Promise<void> {
     const e = this.core;
     if (!e) return;
     const sc = e.identity.spacecraftName;
@@ -699,9 +713,10 @@ export class BesselEngine {
       this.store.setState({ conjunction: null });
       return;
     }
+    const secondary = opts.secondary ?? body;
     const et = e.clock.state.et;
     try {
-      const rel = await e.spice.spkezr(body, et, 'J2000', 'NONE', sc);
+      const rel = await e.spice.spkezr(secondary, et, 'J2000', 'NONE', sc);
       const ca = closestApproachLinear(rel.position, rel.velocity);
       // An illustrative encounter: 1 km position sigma per axis, a 100 m combined
       // hard-body radius, the miss projected onto two encounter-plane axes.
@@ -719,7 +734,7 @@ export class BesselEngine {
             missKm: ca.missKm,
             relSpeedKmS: ca.relSpeedKmS,
             pc,
-            label: `${sc} vs ${body}`,
+            label: `${sc} vs ${secondary}`,
           },
         });
       }
@@ -870,7 +885,7 @@ export class BesselEngine {
    * center body's body-fixed frame, for the 2D map overlay (@bessel/ui GroundTrackMap;
    * the projection is equirectangular). Requires a spacecraft mission.
    */
-  async computeGroundTrack(): Promise<void> {
+  async computeGroundTrack(opts: AnalysisSpan = {}): Promise<void> {
     const e = this.core;
     if (!e) return;
     const sc = e.identity.spacecraftName;
@@ -885,7 +900,7 @@ export class BesselEngine {
       // in the body-fixed frame; @bessel/ui GroundTrackMap projects it via
       // @bessel/map-projection. No ad hoc lon/lat math in the app.
       const series = await e.spice.evalSeries({
-        grid: { start: t0, stop: t0 + 86400, step: 240 },
+        grid: { start: t0, stop: t0 + (opts.spanSec ?? 86400), step: opts.stepSec ?? 240 },
         providers: [
           { kind: 'subPointLonLat', observer: body, target: sc, frame: `IAU_${body.toUpperCase()}` },
         ],

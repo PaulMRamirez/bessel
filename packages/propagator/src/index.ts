@@ -19,11 +19,21 @@ export {
   type SecularRates,
   type PublishOptions,
 } from './elements.ts';
-export { propagateCowell, type CowellOptions } from './cowell.ts';
+export { propagateCowell, propagateCowellEx, type CowellOptions, type CowellResult } from './cowell.ts';
 export { integrate, type Rhs, type IntegratorOptions } from './integrator.ts';
+export { integrateDense, type Solution, type Segment, type DenseOptions, type DenseResult } from './dense.ts';
+export { scanSegmentEvents, type EventSpec, type EventHit } from './events.ts';
+export { augmentInitialState, makeStmRhs, stmFromState, STM_DIM } from './stm.ts';
 export { createForceModel } from './force/model.ts';
 export { pointMass } from './force/point-mass.ts';
 export { zonalHarmonics, type ZonalBody, type ZonalCoeffs } from './force/zonal.ts';
 export { thirdBody, sampledPosition, type PositionAt } from './force/third-body.ts';
-export { IntegrationError } from './errors.ts';
-export type { ForceModel, ForceTerm, ForceContext, Vector3 } from './force/types.ts';
+export { IntegrationError, OutOfDomainError, EventError, StmUnsupportedError } from './errors.ts';
+export type { ForceModel, ForceTerm, ForceContext, Vector3, Mat3, AccelPartials } from './force/types.ts';
+
+// MCS executor and single-level differential corrector (Astrogator-class mission sequences).
+export * from './mcs/index.ts';
+
+// EOP-aware TEME -> J2000 (EME2000/GCRF) transform for SGP4 output, plus precession and
+// nutation primitives.
+export * from './frames/index.ts';

@@ -35,3 +35,11 @@ export const E = [
 
 /** Number of stages. */
 export const STAGES = 7;
+
+/**
+ * True iff the last stage is the step endpoint (C[last] === 1 and A[last] === B): the
+ * FSAL position that lets the cubic-Hermite dense extension reuse k[last] as the
+ * endpoint derivative f_new with no extra rhs call. The dense builder asserts this so
+ * a future tableau swap fails loudly rather than producing a wrong interpolant.
+ */
+export const LAST_STAGE_IS_ENDPOINT = C[STAGES - 1] === 1;

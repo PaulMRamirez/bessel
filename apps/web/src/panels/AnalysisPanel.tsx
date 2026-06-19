@@ -5,7 +5,7 @@
 // slices from the store and calls engine methods; all geometry lives in the engine.
 // (STK_PARITY_SPEC F5 / §4.)
 
-import type { ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { GroundTrackMap, IntervalTimeline, TimeSeriesChart, downloadBlob } from '@bessel/ui';
 import { seriesToCsv, intervalsToCsv } from '@bessel/interop';
 import type { BesselEngine } from '../engine/index.ts';
@@ -91,6 +91,20 @@ function StatResult(props: { show: boolean; resultTestId: string; hint: string; 
 
 export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
   const { engine, store } = props;
+  const objects = useStore(store, (s) => s.objects);
+  const names = useMemo(() => objects.map((o) => o.name), [objects]);
+
+  // Shared analysis parameters: a time span and step the span-based tools use, an
+  // optional target object for range/access, and a secondary object for conjunction.
+  // Empty target/secondary mean "use the tool default" (center body or the Sun).
+  const [spanDays, setSpanDays] = useState(1);
+  const [stepSec, setStepSec] = useState(120);
+  const [target, setTarget] = useState('');
+  const [secondary, setSecondary] = useState('');
+  const spanSec = Math.max(60, spanDays * 86400);
+  const span = { spanSec, stepSec: Math.max(1, stepSec) };
+  const targetSpan = { ...span, ...(target ? { target } : {}) };
+
   const eclipseUmbra = useStore(store, (s) => s.eclipseUmbra);
   const eclipseSpan = useStore(store, (s) => s.eclipseSpan);
   const rangeSeries = useStore(store, (s) => s.rangeSeries);
@@ -107,9 +121,56 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
 
   return (
     <div className="bessel-analysis" data-testid="analysis-panel">
+      {/* Shared parameters threaded into the span-based and target-based tools. */}
+      <div className="bessel-analysis-params" data-testid="analysis-params">
+        <label>
+          Span (days)
+          <input
+            type="number"
+            min={0.01}
+            step={0.5}
+            value={spanDays}
+            onChange={(ev) => setSpanDays(Math.max(0.01, Number(ev.target.value)))}
+            data-testid="param-span-days"
+          />
+        </label>
+        <label>
+          Step (s)
+          <input
+            type="number"
+            min={1}
+            value={stepSec}
+            onChange={(ev) => setStepSec(Math.max(1, Number(ev.target.value)))}
+            data-testid="param-step-sec"
+          />
+        </label>
+        <label>
+          Target (range/access)
+          <select value={target} onChange={(ev) => setTarget(ev.target.value)} data-testid="param-target">
+            <option value="">(default)</option>
+            {names.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Secondary (conjunction)
+          <select value={secondary} onChange={(ev) => setSecondary(ev.target.value)} data-testid="param-secondary">
+            <option value="">(center body)</option>
+            {names.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
       {/* Lighting (eclipse umbra) */}
-      <button type="button" onClick={() => void engine?.computeEclipse()} data-testid="compute-eclipse">
-        Compute eclipse (1 day)
+      <button type="button" onClick={() => void engine?.computeEclipse(span)} data-testid="compute-eclipse">
+        Compute eclipse
       </button>
       <IntervalResult
         intervals={eclipseUmbra}
@@ -123,8 +184,8 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
       />
 
       {/* Range time series */}
-      <button type="button" onClick={() => void engine?.computeRange()} data-testid="compute-range">
-        Compute range (1 day)
+      <button type="button" onClick={() => void engine?.computeRange(targetSpan)} data-testid="compute-range">
+        Compute range
       </button>
       <SeriesResult
         series={rangeSeries}
@@ -135,8 +196,8 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
       />
 
       {/* Access windows + figure of merit */}
-      <button type="button" onClick={() => void engine?.computeAccess()} data-testid="compute-access">
-        Compute Sun access (1 day)
+      <button type="button" onClick={() => void engine?.computeAccess(targetSpan)} data-testid="compute-access">
+        Compute access
       </button>
       <IntervalResult
         intervals={accessWindow}
@@ -158,8 +219,8 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
       />
 
       {/* Communications link budget */}
-      <button type="button" onClick={() => void engine?.computeLinkBudget()} data-testid="compute-link">
-        Compute downlink Eb/N0 (1 day)
+      <button type="button" onClick={() => void engine?.computeLinkBudget(span)} data-testid="compute-link">
+        Compute downlink Eb/N0
       </button>
       <SeriesResult
         series={linkSeries}
@@ -169,7 +230,11 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
       />
 
       {/* Conjunction (closest approach + Pc) */}
-      <button type="button" onClick={() => void engine?.computeConjunction()} data-testid="compute-conjunction">
+      <button
+        type="button"
+        onClick={() => void engine?.computeConjunction(secondary ? { secondary } : {})}
+        data-testid="compute-conjunction"
+      >
         Compute closest approach
       </button>
       <StatResult
@@ -231,8 +296,8 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
       </StatResult>
 
       {/* 2D ground track */}
-      <button type="button" onClick={() => void engine?.computeGroundTrack()} data-testid="compute-groundtrack">
-        Compute ground track (1 day)
+      <button type="button" onClick={() => void engine?.computeGroundTrack(span)} data-testid="compute-groundtrack">
+        Compute ground track
       </button>
       {groundTrack ? (
         <div data-testid="groundtrack-result">

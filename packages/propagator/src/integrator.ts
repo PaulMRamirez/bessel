@@ -22,7 +22,7 @@ export interface IntegratorOptions {
 }
 
 /** Root-mean-square norm of v_i / sc_i. */
-function rmsNorm(v: Float64Array, sc: Float64Array): number {
+export function rmsNorm(v: Float64Array, sc: Float64Array): number {
   let sum = 0;
   for (let i = 0; i < v.length; i++) {
     const e = v[i]! / sc[i]!;
@@ -32,7 +32,7 @@ function rmsNorm(v: Float64Array, sc: Float64Array): number {
 }
 
 /** Hairer's automatic initial step selection (Solving ODE I, II.4). */
-function initialStep(rhs: Rhs, t0: number, y0: Float64Array, f0: Float64Array, sc: Float64Array): number {
+export function initialStep(rhs: Rhs, t0: number, y0: Float64Array, f0: Float64Array, sc: Float64Array): number {
   const n = y0.length;
   const d0 = rmsNorm(y0, sc);
   const d1 = rmsNorm(f0, sc);

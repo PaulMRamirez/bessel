@@ -72,3 +72,24 @@ test('lighting analysis computes and renders eclipse intervals', async ({ page }
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toContain('.oem');
 });
+
+test('analysis tools honor user-supplied parameters (span, target, secondary)', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
+  await loadCassiniSample(page);
+  await page.getByTestId('analysis-menu').click();
+
+  // The shared parameter form drives the span-based and target-based tools.
+  await expect(page.getByTestId('analysis-params')).toBeVisible();
+  await page.getByTestId('param-span-days').fill('2');
+  await page.getByTestId('param-target').selectOption('Saturn');
+
+  // Range over the 2-day span, to the chosen target, still renders a polyline.
+  await page.getByTestId('compute-range').click();
+  await expect(page.getByTestId('range-chart').locator('polyline')).toHaveCount(1, { timeout: 20_000 });
+
+  // Conjunction against a user-chosen secondary object reports that object by name.
+  await page.getByTestId('param-secondary').selectOption('Saturn');
+  await page.getByTestId('compute-conjunction').click();
+  await expect(page.getByTestId('conjunction-result')).toContainText('Saturn');
+});
