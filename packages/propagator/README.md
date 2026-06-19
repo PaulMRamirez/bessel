@@ -30,9 +30,15 @@ Numerical (Cowell) propagation:
   ephemeris-time grid.
 - `integrate`, `Rhs`, `IntegratorOptions`: the bare adaptive DOPRI5 integrator.
 - Force model: `createForceModel`, `pointMass`, `zonalHarmonics` (`ZonalBody`,
-  `ZonalCoeffs`), `thirdBody`, `sampledPosition` (`PositionAt`), plus the
-  `ForceModel`, `ForceTerm`, `ForceContext`, `Vector3`, `Mat3`, `AccelPartials`
-  types (the analytic acceleration-partials seam).
+  `ZonalCoeffs`), `sphericalHarmonics` (full NxN tesseral gravity, with
+  `fixedRotation`, `RotationAt`, `SphericalHarmonicsBody`,
+  `SphericalHarmonicsOptions`, `SphericalHarmonicsError`), `drag` (atmospheric drag
+  with `exponentialAtmosphere`, the `DensityModel` seam, `ExponentialBand`,
+  `ExponentialAtmosphereOptions`, `DragOptions`, `DragError`), `srp` (cannonball
+  solar radiation pressure with `cylindricalShadow`, `SunPositionAt`, `SrpOptions`,
+  `SrpError`), `thirdBody`, `sampledPosition` (`PositionAt`), plus the `ForceModel`,
+  `ForceTerm`, `ForceContext`, `Vector3`, `Mat3`, `AccelPartials` types (the
+  analytic acceleration-partials seam).
 - `IntegrationError`, `OutOfDomainError`, `EventError`, `StmUnsupportedError`.
 
 Numerical substrate (built on the integrator):
@@ -93,6 +99,17 @@ Tests live in `packages/propagator/src/*.test.ts`. Numeric oracles:
   downrange-radius oracle, plus fail-loud payloads.
 - `frames/teme.test.ts`: TEME to J2000 validated to sub-meter against the Vallado
   teme2eci worked example, with orthonormality and round-trip oracles.
+- `spherical-harmonics.test.ts`: the NxN field with only C[2][0] = -J2/sqrt(5)
+  reproduces the zonal J2 acceleration and drives the node/periapsis at the
+  secularRatesJ2 rates; a (2,2) tesseral matches a direct gradient of its exact
+  potential; the supplied rotation maps body-fixed back to inertial.
+- `drag.test.ts`: the acceleration opposes v_rel with the closed-form magnitude and
+  subtracts the co-rotating atmosphere; the exponential model reproduces the
+  documented band density and its e-folding; a low orbit loses energy monotonically;
+  the analytic da/dv and the effective da/dr match central differences.
+- `srp.test.ts`: the cannonball acceleration points anti-sunward with the analytic
+  magnitude, is exactly zero in the cylindrical umbra and nonzero just outside it,
+  and its effective da/dr matches a central difference.
 - `tle.test.ts`, `omm.test.ts`, `oem-import.test.ts`, `sgp4-publish.test.ts`,
   `publish.test.ts`, `propagator.test.ts`, `force-model.test.ts`,
   `third-body.test.ts`.
@@ -107,6 +124,10 @@ Tests live in `packages/propagator/src/*.test.ts`. Numeric oracles:
   Norsett & Wanner (Dormand-Prince 5(4) / DOPRI5 tableau, adaptive step control, and
   continuous extension); Montenbruck & Gill, "Satellite Orbits" (special
   perturbations, zonal harmonics, third-body, and the state transition matrix).
+- Full NxN spherical-harmonic gravity (Cunningham/Gottlieb V/W recursion), drag, and
+  solar radiation pressure: Montenbruck & Gill, "Satellite Orbits" (sections 3.2.4,
+  3.4, 3.5), and Vallado, "Fundamentals of Astrodynamics and Applications" (section
+  8.6, with the USSA76 exponential-atmosphere bands in appendix B).
 - MCS and differential correction: the STK Astrogator targeting model (control
   variables, goals, Newton-Raphson with an STM Jacobian).
 - TEME to J2000: Vallado, Crawford, Hujsak & Kelso, "Revisiting Spacetrack Report
@@ -118,8 +139,12 @@ See REFERENCES.md (repo root) and docs/STK_PARITY_SPEC.md for full provenance.
 
 ## Status / limitations
 
-Force terms implemented: point-mass, zonal harmonics (J2/J4), and third-body;
-drag and SRP are not yet implemented. Mean-element propagation covers J2/J4 secular
+Force terms implemented: point-mass, zonal harmonics (J2/J4), full NxN spherical
+harmonics (sectoral and tesseral, body-fixed evaluation rotated to inertial),
+atmospheric drag (cannonball with a co-rotating atmosphere and a pluggable
+exponential-atmosphere density model, NRLMSISE-00 ready behind the `DensityModel`
+seam), cannonball solar radiation pressure (cylindrical umbra shadow), and
+third-body. Mean-element propagation covers J2/J4 secular
 rates only (no periodic terms). The MCS corrector is single-level (multi-level
 targeting, finite burns, and gradient optimizers are pending); the TEME to J2000
 transform takes the celestial-pole EOP offsets but the time argument is TT

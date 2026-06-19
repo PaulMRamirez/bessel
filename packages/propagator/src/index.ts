@@ -27,6 +27,30 @@ export { augmentInitialState, makeStmRhs, stmFromState, STM_DIM } from './stm.ts
 export { createForceModel } from './force/model.ts';
 export { pointMass } from './force/point-mass.ts';
 export { zonalHarmonics, type ZonalBody, type ZonalCoeffs } from './force/zonal.ts';
+export {
+  sphericalHarmonics,
+  fixedRotation,
+  SphericalHarmonicsError,
+  type SphericalHarmonicsBody,
+  type SphericalHarmonicsOptions,
+  type RotationAt,
+} from './force/spherical-harmonics.ts';
+export {
+  drag,
+  exponentialAtmosphere,
+  DragError,
+  type DragOptions,
+  type DensityModel,
+  type ExponentialBand,
+  type ExponentialAtmosphereOptions,
+} from './force/drag.ts';
+export {
+  srp,
+  cylindricalShadow,
+  SrpError,
+  type SrpOptions,
+  type SunPositionAt,
+} from './force/srp.ts';
 export { thirdBody, sampledPosition, type PositionAt } from './force/third-body.ts';
 export { IntegrationError, OutOfDomainError, EventError, StmUnsupportedError } from './errors.ts';
 export type { ForceModel, ForceTerm, ForceContext, Vector3, Mat3, AccelPartials } from './force/types.ts';
