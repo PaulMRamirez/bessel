@@ -1,8 +1,9 @@
 # @bessel/interop
 
 Standard-format ingest and export for analysis products: CCSDS message parsing
-and writing (OEM, CDM) plus CSV and CZML serialization. Pure and headless string
-transforms with no rendering or SPICE dependency. Part of the core layer.
+and writing (OEM, CDM, AEM) plus CSV and CZML serialization. Pure and headless
+string transforms with no rendering or SPICE dependency. Part of the core layer.
+(CCSDS OMM parsing lives in `@bessel/propagator`, next to the TLE ingest it feeds.)
 
 ## Public API
 
@@ -16,6 +17,13 @@ CDM (CCSDS Conjunction Data Message, KVN):
 - `parseCdm(text): Cdm` extracts TCA, miss distance (m), relative speed (m/s),
   and the two object designators; the inputs a Pc screen needs
 - `CdmError`, types `Cdm`, `CdmObject`
+
+AEM (CCSDS Attitude Ephemeris Message, KVN):
+
+- `parseAem(text): Aem` reads the metadata and quaternion attitude records,
+  normalizing each quaternion to scalar-first `[w, x, y, z]` (the QUATERNION
+  attitude type; closes the MONTE attitude-interchange seam, ADR-0012)
+- `AemError`, types `Aem`, `AemMetadata`, `AemRecord`
 
 CSV export (RFC 4180, with formula-injection neutralization):
 
@@ -54,9 +62,9 @@ against the published message values.
 
 ## Algorithm and references
 
-- OEM and CDM follow the CCSDS Key-Value Notation (KVN) message grammars; see
-  REFERENCES.md: CCSDS 502.0-B (Orbit Data Messages) for OEM, CCSDS 508.0-B
-  (Conjunction Data Message) for CDM.
+- OEM, CDM, and AEM follow the CCSDS Key-Value Notation (KVN) message grammars;
+  see REFERENCES.md: CCSDS 502.0-B (Orbit Data Messages) for OEM, CCSDS 508.0-B
+  (Conjunction Data Message) for CDM, CCSDS 504.0-B (Attitude Data Messages) for AEM.
 - CZML output targets the Cesium interchange schema (CZML 1.0); see REFERENCES.md.
 - CSV follows RFC 4180 quoting.
 

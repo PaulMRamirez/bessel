@@ -709,7 +709,7 @@ and **CSV/CZML export plus a real-data CCSDS OEM fixture** landed in `@bessel/in
 | Sensors | `@bessel/sensors` | Conic FOV in/out, boundary, footprint on a body, the SPICE ellipsoid footprint + FOV cone (moved into core), **plus a typed sensor schema and time-evolving swath accumulation + coverage metric**. **Core done + UI** (FOV cone + footprint render in-scene). Rectangular FOV + spherical-polygon swath union pending. |
 | Conjunction/SSA | `@bessel/conjunction` | 2D Pc (Foster, vs analytic), TCA/miss. **Core done + UI** (`Compute closest approach` readout); all-vs-all screening pending. |
 | Reporting/Workbench | `@bessel/analysis`, `@bessel/spice` | Vector-geometry tool, data-provider series + stats, **plus a unit-tagged provider registry (`PROVIDER_CATALOG`) + the F3 EvalSpec interpreter**. **Core done + UI** (the Report workbench: pick a provider + observer/target + grid, run one evalSeries job, read a `ReportTable`, export CSV; plus the fixed Analysis tools + charting primitives). Calculation/Time derived-column tools pending. |
-| Interop | `@bessel/interop`, `@bessel/propagator` | CCSDS **OEM** parse/write (+ real-data MGS fixture) and **OEM->SPK import** (`publishOem`, renders via spkpos), **OMM** parse + `ommToTle` (drives SGP4, validated vs the catalog-5 TLE), **CDM** parse (SSA), **CSV and CZML export**. Frame/time: **recgeo + et2lst bindings**. **Core done + UI** (`Export CCSDS OEM`, per-result `Export CSV`). AEM + EOP-aware TEME->J2000 + SDK/BCL pending. |
+| Interop | `@bessel/interop`, `@bessel/propagator` | CCSDS **OEM** parse/write (+ real-data MGS fixture) and **OEM->SPK import** (`publishOem`, renders via spkpos), **OMM** parse + `ommToTle` (drives SGP4, validated vs the catalog-5 TLE), **CDM** parse (SSA), **AEM** parse (attitude; quaternion records normalized scalar-first), **CSV and CZML export**. Frame/time: **recgeo + et2lst bindings**. **Core done + UI** (`Export CCSDS OEM`, per-result `Export CSV`). EOP-aware TEME->J2000 + SDK/BCL pending. |
 | 2D map | `@bessel/map-projection` | Equirectangular, Web Mercator (vs EPSG:3857), polar stereographic. **Done + UI** (`GroundTrackMap` overlay). |
 | Terrain | `@bessel/terrain` | Terrain-masked line-of-sight. **Core done.** |
 
@@ -741,7 +741,7 @@ per-domain features beyond the phase definitions, each its own focused effort):
 the full NxN tesseral gravity plus drag/SRP and an EOP-aware TEME->J2000 transform
 (propagator), the MCS executor + differential corrector (mission), all-vs-all
 screening (conjunction), the grid sweep over access (coverage), CK read/write
-(attitude), CCSDS AEM and the automation SDK/BCL (interop), and orbit
+(attitude), the automation SDK/BCL (interop), and orbit
 determination. GMAT remains seam-only per §8.
 
 ---

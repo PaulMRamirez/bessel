@@ -107,3 +107,33 @@ and ADR-worthy. Tests:
 
 If MMGIS deep-linking parameters evolve, update this document against the MMGIS
 repository (the file cited in the header) and refresh the local reference copy.
+
+## 6. MONTE (JPL navigation) interchange
+
+Decision record: docs/adr/0012-monte-relationship.md.
+
+MONTE is JPL's signature astrodynamics and navigation platform (the prime
+operational orbit-determination software for JPL-navigated missions, sponsored by
+MGSS/AMMOS). It is a licensed, Caltech-proprietary, Linux C++/Python engine
+(ITAR-free, EAR99), not open source. Bessel and MONTE are complementary: MONTE is
+the authoritative navigation and design engine; Bessel is the open visualization
+and lightweight-analysis front end. They integrate at the data boundary, not by
+embedding (ADR-0012, in the family of ADR-0008 and ADR-0011).
+
+- Consume MONTE products (works today). MONTE produces SPICE SPK ephemerides and CK
+  attitude; Bessel renders SPK/CK through CSPICE-WASM. Bessel is positioned to be a
+  modern, zero-install, multi-platform viewer for MONTE workflows, the niche
+  Cosmographia occupies.
+- CCSDS file interchange. Bessel parses CCSDS OEM/OMM/CDM and AEM (attitude) and
+  imports OEM to SPK (packages/interop, packages/propagator), and exports OEM, CZML,
+  and CSV. So MONTE OEM/AEM products flow into Bessel for rendering and analysis.
+- Optional licensed ComputeProvider. For licensed or internal deployments only,
+  MONTE may back the PAL ComputeProvider seam (the same seam ADR-0011 defines for
+  GMAT) to supply orbit determination, optimizing mission design, and pork-chop
+  analysis that Bessel does not compute natively. This is desktop or server only,
+  gated, and never part of the open PWA.
+- Not bundled or ported. MONTE is licensed and EAR99 with a Linux C++/Python stack;
+  there is no browser or WASM path, so it is never shipped in the open product, and
+  it is not a public-CI validation dependency.
+
+For information on obtaining a MONTE license see montepy.jpl.nasa.gov.

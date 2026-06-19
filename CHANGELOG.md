@@ -30,7 +30,10 @@ maintained alongside them, not hand-edited per package.
   cancellable-job protocol, a multi-worker SPICE pool, and `recgeo`/`et2lst`
   bindings; the `SpiceWindow` interval algebra and a shared geometry finder in
   `@bessel/timeline`.
-- Interop: CCSDS OEM/OMM/CDM parse, OEM-to-SPK import, and CSV/CZML export.
+- Interop: CCSDS OEM/OMM/CDM/AEM parse, OEM-to-SPK import, and CSV/CZML export.
+- Decision records: ADR-0010 (analysis compute substrate), ADR-0011 (native-first
+  analysis; GMAT deferred), and ADR-0012 (MONTE relationship: consume SPK/CCSDS,
+  optional licensed ComputeProvider).
 - Documentation: a getting-started guide, an analysis-tools reference, an
   architecture overview, a build-from-source guide, and a docs index.
 

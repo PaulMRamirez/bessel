@@ -76,8 +76,8 @@ SPICE engine. Algorithm provenance is in REFERENCES.md.
 - `@bessel/mission`: Lambert and impulsive maneuvers in the standard frames.
 - `@bessel/map-projection`: equirectangular, Web Mercator, and polar-stereographic
   projections.
-- `@bessel/interop`: CCSDS OEM/OMM/CDM parse, OEM-to-SPK import, and CSV/CZML
-  export.
+- `@bessel/interop`: CCSDS OEM/CDM/AEM parse, OEM-to-SPK import, and CSV/CZML
+  export (CCSDS OMM parse lives in `@bessel/propagator`).
 - `@bessel/analysis`: vector-geometry tools and time-series statistics.
 - `@bessel/terrain`: terrain-masked line of sight.
 
