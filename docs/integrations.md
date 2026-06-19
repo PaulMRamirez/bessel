@@ -1,8 +1,11 @@
 # Bessel and MMGIS Integration
 
-Status: Draft v1.0
-Date: 2026-06-07
+Status: v1.0, implemented (view-URL codec and MMGIS/CZML export shipped)
+Date: 2026-06-19
 Decision record: docs/adr/0008-ammos-suite-integration.md
+Implementation: packages/state/src/codec.ts (view-URL encode/decode),
+packages/state/src/mmgis.ts (MMGIS deep-link builder),
+packages/state/src/czml.ts and packages/interop/src/czml.ts (CZML export).
 MMGIS source of truth: the NASA-AMMOS/MMGIS repository,
 docs/pages/Miscellaneous/Deep_Linking/Deep_Linking.md (parameters below were
 derived from that document at commit 6ffb9f8, 2026-06-11). When in doubt, the
@@ -88,12 +91,15 @@ no MMGIS code change.
 ## 4. CZML export (CesiumJS contexts)
 
 For tools built on CesiumJS, Bessel exports CZML for a selected object and time
-window (Phase 2). This is an interchange contract, not a live link.
+window (packages/state/src/czml.ts and packages/interop/src/czml.ts: availability
+intervals and time-tagged ground tracks). This is an interchange contract, not a
+live link.
 
 ## 5. Contract stability and testing
 
-These URL contracts are public API. Once shipped in Phase 2, changes are
-versioned (the v=1 field in Section 1) and ADR-worthy. Tests:
+These URL contracts are public API. The live `v=1` codec ships
+(packages/state/src/codec.ts); changes are versioned (the v field in Section 1)
+and ADR-worthy. Tests:
 
 - Unit tests assert outbound MMGIS URLs are well-formed for fixture selections
   (the parameter table above, including the lon/lat/zoom triple rule).

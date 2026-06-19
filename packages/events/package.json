@@ -1,5 +1,6 @@
 {
   "name": "@bessel/events",
+  "description": "Eclipse and lighting interval events: umbra, penumbra, annular, and sunlit windows for a spacecraft observer",
   "version": "0.0.0",
   "private": true,
   "type": "module",

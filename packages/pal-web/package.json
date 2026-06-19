@@ -1,5 +1,6 @@
 {
   "name": "@bessel/pal-web",
+  "description": "Web platform implementation of the Bessel PAL: HTTP kernel source with OPFS cache, OPFS filesystem, localStorage, and share",
   "version": "0.0.0",
   "private": true,
   "type": "module",

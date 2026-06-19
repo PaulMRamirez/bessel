@@ -1,5 +1,6 @@
 {
   "name": "@bessel/attitude",
+  "description": "Spacecraft pointing laws, eigen-axis slews, and keep-out analysis",
   "version": "0.0.0",
   "private": true,
   "type": "module",

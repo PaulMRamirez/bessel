@@ -1,5 +1,6 @@
 {
   "name": "@bessel/map-projection",
+  "description": "Pure forward/inverse map projections (equirectangular, Web Mercator, polar stereographic) for the 2D map view",
   "version": "0.0.0",
   "private": true,
   "type": "module",

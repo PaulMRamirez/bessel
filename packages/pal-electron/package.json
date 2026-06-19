@@ -1,5 +1,6 @@
 {
   "name": "@bessel/pal-electron",
+  "description": "Electron PAL implementation for Bessel: Node filesystem over a typed IPC bridge, meta-kernel resolution, native dialogs, and an optional Python scripting bridge",
   "version": "0.0.0",
   "private": true,
   "type": "module",

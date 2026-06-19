@@ -1,5 +1,6 @@
 {
   "name": "@bessel/pal",
+  "description": "Platform Abstraction Layer interfaces (kernels, filesystem, storage, share, capabilities) injected per shell",
   "version": "0.0.0",
   "private": true,
   "type": "module",

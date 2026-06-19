@@ -1,5 +1,6 @@
 {
   "name": "@bessel/mission",
+  "description": "Trajectory and maneuver design primitives: a universal-variable Lambert solver and impulsive maneuvers in J2000/VNB/RIC/LVLH frames",
   "version": "0.0.0",
   "private": true,
   "type": "module",

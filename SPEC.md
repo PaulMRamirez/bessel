@@ -28,6 +28,12 @@ membership is implemented as a URL contract with MMGIS (ADR-0008,
 docs/integrations.md, grounded in the MMGIS repository). Phase 5 certifies the
 objective.
 
+This document specifies the visualization application. The mission-analysis engine
+layer (propagation, access, lighting, communications, conjunction, attitude,
+coverage, maneuver design, and CCSDS interop) is specified separately in
+docs/STK_PARITY_SPEC.md; the two documents are complementary, and the analysis
+packages enumerated in STK_PARITY_SPEC.md Section 10 also live in this workspace.
+
 In scope for the program described here:
 
 - A composable monorepo of platform-agnostic core packages.
@@ -35,6 +41,8 @@ In scope for the program described here:
 - Three application shells over a shared React UI.
 - Cosmographia catalog compatibility plus a native schema and round-trip layer.
 - A mission plugin surface.
+- A mission-analysis engine layer surfaced in interactive workbenches (specified
+  in docs/STK_PARITY_SPEC.md).
 - Operations features: shareable URL state, geometric readouts, capture, and
   later, live telemetry overlays.
 - Suite deep links: MMGIS (surface), both directions, plus CZML interchange.
@@ -127,6 +135,10 @@ bessel/
     color/        # @bessel/color    color strategy system (colorScheme hook)
     pal/          # @bessel/pal      interface + pal-web, pal-capacitor, pal-electron
     ui/           # @bessel/ui       React components, panels, controls
+                  # the workspace also contains the analysis-engine packages
+                  #   (propagator, access, events, rf, coverage, conjunction,
+                  #   attitude, sensors, mission, map-projection, interop, analysis,
+                  #   terrain), specified in docs/STK_PARITY_SPEC.md Section 10
   apps/
     web/          # Vite + vite-plugin-pwa; the canonical build all targets consume
     desktop/      # electron-vite; main, preload, renderer; IPC bridge

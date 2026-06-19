@@ -1,7 +1,14 @@
 # Bessel vs Cosmographia: Parity Matrix
 
-Status: Draft v1.1 (closure pass)
-Date: 2026-06-14
+Status: Draft v1.2 (closure pass)
+Date: 2026-06-19
+
+> Scope: this matrix tracks parity against the **Cosmographia visualizer** only.
+> The separate STK-class mission-analysis engine layer (propagation, access,
+> lighting, communications, conjunction, attitude, coverage, maneuver design,
+> interop) landed afterward and is tracked in docs/STK_PARITY_SPEC.md §9; rows
+> below that touch analysis or scripting cross-reference it rather than
+> duplicating that tracking.
 
 > Closure pass (2026-06-14): the Section 15 closure plan was executed. The
 > headline gap (arbitrary-mission load into the rendered scene) is closed, image
@@ -9,9 +16,10 @@ Date: 2026-06-14
 > added, and the scripting/plugin/telemetry surface exists as tested core
 > capability. The status rows below are updated; honest residuals (content not
 > bundled, capabilities not yet surfaced in the shell) are called out per row and
-> summarized in Section 15. All program gates are green (typecheck, lint, 187
-> unit tests, build:web, build:desktop, cap:sync, 18 e2e incl. the Electron DSK
-> render and the axe scan, size, audit:prod, lhci, release:dry).
+> summarized in Section 15. As of 2026-06-19 all program gates are green
+> (typecheck, lint, 392 unit/contract tests, build:web, build:desktop, cap:sync,
+> 22 e2e incl. the Electron DSK render and the axe scan, size, audit:prod, lhci,
+> release:dry).
 
 This is the auditable, feature-by-feature parity check promised in ADR-0006 and
 SPEC.md Section 11. It states *exactly* what Cosmographia does, whether Bessel

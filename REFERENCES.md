@@ -1,7 +1,7 @@
 # Bessel References
 
-Status: Draft v1.0
-Date: 2026-06-07
+Status: v1.1 (adds the mission-analysis algorithm provenance)
+Date: 2026-06-19
 
 Curated sources for the program, grouped by area. Homepages are given where the
 canonical URL is stable; otherwise the package or project identifier is given so
@@ -22,6 +22,48 @@ it can be resolved on npm, PyPI, or GitHub. Verify versions at build time.
 
 - arturania/cspice (CSPICE compiled to WASM via Emscripten, React + Web Worker
   pattern): https://github.com/arturania/cspice
+
+## Mission analysis algorithms (the analysis-engine provenance)
+
+Each analysis engine is validated against an independent reference; the sources
+those references come from are grouped here. See docs/STK_PARITY_SPEC.md for the
+per-domain validation notes and docs/analysis-tools.md for the per-tool summary.
+
+Astrodynamics and orbit propagation:
+
+- Vallado, "Fundamentals of Astrodynamics and Applications" (two-body, Lambert
+  universal-variable, J2 secular theory, time and coordinate systems).
+- Vallado et al., "Revisiting Spacetrack Report #3" (AIAA 2006-6753) and Hoots &
+  Roehrich, Spacetrack Report No. 3: the SGP4 algorithm and the SGP4-VER
+  numerical reference vectors used in the propagator tests.
+- Hairer, Norsett & Wanner, "Solving Ordinary Differential Equations I" (the
+  Dormand-Prince 5(4) / DOPRI5 tableau and adaptive step control used by the
+  Cowell integrator).
+- Montenbruck & Gill, "Satellite Orbits: Models, Methods and Applications"
+  (Cowell special perturbations, zonal J2/J3/J4, third-body, drag, SRP).
+
+Communications and RF link budgets:
+
+- ITU-R Recommendations P.618 (rain attenuation), P.676 (gaseous attenuation),
+  and P.838 (specific-attenuation k/alpha coefficients).
+- DSN Telecommunications Link Design Handbook (JPL 810-005) for the link-budget
+  conventions and representative DSN station parameters.
+
+Conjunction assessment and SSA:
+
+- Foster & Estes, the 2D probability-of-collision method in the encounter plane.
+- NASA CARA (Conjunction Assessment Risk Analysis) Pc methodology notes.
+
+Coverage, maneuvers, and projections:
+
+- Walker, J.G., "Satellite constellations" (Walker Delta/Star geometry).
+- Snyder, "Map Projections: A Working Manual" (USGS Professional Paper 1395) for
+  the equirectangular, Web Mercator, and polar-stereographic projections.
+
+Interoperability standards (CCSDS):
+
+- CCSDS 502.0-B, Orbit Data Messages (the OEM and OMM message formats).
+- CCSDS 508.0-B, Conjunction Data Message (CDM).
 
 ## Cosmographia (the incumbent and the compatibility target)
 

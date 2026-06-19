@@ -1,5 +1,6 @@
 {
   "name": "@bessel/spice",
+  "description": "Typed, promise-based CSPICE-WASM engine for ephemeris, frames, and geometry events, in-process or in a Web Worker",
   "version": "0.0.0",
   "private": true,
   "type": "module",

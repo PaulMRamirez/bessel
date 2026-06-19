@@ -1,5 +1,6 @@
 {
   "name": "@bessel/analysis",
+  "description": "Analysis Workbench primitives: a Vector Geometry Tool and a typed time-series sampler with statistics over caller-supplied providers",
   "version": "0.0.0",
   "private": true,
   "type": "module",

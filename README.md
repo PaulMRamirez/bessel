@@ -5,6 +5,12 @@ single codebase as a Progressive Web App, as native mobile apps (via Capacitor),
 and as a desktop app (via Electron). It reads Cosmographia-compatible catalogs,
 drives geometry from CSPICE compiled to WebAssembly, and renders with Three.js.
 
+Beyond visualization, Bessel ships a validated mission-analysis engine layer
+(orbit propagation, access, lighting, communications, conjunction, attitude,
+coverage, maneuver design, and CCSDS interop) surfaced in three interactive
+workbenches. Every analysis quantity is asserted against an independent numeric
+reference; see docs/analysis-tools.md and docs/STK_PARITY_SPEC.md.
+
 License: Apache-2.0 (LICENSE at the root).
 
 Program objective: a fully featured, production quality, efficient application
@@ -13,11 +19,22 @@ enforced by verifiable gates (ADR-0009).
 
 ## What this repository contains
 
-A pnpm workspace monorepo: typed core packages (`packages/`), a platform
+A pnpm workspace monorepo of 24 typed core packages (`packages/`), a platform
 abstraction layer with web, Electron, and Capacitor implementations, and the
 three app shells (`apps/web`, `apps/desktop`, `apps/mobile`). The web app boots a
 neutral inner-solar-system scene and renders any loaded mission through a generic,
 catalog-driven builder.
+
+The core packages split into two families (see docs/architecture.md for the full
+map):
+
+- Visualization and platform: `spice` (CSPICE-WASM in a Web Worker), `catalog`,
+  `scene`, `timeline`, `state`, `color`, `ui`, and the `pal` interface with its
+  `pal-web` / `pal-electron` / `pal-capacitor` implementations.
+- Analysis engines: `propagator` (SGP4, two-body, J2/J4, Cowell HPOP), `access`,
+  `events` (eclipse), `rf` (link budgets), `coverage`, `conjunction`, `attitude`,
+  `sensors`, `mission` (Lambert, maneuvers), `map-projection`, `interop` (CCSDS
+  OEM/OMM/CDM), `analysis`, and `terrain`.
 
 ## Running it
 
@@ -53,14 +70,46 @@ Copy and edit the sample file as a starting point for your own mission; the
 kernels its bodies need must be furnished (the bundled demo kernels cover the
 inner system, Saturn, and Cassini).
 
+## Mission analysis workbenches
+
+Three menus in the app shell run the analysis engines and render the results as
+Gantt timelines, time-series charts, ground-track overlays, report tables, and
+file exports. Full reference: docs/analysis-tools.md.
+
+- Analysis (appears once a spacecraft mission is loaded): eclipse/umbra
+  intervals, range time series, Sun line-of-sight access with a coverage figure
+  of merit, downlink Eb/N0 link budget, conjunction time-of-closest-approach and
+  2D collision probability, Walker-Delta constellation design, eigen-axis
+  attitude slew, Lambert transfer delta-v, ground track, and CCSDS OEM export.
+- Propagate (always available): propagate a bundled sample TLE with SGP4 into an
+  in-memory SPK and read back altitude, ground track, and period; find
+  ground-station access; and propagate the same state numerically with the native
+  Cowell HPOP (adaptive DOPRI5 with a point-mass + J2 force model).
+- Report: pick a data provider (range, range rate, speed, position, velocity, sub
+  point) for an observer/target pair over a time grid, run one cancellable
+  evalSeries job, read the unit-tagged report table, and export CSV.
+
+The Analysis and Propagate buttons use fixed demonstration parameters (one-day
+spans, a representative DSN/Goldstone station, the bundled sample TLE, and an
+illustrative conjunction covariance) to exercise each engine end to end; the
+Report workbench is the parameterized path. Every engine is validated against an
+independent reference (docs/STK_PARITY_SPEC.md, REFERENCES.md).
+
 ## Where to start
 
-1. SPEC.md: the master specification and the verifiable command catalog.
-2. docs/PARITY_MATRIX.md: the feature-by-feature parity check against
+1. docs/getting-started.md: load a mission, explore, run an analysis, export.
+2. docs/analysis-tools.md: one entry per workbench tool (inputs, what it computes,
+   validation, limits).
+3. docs/architecture.md: the layering and the 24-package map.
+4. SPEC.md: the visualizer specification and the verifiable command catalog;
+   docs/STK_PARITY_SPEC.md: the analysis-engine specification and status.
+5. docs/PARITY_MATRIX.md: the feature-by-feature parity check against
    Cosmographia, with the current implemented status.
-3. docs/catalog-schema.md: the native catalog schema for authoring missions.
-4. docs/adr/: the binding architecture decisions.
-5. REFERENCES.md: curated sources.
+6. docs/catalog-schema.md: the native catalog schema for authoring missions.
+7. docs/build-from-source.md: building, the CSPICE-WASM relink, and the gates.
+8. docs/adr/: the binding architecture decisions. REFERENCES.md: curated sources.
+
+A by-audience index of all documentation is in docs/README.md.
 
 ## Project configuration
 

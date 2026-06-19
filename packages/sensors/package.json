@@ -1,5 +1,6 @@
 {
   "name": "@bessel/sensors",
+  "description": "Sensor field-of-view geometry, ground footprints, and swath coverage (conic FOV, SPICE getfov/sincpt)",
   "version": "0.0.0",
   "private": true,
   "type": "module",

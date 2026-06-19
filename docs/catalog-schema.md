@@ -1,7 +1,7 @@
 # Bessel Catalog Schema Design
 
-Status: Draft v1.0 (re-derivation, to reconcile against the validated original)
-Date: 2026-06-07
+Status: v1.0, implemented and tested in packages/catalog
+Date: 2026-06-19
 Artifacts: packages/catalog/schema/bessel-catalog.schema.json,
 packages/catalog/schema/examples/cassini-saturn.example.json
 Decision record: docs/adr/0006-catalog-schema-and-compatibility.md
@@ -93,9 +93,9 @@ references geometry recursively for its segments.
 ## 4. Validation
 
 The schema and the Cassini-style instance are validated by
-scripts/validate-catalog-schema.py (Python jsonschema, Draft 2020-12), which
-any reviewer can run before the Phase 1 Vitest tests exist. The gates, which
-mirror the original design's gates, are:
+scripts/validate-catalog-schema.py (Python jsonschema, Draft 2020-12), a
+standalone re-check; the same gates are covered by Vitest in
+packages/catalog/src (schema.test.ts and siblings). The gates are:
 
 1. The schema validates against the JSON Schema 2020-12 meta-schema.
 2. A full Cassini-style instance validates clean. The instance has Saturn (a globe
@@ -105,8 +105,8 @@ mirror the original design's gates, are:
 3. Negative test A: a spacecraft with both arcs and trajectory is rejected.
 4. Negative test B: sideDivisions 1 (the Cosmographia crash case) is rejected.
 
-These two negative cases are wired into the Phase 1 acceptance criteria so the
-catalog validation is verifiable by the /goal completion checker.
+These two negative cases are covered by the catalog tests so the schema validation
+is verifiable in `pnpm test`.
 
 ---
 
@@ -132,5 +132,6 @@ v1 targets 80 percent core fidelity with Cosmographia, with a documented
 compatibility matrix, pursuing full fidelity opportunistically (ADR-0006). The
 round-trip layer (Cosmographia in, native out, native back to Cosmographia on the
 lossless subset) is the mechanism that lets missions adopt Bessel without
-rewriting existing catalogs. The fromCosmographia converter is the natural next
-implementation step once the schema is locked.
+rewriting existing catalogs. The schema is locked and tested; a standalone
+`fromCosmographia` converter is a noted gap (the loader parses Cosmographia
+catalogs directly today via `apps/web/src/catalog-load.ts`).

@@ -51,6 +51,7 @@ must exist and exit 0 on success.
 | `pnpm lhci`          | Lighthouse CI assertions on the built PWA (Phase 2 on)      |
 | `pnpm bench`         | Vitest bench micro-benchmarks (informational)               |
 | `pnpm release:dry`   | changesets version and publish dry-run                      |
+| `pnpm cspice:build`  | relink CSPICE to WASM (Emscripten); only when changing exports |
 | `pnpm verify`        | typecheck, lint, test, build:web, size in sequence; the gate|
 
 Never edit .size-limit.json or lighthouserc.json to make a budget pass; if a
@@ -83,11 +84,13 @@ loads a fixture and checks for a non-empty WebGL frame, never by judgement.
 
 - Dependency rule: lower layers never import higher ones, and the core never
   imports a concrete PAL implementation. Order is plugins, core, PAL interface,
-  UI, shells. Core (@bessel/spice, catalog, scene, timeline, state, color)
-  depends only on other core packages and the @bessel/pal interface. The UI
-  depends on core and the PAL interface. Shells inject one PAL implementation at
-  startup. If a task tempts you to break this rule, the scope is wrong; stop and
-  flag it.
+  UI, shells. Core (@bessel/spice, catalog, scene, timeline, state, color, and the
+  analysis-engine packages: propagator, access, events, rf, coverage, conjunction,
+  attitude, sensors, mission, map-projection, interop, analysis, terrain) depends
+  only on other core packages and the @bessel/pal interface. The UI depends on
+  core and the PAL interface. Shells inject one PAL implementation at startup. The
+  workspace has 24 packages in all (see docs/architecture.md for the map). If a
+  task tempts you to break this rule, the scope is wrong; stop and flag it.
 - The SPICE engine never reads kernel bytes directly. Kernels arrive through the
   PAL KernelSource so the same engine works over HTTP range, Capacitor paths, and
   the Electron filesystem.

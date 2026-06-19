@@ -1,5 +1,6 @@
 {
   "name": "@bessel/propagator",
+  "description": "Orbit propagation and TLE/OMM/OEM ingest: two-body, J2/J4 mean-element, SGP4, and a DOPRI5 Cowell numerical propagator",
   "version": "0.0.0",
   "private": true,
   "type": "module",

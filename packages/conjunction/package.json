@@ -1,5 +1,6 @@
 {
   "name": "@bessel/conjunction",
+  "description": "Close-approach math: TCA, miss distance, and 2D probability of collision (Foster's method)",
   "version": "0.0.0",
   "private": true,
   "type": "module",

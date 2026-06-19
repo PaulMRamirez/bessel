@@ -1,5 +1,6 @@
 {
   "name": "@bessel/ui",
+  "description": "React components, panels, and controls for the Bessel viewer (timeline, camera, object browser, settings, charts, keyboard shortcuts, and capture)",
   "version": "0.0.0",
   "private": true,
   "type": "module",

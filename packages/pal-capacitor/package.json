@@ -1,5 +1,6 @@
 {
   "name": "@bessel/pal-capacitor",
+  "description": "Capacitor PAL implementation for Bessel: native filesystem kernel source and kernel zip import for the iOS shell",
   "version": "0.0.0",
   "private": true,
   "type": "module",

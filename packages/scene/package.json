@@ -1,5 +1,6 @@
 {
   "name": "@bessel/scene",
+  "description": "Camera-relative Three.js scene graph builder for Bessel missions, driven by inert SceneSpec data",
   "version": "0.0.0",
   "private": true,
   "type": "module",
