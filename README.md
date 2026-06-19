@@ -8,8 +8,13 @@ drives geometry from CSPICE compiled to WebAssembly, and renders with Three.js.
 Beyond visualization, Bessel ships a validated mission-analysis engine layer
 (orbit propagation, access, lighting, communications, conjunction, attitude,
 coverage, maneuver design, and CCSDS interop) surfaced in three interactive
-workbenches. Every analysis quantity is asserted against an independent numeric
-reference; see docs/analysis-tools.md and docs/STK_PARITY_SPEC.md.
+workbenches. It also runs headless: special-perturbations propagation with dense
+output, event detection, and the State Transition Matrix; an Astrogator-class
+Mission Control Sequence with a differential corrector; the EOP-aware TEME to J2000
+transform; and a deterministic batch runner (`@bessel/sdk` and the `bessel` CLI)
+that executes a JSON job with no UI. Every analysis quantity is asserted against an
+independent numeric reference; see docs/analysis-tools.md and
+docs/STK_PARITY_SPEC.md.
 
 License: Apache-2.0 (LICENSE at the root).
 
@@ -18,11 +23,11 @@ The objective is enforced by verifiable gates (ADR-0009).
 
 ## What this repository contains
 
-A pnpm workspace monorepo of 24 typed core packages (`packages/`), a platform
-abstraction layer with web, Electron, and Capacitor implementations, and the
-three app shells (`apps/web`, `apps/desktop`, `apps/mobile`). The web app boots a
-neutral inner-solar-system scene and renders any loaded mission through a generic,
-catalog-driven builder.
+A pnpm workspace monorepo of 26 typed core packages (`packages/`), a platform
+abstraction layer with web, Electron, Capacitor, and Node implementations, and the
+app shells (`apps/web`, `apps/desktop`, `apps/mobile`, and the `apps/cli` headless
+batch runner). The web app boots a neutral inner-solar-system scene and renders any
+loaded mission through a generic, catalog-driven builder.
 
 The core packages split into two families (see docs/architecture.md for the full
 map):
@@ -30,10 +35,13 @@ map):
 - Visualization and platform: `spice` (CSPICE-WASM in a Web Worker), `catalog`,
   `scene`, `timeline`, `state`, `color`, `ui`, and the `pal` interface with its
   `pal-web` / `pal-electron` / `pal-capacitor` implementations.
-- Analysis engines: `propagator` (SGP4, two-body, J2/J4, Cowell HPOP), `access`,
-  `events` (eclipse), `rf` (link budgets), `coverage`, `conjunction`, `attitude`,
-  `sensors`, `mission` (Lambert, maneuvers), `map-projection`, `interop` (CCSDS
-  OEM/OMM/CDM), `analysis`, and `terrain`.
+- Analysis engines: `propagator` (SGP4, two-body, J2/J4, Cowell HPOP, dense output
+  + events + STM, an Astrogator-class MCS with a differential corrector, and TEME to
+  J2000), `access`, `events` (eclipse), `rf` (link budgets), `coverage`,
+  `conjunction`, `attitude`, `sensors`, `mission` (Lambert, maneuvers),
+  `map-projection`, `interop` (CCSDS OEM/OMM/CDM), `analysis`, and `terrain`.
+- Automation: `sdk` (a JSON batch-job IR, a `defineJob` builder, and a headless
+  `runJob` runner) with `pal-node` (Node kernel/file IO) driving the `bessel` CLI.
 
 ## Running it
 

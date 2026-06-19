@@ -17,8 +17,8 @@ Date: 2026-06-19
 > capability. The status rows below are updated; honest residuals (content not
 > bundled, capabilities not yet surfaced in the shell) are called out per row and
 > summarized in Section 15. As of 2026-06-19 all program gates are green
-> (typecheck, lint, 395 unit/contract tests, build:web, build:desktop, cap:sync,
-> 22 e2e incl. the Electron DSK render and the axe scan, size, audit:prod, lhci,
+> (typecheck, lint, 509 unit/contract tests, build:web, build:desktop, cap:sync,
+> 23 e2e incl. the Electron DSK render and the axe scan, size, audit:prod, lhci,
 > release:dry).
 
 This is the auditable, feature-by-feature parity check promised in ADR-0006 and
@@ -63,7 +63,7 @@ Counts after the closure pass (Draft v1.0 values in parentheses where changed):
 | 8. Analysis and measurement      | 4 (2)   | 0 (1)   | 0 (1)   | 0         |
 | 9. Modern UI/UX                  | 7       | 0       | 0       | 0         |
 | 10. Platform reach               | 4       | 0       | 0       | 0         |
-| 11. Sharing and ops integration  | 4       | 1 (0)   | 1 (2)   | 1         |
+| 11. Sharing and ops integration  | 5 (4)   | 1 (0)   | 0 (2)   | 1         |
 | 12. Scripting and extensibility  | 1       | 3 (1)   | 0 (2)   | 0         |
 
 Headline reading after closure: the SPICE engine, geometry taxonomy, rendering,
@@ -191,7 +191,7 @@ in-process C++ calls.
 | MMGIS deep links | No | Done | `packages/state/src/mmgis.ts` | Bessel advantage. |
 | CZML export (CesiumJS) | No | Done | `packages/state/src/czml.ts` | Bessel advantage. |
 | Movie and screenshot export | Yes | Done | see Section 9 | Parity. |
-| Command-line / batch usage | Yes (Command Line Usage) | Missing | not found | No headless/CLI entry; desktop Python bridge is the nearest path. |
+| Command-line / batch usage | Yes (Command Line Usage) | Done | `packages/sdk` (`runJob`, `defineJob`, the JSON batch-job IR), `packages/pal-node`, `apps/cli` (the `bessel` bin) | Bessel advantage: a headless, deterministic batch runner executes a schema-validated JSON job (furnish kernels, propagate, run an MCS, analyze, export OEM/CSV) against a Node PAL with CI-grade exit codes, plus a programmatic `defineJob` builder. Tested end to end with the real SPICE engine and an in-memory PAL. |
 | Live telemetry overlays (Yamcs, OpenMCT) | No | Partial | `packages/state/src/telemetry.ts` (`TelemetryAdapter`); `telemetry.test.ts` | A transport-neutral adapter ingests state vectors from a WebSocket-like source and produces a predicted-versus-actual overlay with residuals; tested with a mock socket. Residual: not wired to a live Yamcs/OpenMCT server or an on-screen overlay yet. |
 | Surface GIS context | Built in | By-design | `mmgis.ts` | Deferred to MMGIS by deep link rather than embedded (ADR rationale). |
 
@@ -222,6 +222,13 @@ clone:
   designed-in properties (Sections 3 and 5).
 - Modern UI affordances: search, theming, dockable panels, inspector, richer
   illumination readouts (Sections 8 and 9).
+- A numerical mission-analysis backend that Cosmographia, a pure viewer, has no
+  equivalent of: special-perturbations propagation (adaptive DOPRI5 Cowell) with
+  dense output, switching-function event detection, and a co-integrated State
+  Transition Matrix; an Astrogator-class Mission Control Sequence executor with a
+  single-level differential corrector; the EOP-aware TEME to J2000 transform; and
+  the headless automation SDK and `bessel` batch runner (Section 11). See
+  docs/STK_PARITY_SPEC.md for the analysis-layer requirements.
 
 ## 14. Known divergences (by design, not gaps)
 

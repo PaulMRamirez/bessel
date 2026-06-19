@@ -678,15 +678,20 @@ pthreads / web.dev WebAssembly threads / Pyodide Fortran-to-WASM notes.
 
 ---
 
-## 9. Implementation status (2026-06-18)
+## 9. Implementation status (2026-06-19)
 
 The analytical **engine layer**, the actual gap vs STK, is implemented as
 validated headless core packages, and every Phase B/C analysis domain is now
 **surfaced into the app UI and proven by an end-to-end test**. Every quantity is
 asserted against an independent numeric reference (NAIF SPK/`occult`, Vallado
 SGP4-VER and Lambert, EPSG:3857, analytic Pc/eclipse/footprint forms, ITU/textbook
-RF anchors). 395 unit/contract tests and 22 Playwright e2e; `pnpm verify` and
+RF anchors). 509 unit/contract tests and 23 Playwright e2e; `pnpm verify` and
 `pnpm e2e` green; initial JS and WASM within budget.
+
+The numerical substrate, the Astrogator-class Mission Control Sequence, the
+EOP-aware TEME to J2000 transform, and the headless automation SDK/BCL (the
+formerly pending items below) all landed in 2026-06; see the updated rows and
+§10.
 
 Near-term roadmap progress (the F3 foundation and the shadowed-core wiring) is
 landed: the **F3 cancellable-job protocol, EvalSpec interpreter, and worker pool**
@@ -699,17 +704,20 @@ and **CSV/CZML export plus a real-data CCSDS OEM fixture** landed in `@bessel/in
 | Domain | Package | Status (validated cores) |
 |---|---|---|
 | Foundations (F1/F2/F3) | `@bessel/spice`, `@bessel/timeline` | GF + SpiceCell + propagation/attitude/SPK-write bindings; `SpiceWindow` algebra; batched zero-copy `spkposBatch`; **F3 EvalSpec interpreter + cancellable-job protocol + worker pool** (partition a sweep across workers). **Done.** |
-| Propagation | `@bessel/propagator` | TLE parse (vs Vallado), **SGP4 (vs SGP4-VER, sub-meter)**, two-body (`prop2b`), J2/J4 mean-element, SPK Type-13 publish, batch, **plus a native Cowell HPOP: adaptive DOPRI5 integrator + pluggable ForceModel (point-mass + zonal J2..J4, third-body), validated against prop2b (sub-meter) and secularRatesJ2**. **Done + UI** (Propagate workbench: SGP4 and HPOP both render altitude/ground-track; publish pipeline tested). NxN tesserals, drag/SRP pending a committed reference. |
+| Propagation | `@bessel/propagator` | TLE parse (vs Vallado), **SGP4 (vs SGP4-VER, sub-meter)**, two-body (`prop2b`), J2/J4 mean-element, SPK Type-13 publish, batch, **a native Cowell HPOP: adaptive DOPRI5 integrator + pluggable ForceModel (point-mass + zonal J2..J4, third-body), validated against prop2b (sub-meter) and secularRatesJ2**, **plus the numerical substrate: dense (continuous Hermite) output, switching-function event detection with Brent root-finding and terminal stops, and the co-integrated 42-state variational State Transition Matrix (`propagateCowellEx`, `dense.ts`, `events.ts`, `stm.ts`)**. **Done + UI** (Propagate workbench: SGP4 and HPOP both render altitude/ground-track; publish pipeline tested). NxN tesserals, drag/SRP pending a committed reference. |
+| Mission Control Sequence | `@bessel/propagator` (`mcs/`) | **Astrogator-class MCS: a pure JSON mission IR (InitialState/Propagate/Maneuver/Target/Sequence/Stop), an immutable executor reusing `propagateCowellEx` with event-driven stop conditions, impulsive VNB/inertial burns, and a single-level differential corrector with an STM-analytic Jacobian (zero finite-difference when STM-served + analytic goal + fixed-time stop) falling back to finite difference, with damped Newton, trust region, and loud typed failures**. Validated against the vis-viva delta-v, a flight-path-angle null, and a pure-STM downrange-radius oracle. **Core done.** Multi-level targeting, finite burns, and optimizers (SNOPT-class) pending. |
+| Frames | `@bessel/propagator` (`frames/`) | **EOP-aware TEME to J2000 (EME2000/GCRF): IAU-1976 precession, the full 106-term IAU-1980 nutation, the equation of the equinoxes, and the celestial-pole offset (ddpsi/ddeps) corrections**, validated to sub-meter against the Vallado teme2eci worked example. **Core done** (wired into the SDK SGP4 propagate path). |
 | Access | `@bessel/access` | Line-of-sight (`gfoclt`), range (`gfdist`), chains, facility elevation. **Done + UI** (composable ground-station passes: elevation mask intersected with a range gate, FOM + CSV). |
 | Lighting/eclipse | `@bessel/events` | Umbra/penumbra/annular/sunlit (vs `occult`). **Done.** |
-| Mission/maneuver | `@bessel/mission` | Lambert (vs Vallado 7-5), impulsive maneuvers in VNB/RIC/LVLH. **Core done + UI** (`Solve Lambert transfer`); MCS executor + differential corrector pending. |
+| Mission/maneuver | `@bessel/mission`, `@bessel/propagator` (`mcs/`) | Lambert (vs Vallado 7-5), impulsive maneuvers in VNB/RIC/LVLH. **Core done + UI** (`Solve Lambert transfer`). The MCS executor + differential corrector (above) now provides Astrogator-class targeting. |
 | Coverage | `@bessel/coverage` | Figure-of-Merit reduction, Walker generation. **Core done + UI** (access FOM readout + `Design Walker constellation`); grid sweep over access pending. |
 | Comms/RF | `@bessel/rf` | Friis, antenna gain, BER, link budget, Doppler, **plus ITU-R rain (P.618/P.838) + gaseous slant-path attenuation and a typed comm-entity schema (Transmitter/Receiver/Antenna -> EIRP, G/T)**. **Done + UI** (downlink Eb/N0 chart). Full P.676 line-by-line pending. |
 | Attitude | `@bessel/attitude` | Two-vector laws (`twovec`), eigen-axis slew, **plus pointing keep-out (exclusion) constraints with a windowed analysis**. **Core done + UI** (`Compute attitude slew` chart); CK read/write pending. |
 | Sensors | `@bessel/sensors` | Conic FOV in/out, boundary, footprint on a body, the SPICE ellipsoid footprint + FOV cone (moved into core), **plus a typed sensor schema and time-evolving swath accumulation + coverage metric**. **Core done + UI** (FOV cone + footprint render in-scene). Rectangular FOV + spherical-polygon swath union pending. |
 | Conjunction/SSA | `@bessel/conjunction` | 2D Pc (Foster, vs analytic), TCA/miss. **Core done + UI** (`Compute closest approach` readout); all-vs-all screening pending. |
 | Reporting/Workbench | `@bessel/analysis`, `@bessel/spice` | Vector-geometry tool, data-provider series + stats, **plus a unit-tagged provider registry (`PROVIDER_CATALOG`) + the F3 EvalSpec interpreter**. **Core done + UI** (the Report workbench: pick a provider + observer/target + grid, run one evalSeries job, read a `ReportTable`, export CSV; plus the fixed Analysis tools + charting primitives). Calculation/Time derived-column tools pending. |
-| Interop | `@bessel/interop`, `@bessel/propagator` | CCSDS **OEM** parse/write (+ real-data MGS fixture) and **OEM->SPK import** (`publishOem`, renders via spkpos), **OMM** parse + `ommToTle` (drives SGP4, validated vs the catalog-5 TLE), **CDM** parse (SSA), **AEM** parse (attitude; quaternion records normalized scalar-first), **CSV and CZML export**. Frame/time: **recgeo + et2lst bindings**. **Core done + UI** (`Export CCSDS OEM`, per-result `Export CSV`). EOP-aware TEME->J2000 + SDK/BCL pending. |
+| Interop | `@bessel/interop`, `@bessel/propagator` | CCSDS **OEM** parse/write (+ real-data MGS fixture) and **OEM->SPK import** (`publishOem`, renders via spkpos), **OMM** parse + `ommToTle` (drives SGP4, validated vs the catalog-5 TLE), **CDM** parse (SSA), **AEM** parse (attitude; quaternion records normalized scalar-first), **CSV and CZML export**. Frame/time: **recgeo + et2lst bindings**. **Core done + UI** (`Export CCSDS OEM`, per-result `Export CSV`). The EOP-aware TEME->J2000 transform (Frames row) and the automation SDK/BCL (Automation row) have since landed. |
+| Automation/BCL | `@bessel/sdk`, `@bessel/pal-node`, `apps/cli` | **A headless, deterministic batch runner: a schema-validated JSON batch-job IR + `defineJob` builder, and `runJob` (3-pass validate/reference/execute) over furnish/propagate(sgp4 with TEME->J2000, twobody)/runMcs/analyze(range)/exportOem/exportCsv, with CI-grade exit codes**, an in-memory test PAL, a Node directory PAL (`@bessel/pal-node`), and the `bessel` CLI. **Core done** (end-to-end tested with the real SPICE engine). Eclipse/link/report/loadCatalog ops, a shipped JSON-schema file, and provenance hashing pending. |
 | 2D map | `@bessel/map-projection` | Equirectangular, Web Mercator (vs EPSG:3857), polar stereographic. **Done + UI** (`GroundTrackMap` overlay). |
 | Terrain | `@bessel/terrain` | Terrain-masked line-of-sight. **Core done.** |
 
@@ -736,13 +744,14 @@ sampled (batched-ephemeris) engine paths, plus the scalar-readout and file-expor
 paths.
 
 The F3 cancellable-job worker pool, OMM/CDM interop, time-evolving sensor swaths,
-and attitude pointing keep-out have since landed (see §9). Remaining (deeper
-per-domain features beyond the phase definitions, each its own focused effort):
-the full NxN tesseral gravity plus drag/SRP and an EOP-aware TEME->J2000 transform
-(propagator), the MCS executor + differential corrector (mission), all-vs-all
-screening (conjunction), the grid sweep over access (coverage), CK read/write
-(attitude), the automation SDK/BCL (interop), and orbit
-determination. GMAT remains seam-only per §8.
+attitude pointing keep-out, the integrator substrate (dense output + event
+detection + STM), the Astrogator-class MCS + differential corrector, the EOP-aware
+TEME->J2000 transform, and the headless automation SDK/BCL have all since landed
+(see the rows above). Remaining (deeper per-domain features beyond the phase
+definitions, each its own focused effort): the full NxN tesseral gravity plus
+drag/SRP (propagator), multi-level MCS targeting and finite burns (mcs),
+all-vs-all screening (conjunction), the grid sweep over access (coverage), CK
+read/write (attitude), and orbit determination. GMAT remains seam-only per §8.
 
 ---
 
@@ -751,11 +760,14 @@ determination. GMAT remains seam-only per §8.
 `@bessel/propagator`, `@bessel/access`, `@bessel/coverage`,
 `@bessel/rf`, `@bessel/analysis`, `@bessel/attitude`, `@bessel/sensors`,
 `@bessel/conjunction`, `@bessel/events`, `@bessel/interop`,
-`@bessel/map-projection`, `@bessel/terrain` (the planned `@bessel/astro` folded
-into `@bessel/propagator`; the `@bessel/sdk` headless runner is deferred), all
-core-layer, depending only on
+`@bessel/map-projection`, `@bessel/terrain`, and **`@bessel/sdk`** (the headless
+automation runner; the planned `@bessel/astro` folded into `@bessel/propagator`,
+which also now hosts the MCS executor and the TEME->J2000 frames), all core-layer,
+depending only on
 other core packages and `@bessel/pal`, lazy-loaded, worker-backed where they
-compute. Existing packages extended: `@bessel/spice` (exports + bindings + worker
+compute. The PAL gained a headless Node implementation **`@bessel/pal-node`** and a
+new shell **`apps/cli`** (the `bessel` batch runner). Existing packages extended:
+`@bessel/spice` (exports + bindings + worker
 protocol), `@bessel/timeline` (window algebra), `@bessel/catalog` (facility/
 sensor/comm/attitude schema), `@bessel/scene` (FOM/swath/terminator overlays),
 `@bessel/ui` (charting + analysis panels), `@bessel/state` (export + persistence),

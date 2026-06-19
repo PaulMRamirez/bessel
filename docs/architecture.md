@@ -1,6 +1,6 @@
 # Architecture Overview and Package Map
 
-This is the navigable map of the monorepo: the binding layering, the 24 core
+This is the navigable map of the monorepo: the binding layering, the 26 core
 packages with one-line purposes, the data flow, and the cross-cutting mandates.
 The binding decisions behind it are in docs/adr/; the requirements are in SPEC.md
 (visualizer) and docs/STK_PARITY_SPEC.md (analysis engines).
@@ -24,7 +24,7 @@ flowchart TD
   shells --> pal
   ui --> pal
   core --> pal
-  palimpl["PAL implementations: pal-web, pal-electron, pal-capacitor"]
+  palimpl["PAL implementations: pal-web, pal-electron, pal-capacitor, pal-node"]
   palimpl -.implements.-> pal
   shells -.inject one.-> palimpl
 ```
@@ -60,7 +60,11 @@ SPICE engine. Algorithm provenance is in REFERENCES.md.
 
 - `@bessel/propagator`: SGP4 with TLE/OMM ingest, two-body and J2/J4 mean-element
   theory, SPK Type-13 publish, and the native Cowell HPOP (adaptive DOPRI5 with a
-  pluggable force model).
+  pluggable force model). Plus the numerical substrate built on it: dense
+  (continuous) output, switching-function event detection with terminal stops, the
+  co-integrated State Transition Matrix, an Astrogator-class Mission Control
+  Sequence executor with a single-level differential corrector, and the EOP-aware
+  TEME to J2000 (IAU-76/80) transform for SGP4 output.
 - `@bessel/access`: visibility/access windows (line-of-sight, range, facility
   elevation) and chained access.
 - `@bessel/events`: eclipse and lighting intervals.
@@ -81,15 +85,28 @@ SPICE engine. Algorithm provenance is in REFERENCES.md.
 - `@bessel/analysis`: vector-geometry tools and time-series statistics.
 - `@bessel/terrain`: terrain-masked line of sight.
 
+## Core packages: automation
+
+- `@bessel/sdk`: the programmatic automation facade plus a serializable JSON
+  batch-job IR (the `defineJob` builder lowers to the same IR a hand-written job
+  parses into) and a headless `runJob` runner that composes the compute core
+  (furnish kernels, propagate, run an MCS, analyze, export OEM/CSV) deterministically
+  with CI-grade exit codes. Depends only on core packages and the `@bessel/pal`
+  interface; a shell injects the concrete Node IO.
+
 ## PAL and shells
 
 - `@bessel/pal`: the platform-abstraction interface (`KernelSource`, `FileSystem`,
   `Storage`, `Share`). The SPICE engine never reads kernel bytes directly; kernels
   arrive through `KernelSource`.
 - `@bessel/pal-web`, `@bessel/pal-electron`, `@bessel/pal-capacitor`: the three
-  implementations.
+  GUI-shell implementations. `@bessel/pal-node` is the headless Node IO (a
+  directory-backed `KernelSource` plus an output-dir-confined writer) the SDK
+  runner and CLI inject.
 - `apps/web` (the PWA, the reference shell), `apps/desktop` (Electron via
-  electron-vite), `apps/mobile` (Capacitor iOS). Each injects one PAL.
+  electron-vite), `apps/mobile` (Capacitor iOS), and `apps/cli` (the `bessel`
+  headless batch runner over `@bessel/sdk` + `@bessel/pal-node`). Each injects one
+  PAL.
 
 ## Data flow
 

@@ -26,6 +26,19 @@ maintained alongside them, not hand-edited per package.
 - New core analysis packages: `@bessel/propagator`, `access`, `events`, `rf`,
   `coverage`, `conjunction`, `attitude`, `sensors`, `mission`, `map-projection`,
   `interop`, `analysis`, and `terrain`.
+- Numerical substrate in `@bessel/propagator`: dense (continuous Hermite) output,
+  switching-function event detection with terminal stops, and the co-integrated
+  42-state variational State Transition Matrix (`propagateCowellEx`).
+- Astrogator-class Mission Control Sequence in `@bessel/propagator` (`mcs/`): a pure
+  JSON mission IR, an immutable executor, and a single-level differential corrector
+  with an STM-analytic (else finite-difference) Jacobian and damped Newton solve.
+- EOP-aware TEME to J2000 (EME2000/GCRF) transform in `@bessel/propagator`
+  (`frames/`): IAU-1976 precession, the full IAU-1980 nutation, and celestial-pole
+  offsets, validated to sub-meter against the Vallado worked example.
+- Headless automation: `@bessel/sdk` (a JSON batch-job IR, a `defineJob` builder,
+  and a deterministic `runJob` runner with CI-grade exit codes), `@bessel/pal-node`
+  (Node kernel source plus a confined writer), and `apps/cli` (the `bessel` batch
+  runner).
 - F3 foundation in `@bessel/spice`: an EvalSpec time-series interpreter, a
   cancellable-job protocol, a multi-worker SPICE pool, and `recgeo`/`et2lst`
   bindings; the `SpiceWindow` interval algebra and a shared geometry finder in

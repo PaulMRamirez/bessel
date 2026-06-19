@@ -8,9 +8,9 @@ each audience to the right document.
 - New users and educators: [getting-started.md](getting-started.md) (load,
   explore, analyze, export), then [analysis-tools.md](analysis-tools.md).
 - Mission analysts: [analysis-tools.md](analysis-tools.md) (per-tool inputs,
-  outputs, validation, limits), [STK_PARITY_SPEC.md](STK_PARITY_SPEC.md) (the
-  analysis-engine spec and status), and [../REFERENCES.md](../REFERENCES.md) (the
-  algorithm provenance).
+  outputs, validation, limits, plus the headless batch runner and the `bessel`
+  CLI), [STK_PARITY_SPEC.md](STK_PARITY_SPEC.md) (the analysis-engine spec and
+  status), and [../REFERENCES.md](../REFERENCES.md) (the algorithm provenance).
 - Contributors: [architecture.md](architecture.md) (the layering and package
   map), [build-from-source.md](build-from-source.md) (building and the
   CSPICE-WASM relink), [../CONTRIBUTING.md](../CONTRIBUTING.md), the decision

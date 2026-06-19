@@ -133,17 +133,19 @@ bessel/
     timeline/     # @bessel/timeline time model, playback, rate, epoch
     state/        # @bessel/state    view model, URL state serialization
     color/        # @bessel/color    color strategy system (colorScheme hook)
-    pal/          # @bessel/pal      interface + pal-web, pal-capacitor, pal-electron
+    pal/          # @bessel/pal      interface + pal-web, pal-capacitor, pal-electron, pal-node
     ui/           # @bessel/ui       React components, panels, controls
                   # the workspace also contains the analysis-engine packages
                   #   (propagator, access, events, rf, coverage, conjunction,
                   #   attitude, sensors, mission, map-projection, interop, analysis,
-                  #   terrain), specified in docs/STK_PARITY_SPEC.md Section 10
+                  #   terrain) and the headless automation package sdk,
+                  #   specified in docs/STK_PARITY_SPEC.md Section 10
   apps/
     web/          # Vite + vite-plugin-pwa; the canonical build all targets consume
     desktop/      # electron-vite; main, preload, renderer; IPC bridge
     mobile/       # capacitor.config.ts + ios/; webDir -> apps/web/dist
                   #   (Android deferred from gates; architecture unchanged, ADR-0002)
+    cli/          # the bessel headless batch runner over @bessel/sdk + pal-node
   kernels/        # sample meta-kernels + a fetch script (large data git-ignored)
   e2e/            # Playwright cross-target end-to-end tests
   docs/           # spec companion docs: adr, parity matrix, catalog schema, integrations
