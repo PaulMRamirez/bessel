@@ -10,6 +10,15 @@
     "@bessel/pal": "workspace:*",
     "@bessel/spice": "workspace:*",
     "@bessel/propagator": "workspace:*",
-    "@bessel/interop": "workspace:*"
+    "@bessel/interop": "workspace:*",
+    "@bessel/timeline": "workspace:*",
+    "@bessel/events": "workspace:*",
+    "@bessel/access": "workspace:*",
+    "@bessel/rf": "workspace:*",
+    "@bessel/coverage": "workspace:*",
+    "@bessel/catalog": "workspace:*"
+  },
+  "devDependencies": {
+    "ajv": "^8.17.1"
   }
 }

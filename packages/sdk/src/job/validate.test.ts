@@ -31,6 +31,13 @@ describe('validateJob', () => {
     ['unknown propagate method', { ...VALID, operations: [{ op: 'propagate', id: 'e', object: 'SAT', method: 'rk4', grid: { epochs: ['a'] } }] }, '/operations/0/method'],
     ['missing output dir', { ...VALID, output: {} }, '/output/dir'],
     ['bad satellite source kind', { ...VALID, entities: { SAT: { type: 'satellite', source: { kind: 'magic' } } } }, '/entities/SAT/source/kind'],
+    ['eclipse missing body', { ...VALID, operations: [{ op: 'analyzeEclipse', id: 'e', observer: 'x', grid: { epochs: ['a', 'b'] } }] }, '/operations/0/body'],
+    ['bad eclipse condition', { ...VALID, operations: [{ op: 'analyzeEclipse', id: 'e', observer: 'x', body: 'EARTH', grid: { epochs: ['a', 'b'] }, condition: 'dusk' }] }, '/operations/0/condition'],
+    ['access bad facility latitude', { ...VALID, operations: [{ op: 'analyzeAccess', id: 'a', observer: 'x', target: 'y', grid: { epochs: ['a', 'b'] }, facility: { body: 'EARTH', bodyFrame: 'IAU_EARTH', lonDeg: 0, latDeg: 'north', altKm: 0, minElevationDeg: 10 } }] }, '/operations/0/facility/latDeg'],
+    ['link budget missing radio', { ...VALID, operations: [{ op: 'analyzeLinkBudget', id: 'l', observer: 'x', target: 'y', grid: { epochs: ['a', 'b'] } }] }, '/operations/0/radio'],
+    ['link budget bad freq', { ...VALID, operations: [{ op: 'analyzeLinkBudget', id: 'l', observer: 'x', target: 'y', grid: { epochs: ['a', 'b'] }, radio: { eirpDbW: 1, freqHz: 'x', gOverTDbK: 1, dataRateBps: 1 } }] }, '/operations/0/radio/freqHz'],
+    ['loadCatalog missing file', { ...VALID, operations: [{ op: 'loadCatalog' }] }, '/operations/0/file'],
+    ['report from not an array', { ...VALID, operations: [{ op: 'report', from: 'eph', file: 'r.json' }] }, '/operations/0/from'],
   ];
   for (const [label, job, pointer] of cases) {
     it(`rejects: ${label} (pointer ${pointer})`, () => {

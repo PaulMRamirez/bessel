@@ -12,6 +12,8 @@ export interface RunIo {
   readonly kernels: KernelSource;
   /** Write an artifact (path relative to the job's output dir). */
   writeFile(relPath: string, data: Uint8Array): Promise<void>;
+  /** Read a text input (e.g. a catalog). Optional: a job that uses loadCatalog needs it. */
+  readText?(relPath: string): Promise<string>;
 }
 
 export interface ResolvedDefaults {

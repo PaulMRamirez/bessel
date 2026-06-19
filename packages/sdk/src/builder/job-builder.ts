@@ -5,14 +5,19 @@
 import { validateJob } from '../job/validate.ts';
 import type {
   AnalyzeOp,
+  AnalyzeAccessOp,
+  AnalyzeEclipseOp,
+  AnalyzeLinkBudgetOp,
   BatchJob,
   EntityDecl,
   ExportCsvOp,
   ExportOemOp,
   JobDefaults,
+  LoadCatalogOp,
   Operation,
   OutputDecl,
   PropagateOp,
+  ReportOp,
   RunMcsOp,
   SatelliteSource,
 } from '../job/types.ts';
@@ -21,9 +26,14 @@ export interface JobBuilder {
   defaults(d: JobDefaults): JobBuilder;
   satellite(id: string, source: SatelliteSource): JobBuilder;
   furnish(names: readonly string[]): JobBuilder;
+  loadCatalog(args: Omit<LoadCatalogOp, 'op'>): JobBuilder;
   propagate(id: string, op: Omit<PropagateOp, 'op' | 'id'>): JobBuilder;
   runMcs(id: string, op: Omit<RunMcsOp, 'op' | 'id'>): JobBuilder;
   analyze(id: string, op: Omit<AnalyzeOp, 'op' | 'id'>): JobBuilder;
+  analyzeEclipse(id: string, op: Omit<AnalyzeEclipseOp, 'op' | 'id'>): JobBuilder;
+  analyzeAccess(id: string, op: Omit<AnalyzeAccessOp, 'op' | 'id'>): JobBuilder;
+  analyzeLinkBudget(id: string, op: Omit<AnalyzeLinkBudgetOp, 'op' | 'id'>): JobBuilder;
+  report(args: Omit<ReportOp, 'op'>): JobBuilder;
   exportOem(args: Omit<ExportOemOp, 'op'>): JobBuilder;
   exportCsv(args: Omit<ExportCsvOp, 'op'>): JobBuilder;
   output(o: OutputDecl): JobBuilder;
@@ -49,6 +59,10 @@ export function defineJob(meta?: BatchJob['meta']): JobBuilder {
       operations.push({ op: 'furnish', names });
       return builder;
     },
+    loadCatalog(args) {
+      operations.push({ op: 'loadCatalog', ...args });
+      return builder;
+    },
     propagate(id, op) {
       operations.push({ op: 'propagate', id, ...op });
       return builder;
@@ -59,6 +73,22 @@ export function defineJob(meta?: BatchJob['meta']): JobBuilder {
     },
     analyze(id, op) {
       operations.push({ op: 'analyze', id, ...op });
+      return builder;
+    },
+    analyzeEclipse(id, op) {
+      operations.push({ op: 'analyzeEclipse', id, ...op });
+      return builder;
+    },
+    analyzeAccess(id, op) {
+      operations.push({ op: 'analyzeAccess', id, ...op });
+      return builder;
+    },
+    analyzeLinkBudget(id, op) {
+      operations.push({ op: 'analyzeLinkBudget', id, ...op });
+      return builder;
+    },
+    report(args) {
+      operations.push({ op: 'report', ...args });
       return builder;
     },
     exportOem(args) {

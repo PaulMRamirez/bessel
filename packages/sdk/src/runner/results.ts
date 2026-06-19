@@ -3,6 +3,7 @@
 // serialize. (STK_PARITY_SPEC, SDK.)
 
 import type { McsRun } from '@bessel/propagator';
+import type { Window } from '@bessel/timeline';
 
 export type OpResult =
   | {
@@ -19,6 +20,15 @@ export type OpResult =
       readonly et: Float64Array;
       readonly columns: readonly Float64Array[];
       readonly names: readonly string[];
+    }
+  | {
+      readonly kind: 'intervals';
+      /** The interval window (an access/eclipse Gantt) in ET seconds. */
+      readonly window: Window;
+      /** The analysis span [t0, t1] in ET seconds the window was computed over. */
+      readonly span: readonly [number, number];
+      /** A human label for the window (used by report summaries). */
+      readonly label: string;
     }
   | { readonly kind: 'mcs'; readonly run: McsRun; readonly center: string; readonly frame: string }
   | { readonly kind: 'void' };

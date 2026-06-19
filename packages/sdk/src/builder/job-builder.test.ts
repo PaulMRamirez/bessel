@@ -40,4 +40,24 @@ describe('defineJob builder', () => {
   it('throws if output() was never called', () => {
     expect(() => defineJob().furnish(['x']).toJSON()).toThrow(/output/);
   });
+
+  it('lowers the analysis-suite ops to the expected IR', () => {
+    const grid = { start: '2004-07-01T00:00:00', stop: '2004-07-01T06:00:00', stepSec: 60 } as const;
+    const job = defineJob()
+      .loadCatalog({ file: 'mission.json' })
+      .analyzeEclipse('ecl', { observer: '-82', body: 'SATURN', grid })
+      .analyzeAccess('acc', { observer: '-82', target: 'SUN', losBody: 'SATURN', grid })
+      .analyzeLinkBudget('link', { observer: '-82', target: 'EARTH', grid, radio: { eirpDbW: 90, freqHz: 8.4e9, gOverTDbK: 53, dataRateBps: 14000 } })
+      .report({ from: ['ecl', 'acc'], file: 'report.json' })
+      .output({ dir: 'out' })
+      .toJSON();
+
+    expect(job.operations).toEqual([
+      { op: 'loadCatalog', file: 'mission.json' },
+      { op: 'analyzeEclipse', id: 'ecl', observer: '-82', body: 'SATURN', grid },
+      { op: 'analyzeAccess', id: 'acc', observer: '-82', target: 'SUN', losBody: 'SATURN', grid },
+      { op: 'analyzeLinkBudget', id: 'link', observer: '-82', target: 'EARTH', grid, radio: { eirpDbW: 90, freqHz: 8.4e9, gOverTDbK: 53, dataRateBps: 14000 } },
+      { op: 'report', from: ['ecl', 'acc'], file: 'report.json' },
+    ]);
+  });
 });
