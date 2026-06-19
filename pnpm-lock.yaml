@@ -288,6 +288,15 @@ importers:
 
   packages/mission: {}
 
+  packages/od:
+    dependencies:
+      '@bessel/propagator':
+        specifier: workspace:*
+        version: link:../propagator
+      '@bessel/spice':
+        specifier: workspace:*
+        version: link:../spice
+
   packages/pal:
     devDependencies:
       vitest:

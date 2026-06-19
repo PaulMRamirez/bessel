@@ -7,6 +7,7 @@
       "@bessel/spice": ["./packages/spice/src/index.ts"],
       "@bessel/access": ["./packages/access/src/index.ts"],
       "@bessel/propagator": ["./packages/propagator/src/index.ts"],
+      "@bessel/od": ["./packages/od/src/index.ts"],
       "@bessel/events": ["./packages/events/src/index.ts"],
       "@bessel/rf": ["./packages/rf/src/index.ts"],
       "@bessel/coverage": ["./packages/coverage/src/index.ts"],
