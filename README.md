@@ -13,9 +13,8 @@ reference; see docs/analysis-tools.md and docs/STK_PARITY_SPEC.md.
 
 License: Apache-2.0 (LICENSE at the root).
 
-Program objective: a fully featured, production quality, efficient application
-suitable for the NASA-AMMOS product suite alongside MMGIS. The objective is
-enforced by verifiable gates (ADR-0009).
+Program objective: a fully featured, production quality, efficient application.
+The objective is enforced by verifiable gates (ADR-0009).
 
 ## What this repository contains
 
@@ -119,8 +118,6 @@ A by-audience index of all documentation is in docs/README.md.
 - .claudeignore: secrets and bulk kernel data the agent must not touch.
 - .github/workflows/ci.yml: CI running the same gate vocabulary as `pnpm verify`.
 - .size-limit.json, lighthouserc.json: the efficiency budgets (hard gates).
-- docs/integrations.md: the MMGIS deep-link contract, grounded in the MMGIS
-  repository (scripts/fetch-mmgis-reference.sh keeps a local reference copy).
 - CONTRIBUTING.md, CODE_OF_CONDUCT.md, SECURITY.md: governance.
 
 ## House rules
