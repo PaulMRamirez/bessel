@@ -17,8 +17,8 @@ each audience to the right document.
   records in [adr/](adr/), and [../SPEC.md](../SPEC.md).
 - Integrators and mission authors: [catalog-schema.md](catalog-schema.md) (the
   native catalog format), [integrations.md](integrations.md) (the MMGIS deep-link
-  contract and CZML export), and the PAL described in
-  [architecture.md](architecture.md).
+  contract, CZML export, and the MONTE interchange relationship), and the PAL
+  described in [architecture.md](architecture.md).
 
 ## By topic
 
@@ -28,7 +28,8 @@ each audience to the right document.
   [STK_PARITY_SPEC.md](STK_PARITY_SPEC.md), [../REFERENCES.md](../REFERENCES.md).
 - Architecture and build: [architecture.md](architecture.md),
   [build-from-source.md](build-from-source.md), [adr/](adr/).
-- Integration: [integrations.md](integrations.md).
+- Integration: [integrations.md](integrations.md) (MMGIS, CZML, MONTE),
+  [adr/](adr/).
 
 ## Status and specifications
 

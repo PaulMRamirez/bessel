@@ -685,7 +685,7 @@ validated headless core packages, and every Phase B/C analysis domain is now
 **surfaced into the app UI and proven by an end-to-end test**. Every quantity is
 asserted against an independent numeric reference (NAIF SPK/`occult`, Vallado
 SGP4-VER and Lambert, EPSG:3857, analytic Pc/eclipse/footprint forms, ITU/textbook
-RF anchors). 392 unit/contract tests and 22 Playwright e2e; `pnpm verify` and
+RF anchors). 395 unit/contract tests and 22 Playwright e2e; `pnpm verify` and
 `pnpm e2e` green; initial JS and WASM within budget.
 
 Near-term roadmap progress (the F3 foundation and the shadowed-core wiring) is

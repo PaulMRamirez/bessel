@@ -63,6 +63,7 @@ Coverage, maneuvers, and projections:
 Interoperability standards (CCSDS):
 
 - CCSDS 502.0-B, Orbit Data Messages (the OEM and OMM message formats).
+- CCSDS 504.0-B, Attitude Data Messages (the AEM Attitude Ephemeris Message).
 - CCSDS 508.0-B, Conjunction Data Message (CDM).
 
 ## Cosmographia (the incumbent and the compatibility target)
