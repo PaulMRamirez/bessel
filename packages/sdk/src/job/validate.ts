@@ -38,6 +38,16 @@ function validateGrid(v: unknown, ptr: string): void {
   if (step <= 0) throw new JobSchemaError('grid stepSec must be positive', `${ptr}/stepSec`);
 }
 
+function validateFacility(v: unknown, ptr: string): void {
+  const f = assertObject(v, ptr);
+  assertString(f.body, `${ptr}/body`);
+  assertString(f.bodyFrame, `${ptr}/bodyFrame`);
+  assertNumber(f.lonDeg, `${ptr}/lonDeg`);
+  assertNumber(f.latDeg, `${ptr}/latDeg`);
+  assertNumber(f.altKm, `${ptr}/altKm`);
+  assertNumber(f.minElevationDeg, `${ptr}/minElevationDeg`);
+}
+
 function validateOperation(v: unknown, ptr: string): void {
   const o = assertObject(v, ptr);
   const op = assertString(o.op, `${ptr}/op`);
@@ -66,6 +76,46 @@ function validateOperation(v: unknown, ptr: string): void {
       validateGrid(o.grid, `${ptr}/grid`);
       break;
     }
+    case 'analyzeEclipse': {
+      assertString(o.id, `${ptr}/id`);
+      assertString(o.observer, `${ptr}/observer`);
+      assertString(o.body, `${ptr}/body`);
+      validateGrid(o.grid, `${ptr}/grid`);
+      if (o.condition !== undefined) {
+        const c = assertString(o.condition, `${ptr}/condition`);
+        if (c !== 'umbra' && c !== 'penumbra' && c !== 'annular' && c !== 'sunlit') {
+          throw new JobSchemaError(`unknown eclipse condition "${c}"`, `${ptr}/condition`);
+        }
+      }
+      break;
+    }
+    case 'analyzeAccess': {
+      assertString(o.id, `${ptr}/id`);
+      assertString(o.observer, `${ptr}/observer`);
+      assertString(o.target, `${ptr}/target`);
+      validateGrid(o.grid, `${ptr}/grid`);
+      if (o.facility !== undefined) validateFacility(o.facility, `${ptr}/facility`);
+      break;
+    }
+    case 'analyzeLinkBudget': {
+      assertString(o.id, `${ptr}/id`);
+      assertString(o.observer, `${ptr}/observer`);
+      assertString(o.target, `${ptr}/target`);
+      validateGrid(o.grid, `${ptr}/grid`);
+      const radio = assertObject(o.radio, `${ptr}/radio`);
+      assertNumber(radio.eirpDbW, `${ptr}/radio/eirpDbW`);
+      assertNumber(radio.freqHz, `${ptr}/radio/freqHz`);
+      assertNumber(radio.gOverTDbK, `${ptr}/radio/gOverTDbK`);
+      assertNumber(radio.dataRateBps, `${ptr}/radio/dataRateBps`);
+      break;
+    }
+    case 'loadCatalog':
+      assertString(o.file, `${ptr}/file`);
+      break;
+    case 'report':
+      assertArray(o.from, `${ptr}/from`).forEach((f, i) => assertString(f, `${ptr}/from/${i}`));
+      assertString(o.file, `${ptr}/file`);
+      break;
     case 'exportOem':
       assertString(o.from, `${ptr}/from`);
       assertString(o.file, `${ptr}/file`);

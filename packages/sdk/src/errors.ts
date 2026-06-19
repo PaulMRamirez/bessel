@@ -76,3 +76,20 @@ export class McsValidationError extends SdkError {
     this.cause = cause;
   }
 }
+
+/** A loadCatalog op could not read or parse its catalog file. */
+export class CatalogLoadError extends SdkError {
+  override readonly code = 'catalog-load';
+  readonly file: string;
+  override readonly cause: unknown;
+  constructor(file: string, cause: unknown) {
+    super(`catalog "${file}" could not be loaded`);
+    this.file = file;
+    this.cause = cause;
+  }
+}
+
+/** A report op was pointed at a producer that does not exist or cannot be summarized. */
+export class ReportError extends SdkError {
+  override readonly code = 'report';
+}

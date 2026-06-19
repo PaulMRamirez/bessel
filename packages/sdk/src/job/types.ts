@@ -43,7 +43,18 @@ export type SatelliteSource =
       readonly v: readonly [number, number, number]; // km/s
     };
 
-export type Operation = FurnishOp | PropagateOp | RunMcsOp | AnalyzeOp | ExportOemOp | ExportCsvOp;
+export type Operation =
+  | FurnishOp
+  | PropagateOp
+  | RunMcsOp
+  | AnalyzeOp
+  | AnalyzeEclipseOp
+  | AnalyzeAccessOp
+  | AnalyzeLinkBudgetOp
+  | LoadCatalogOp
+  | ReportOp
+  | ExportOemOp
+  | ExportCsvOp;
 
 export interface FurnishOp {
   readonly op: 'furnish';
@@ -81,6 +92,102 @@ export interface AnalyzeOp {
   readonly target: string;
   readonly grid: GridSpec;
   readonly frame?: string;
+}
+
+/**
+ * Eclipse (umbra) interval analysis over a grid: occultation of the Sun by a body, as
+ * seen from the observer, reduced to an interval window. Delegates to @bessel/events.
+ */
+export interface AnalyzeEclipseOp {
+  readonly op: 'analyzeEclipse';
+  readonly id: string;
+  /** Observer (satellite/spacecraft) SPICE id or name. */
+  readonly observer: string;
+  /** Eclipsing central body (e.g. "EARTH", "SATURN"). */
+  readonly body: string;
+  /** Body-fixed frame of the eclipsing body; defaults to IAU_<body>. */
+  readonly bodyFrame?: string;
+  readonly grid: GridSpec;
+  /** Which eclipse condition's intervals to publish; defaults to 'umbra'. */
+  readonly condition?: 'umbra' | 'penumbra' | 'annular' | 'sunlit';
+}
+
+/**
+ * Line-of-sight visibility access over a grid, with an optional ground-facility
+ * elevation mask and an optional range gate, reduced to an interval window. Delegates
+ * to @bessel/access (computeAccess / computeElevationAccess).
+ */
+export interface AnalyzeAccessOp {
+  readonly op: 'analyzeAccess';
+  readonly id: string;
+  /** Observing body/spacecraft (SPICE id or name). */
+  readonly observer: string;
+  /** Observed target (SPICE id or name). */
+  readonly target: string;
+  readonly grid: GridSpec;
+  /** Occulting body for a line-of-sight constraint; defaults to the job center. */
+  readonly losBody?: string;
+  /** Body-fixed frame of the occulting body; defaults to IAU_<losBody>. */
+  readonly losBodyFrame?: string;
+  /** A ground facility (with an elevation mask) the observer must rise above. */
+  readonly facility?: {
+    readonly body: string;
+    readonly bodyFrame: string;
+    readonly lonDeg: number;
+    readonly latDeg: number;
+    readonly altKm: number;
+    readonly minElevationDeg: number;
+  };
+  /** Observer-to-target range gate (km), intersected with the access window. */
+  readonly maxRangeKm?: number;
+  readonly minRangeKm?: number;
+}
+
+/**
+ * Link-budget series over a grid: observer-to-target range from the engine, fed to
+ * @bessel/rf for a per-epoch (range, pathLoss, ebN0, margin) series.
+ */
+export interface AnalyzeLinkBudgetOp {
+  readonly op: 'analyzeLinkBudget';
+  readonly id: string;
+  /** Transmitter (spacecraft) SPICE id or name; the link origin. */
+  readonly observer: string;
+  /** Receiver (e.g. "EARTH") SPICE id or name; range is observer-to-target. */
+  readonly target: string;
+  readonly grid: GridSpec;
+  readonly frame?: string;
+  /** Radio parameters fed to the @bessel/rf link budget per epoch. */
+  readonly radio: {
+    readonly eirpDbW: number;
+    readonly freqHz: number;
+    readonly gOverTDbK: number;
+    readonly dataRateBps: number;
+    readonly otherLossesDb?: number;
+    readonly requiredEbN0Db?: number;
+  };
+}
+
+/**
+ * Load a Cosmographia catalog (read as text through the RunIo) and furnish the kernels
+ * it references. Bridges an authored catalog into the headless run.
+ */
+export interface LoadCatalogOp {
+  readonly op: 'loadCatalog';
+  readonly id?: string;
+  /** Catalog file path resolved through the RunIo readText seam. */
+  readonly file: string;
+}
+
+/**
+ * Reduce a set of prior producer results to a canonical JSON summary file: a stable,
+ * sorted-key digest of each named producer (its kind and headline metrics).
+ */
+export interface ReportOp {
+  readonly op: 'report';
+  readonly id?: string;
+  /** Producer ids to summarize; in declared order. */
+  readonly from: readonly string[];
+  readonly file: string;
 }
 
 export interface ExportOemOp {

@@ -387,6 +387,18 @@ importers:
 
   packages/sdk:
     dependencies:
+      '@bessel/access':
+        specifier: workspace:*
+        version: link:../access
+      '@bessel/catalog':
+        specifier: workspace:*
+        version: link:../catalog
+      '@bessel/coverage':
+        specifier: workspace:*
+        version: link:../coverage
+      '@bessel/events':
+        specifier: workspace:*
+        version: link:../events
       '@bessel/interop':
         specifier: workspace:*
         version: link:../interop
@@ -396,9 +408,19 @@ importers:
       '@bessel/propagator':
         specifier: workspace:*
         version: link:../propagator
+      '@bessel/rf':
+        specifier: workspace:*
+        version: link:../rf
       '@bessel/spice':
         specifier: workspace:*
         version: link:../spice
+      '@bessel/timeline':
+        specifier: workspace:*
+        version: link:../timeline
+    devDependencies:
+      ajv:
+        specifier: ^8.17.1
+        version: 8.20.0
 
   packages/sensors:
     dependencies:

@@ -31,14 +31,29 @@ export function memoryKernelSource(map: ReadonlyMap<string, Uint8Array>): Kernel
   };
 }
 
-/** A RunIo that serves kernels from `kernels` and records writes into the returned map. */
-export function recordingIo(kernels: KernelSource): { io: RunIo; files: Map<string, Uint8Array> } {
+/**
+ * A RunIo that serves kernels from `kernels` and records writes into the returned map.
+ * `texts` (optional) backs the readText seam so a loadCatalog op can read a catalog file.
+ */
+export function recordingIo(
+  kernels: KernelSource,
+  texts?: ReadonlyMap<string, string>,
+): { io: RunIo; files: Map<string, Uint8Array> } {
   const files = new Map<string, Uint8Array>();
   const io: RunIo = {
     kernels,
     async writeFile(relPath: string, data: Uint8Array): Promise<void> {
       files.set(relPath, data);
     },
+    ...(texts
+      ? {
+          async readText(relPath: string): Promise<string> {
+            const text = texts.get(relPath);
+            if (text === undefined) throw new PalError(`text not found: ${relPath}`);
+            return text;
+          },
+        }
+      : {}),
   };
   return { io, files };
 }
