@@ -27,6 +27,7 @@ export { runMcs, runMission, runSegment, type McsRun, type RunOpts } from './exe
 export { createMissionEnv, type MissionEnv, type BodyDynamics } from './env.ts';
 export { coe2rv, rv2coe, trueAnomalyOf, type OrbitElements, type RvPair } from './elements.ts';
 export { vnbBasis, dvToInertial, type VnbBasis } from './frames.ts';
+export { runFiniteBurn, G0_KM_S2, type FiniteBurnResult } from './finite-burn.ts';
 
 export { runDifferentialCorrector, type DcReport, type PerGoalReport } from './corrector/solve.ts';
 export type { DcEvalContext, ResidualEval } from './corrector/residual.ts';

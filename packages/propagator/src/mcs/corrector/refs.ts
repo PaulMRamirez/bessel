@@ -85,6 +85,8 @@ export function bindControls(children: readonly Segment[], controls: readonly Co
 
 function readParam(seg: Segment, param: ControlVar['param']): number {
   if (param.startsWith('Maneuver.dv.')) return (seg as ManeuverSegment).dv[axisOf(param)];
+  if (param === 'Maneuver.duration') return seg.kind === 'Maneuver' ? seg.duration ?? 0 : 0;
+  if (param === 'Maneuver.thrustN') return seg.kind === 'Maneuver' ? seg.thrustN ?? 0 : 0;
   if (param === 'Propagate.maxDuration') return seg.kind === 'Propagate' ? seg.maxDuration : 0;
   if (param === 'InitialState.epoch') return seg.kind === 'InitialState' ? seg.epoch : 0;
   if (seg.kind === 'InitialState' && seg.coord.type === 'Cartesian') {
@@ -98,6 +100,8 @@ function writeParam(seg: Segment, param: ControlVar['param'], value: number): Se
   if (param.startsWith('Maneuver.dv.') && seg.kind === 'Maneuver') {
     return { ...seg, dv: { ...seg.dv, [axisOf(param)]: value } };
   }
+  if (param === 'Maneuver.duration' && seg.kind === 'Maneuver') return { ...seg, duration: value };
+  if (param === 'Maneuver.thrustN' && seg.kind === 'Maneuver') return { ...seg, thrustN: value };
   if (param === 'Propagate.maxDuration' && seg.kind === 'Propagate') return { ...seg, maxDuration: value };
   if (param === 'InitialState.epoch' && seg.kind === 'InitialState') return { ...seg, epoch: value };
   if (seg.kind === 'InitialState' && seg.coord.type === 'Cartesian') {

@@ -12,6 +12,8 @@ const KIND_OF_PARAM: Record<ControlParam, Segment['kind']> = {
   'Maneuver.dv.x': 'Maneuver',
   'Maneuver.dv.y': 'Maneuver',
   'Maneuver.dv.z': 'Maneuver',
+  'Maneuver.duration': 'Maneuver',
+  'Maneuver.thrustN': 'Maneuver',
   'Propagate.maxDuration': 'Propagate',
   'InitialState.epoch': 'InitialState',
   'InitialState.r.x': 'InitialState',

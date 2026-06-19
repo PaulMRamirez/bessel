@@ -8,6 +8,7 @@ import type { MissionEnv } from '../env.ts';
 import type { Segment } from '../segments.ts';
 import type { MissionState, SegmentResult, SegmentStatus, StateSample } from '../state.ts';
 import type { ControlBinding, GoalBinding } from './refs.ts';
+import type { DcReport } from './solve.ts';
 import { StopConditionNeverTriggeredError } from '../errors.ts';
 
 export interface DcEvalContext {
@@ -29,6 +30,12 @@ export interface ResidualEval {
   readonly samples: readonly StateSample[];
   readonly stmAt?: (et: number) => Float64Array;
   readonly stmEpoch?: number;
+  /**
+   * Reports from any nested Target children solved while evaluating this residual (each
+   * inner corrector runs to convergence per outer iteration). The executor's replay also
+   * surfaces these, so this is the in-iteration view for diagnostics.
+   */
+  readonly nestedReports: readonly DcReport[];
 }
 
 export function evaluateResidual(
@@ -48,13 +55,21 @@ export function evaluateResidual(
   const samples: StateSample[] = [];
   let stmAt: ((et: number) => Float64Array) | undefined;
   let stmEpoch: number | undefined;
+  const nestedReports: DcReport[] = [];
   let lastId = 'End';
 
   for (const child of tree) {
     if (child.kind === 'Maneuver') burnStates.set(child.id, state);
     const r = ctx.execOne(child, state, wantStm);
     state = r.out;
-    if (r.stmAt) {
+    if (child.kind === 'Target') {
+      // A nested Target solves its own corrector to convergence here; it publishes no STM,
+      // so any prior coast STM is stale past this point. Drop it (the outer column falls to
+      // finite difference) and collect the inner report.
+      stmAt = undefined;
+      stmEpoch = undefined;
+      if (r.targetReports) nestedReports.push(...r.targetReports);
+    } else if (r.stmAt) {
       stmAt = r.stmAt;
       stmEpoch = r.stmEpoch;
     }
@@ -84,5 +99,5 @@ export function evaluateResidual(
     residualScaled[i] = (raw * goal.weight) / goal.tolerance;
   }
 
-  return { residualScaled, residualRaw, evalStates, burnStates, samples, stmAt, stmEpoch };
+  return { residualScaled, residualRaw, evalStates, burnStates, samples, stmAt, stmEpoch, nestedReports };
 }

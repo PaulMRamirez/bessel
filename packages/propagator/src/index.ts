@@ -28,6 +28,7 @@ export { createForceModel } from './force/model.ts';
 export { pointMass } from './force/point-mass.ts';
 export { zonalHarmonics, type ZonalBody, type ZonalCoeffs } from './force/zonal.ts';
 export { thirdBody, sampledPosition, type PositionAt } from './force/third-body.ts';
+export { constantThrust, type ConstantThrustOptions } from './force/thrust.ts';
 export { IntegrationError, OutOfDomainError, EventError, StmUnsupportedError } from './errors.ts';
 export type { ForceModel, ForceTerm, ForceContext, Vector3, Mat3, AccelPartials } from './force/types.ts';
 

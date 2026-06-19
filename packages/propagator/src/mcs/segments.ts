@@ -63,13 +63,21 @@ export interface PropagateSegment {
 export interface ManeuverSegment {
   readonly kind: 'Maneuver';
   readonly id: SegmentId;
-  /** 'Finite' is reserved (NotImplementedError at execution in the MVP). */
+  /** 'Impulsive' adds the delta-v instantly; 'Finite' propagates a constant-thrust arc. */
   readonly mode: 'Impulsive' | 'Finite';
   readonly attitude: 'VNB' | 'Inertial';
-  /** Delta-v components in the `attitude` frame (km/s). */
+  /**
+   * For an impulsive burn: the delta-v components in the `attitude` frame (km/s). For a
+   * finite burn: the thrust DIRECTION in the `attitude` frame (only its direction is used,
+   * frozen at ignition; magnitude/duration come from thrustN/duration below).
+   */
   readonly dv: Vec3;
-  /** Populated => NotImplementedError (finite-burn reserved). */
+  /** Specific impulse (s). Required for a finite burn; rejected on an impulsive burn. */
   readonly isp?: number;
+  /** Finite burn: thrust magnitude (N). */
+  readonly thrustN?: number;
+  /** Finite burn: burn duration (s). */
+  readonly duration?: number;
 }
 
 export interface TargetSegment {
@@ -103,6 +111,8 @@ export type ControlParam =
   | 'Maneuver.dv.x'
   | 'Maneuver.dv.y'
   | 'Maneuver.dv.z'
+  | 'Maneuver.duration'
+  | 'Maneuver.thrustN'
   | 'Propagate.maxDuration'
   | 'InitialState.epoch'
   | 'InitialState.r.x'
