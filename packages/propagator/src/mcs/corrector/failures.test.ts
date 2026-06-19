@@ -8,7 +8,7 @@ import { runMcs } from '../executor.ts';
 import { createMissionEnv } from '../env.ts';
 import {
   DcNotConvergedError,
-  NotImplementedError,
+  McsError,
   SingularJacobianError,
   StopConditionNeverTriggeredError,
 } from '../errors.ts';
@@ -69,7 +69,7 @@ describe('corrector failure modes', () => {
     expect(() => runMcs(wrap(tgt), env)).toThrow(StopConditionNeverTriggeredError);
   });
 
-  it('throws NotImplementedError for a finite-burn maneuver', () => {
+  it('throws a loud McsError for an under-specified finite burn (no thrust/isp/duration)', () => {
     const tgt: TargetSegment = {
       kind: 'Target',
       id: 'tgt',
@@ -77,11 +77,13 @@ describe('corrector failure modes', () => {
       controls: [{ segment: 'burn', param: 'Maneuver.dv.x', perturbation: 1e-5 }],
       goals: [{ evalAt: 'End', type: 'Radius', desired: 7100, tolerance: 1e-4 }],
       children: [
+        // A Finite burn missing its thrustN/isp/duration must fail loudly, not silently
+        // coast or apply a zero burn.
         { kind: 'Maneuver', id: 'burn', mode: 'Finite', attitude: 'VNB', dv: { x: 0.02, y: 0, z: 0 } },
         { kind: 'Propagate', id: 'coast', model: 'TwoBody', maxDuration: 1500, stop: [{ type: 'Duration', value: 1500 }] },
       ],
     };
-    expect(() => runMcs(wrap(tgt), env)).toThrow(NotImplementedError);
+    expect(() => runMcs(wrap(tgt), env)).toThrow(McsError);
   });
 
   it('throws DcNotConvergedError (with payload) for an unreachable goal in few iterations', () => {

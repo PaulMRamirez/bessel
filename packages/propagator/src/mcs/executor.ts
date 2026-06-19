@@ -12,6 +12,7 @@ import type { MissionState, SegmentResult, SegmentStatus, StateSample } from './
 import { sampleOf, toCartesian, withY6, pushPath } from './state.ts';
 import { coe2rv } from './elements.ts';
 import { applyImpulsive } from './maneuver.ts';
+import { runFiniteBurn } from './finite-burn.ts';
 import { compileStops } from './stop.ts';
 import { propagateCowellEx } from '../cowell.ts';
 import {
@@ -157,6 +158,12 @@ export function runSegment(seg: Segment, input: MissionState | null, env: Missio
       return runPropagate(seg, input, env, opts);
     case 'Maneuver': {
       if (!input) throw new MissingInitialStateError([seg.id]);
+      if (seg.mode === 'Finite') {
+        const baseModel = env.twoBodyModel(input.centralBody);
+        const burn = runFiniteBurn(seg, input, baseModel, env.integratorOptions, 33);
+        const samples = burn.samples.map((p) => ({ et: p.et, state: { position: p.r, velocity: p.v } }));
+        return { out: burn.out, samples, status: { kind: 'ok' }, halt: false };
+      }
       const out = applyImpulsive(input, seg);
       return { out, samples: [sampleOf(out)], status: { kind: 'ok' }, halt: false };
     }

@@ -58,7 +58,19 @@ Mission Control Sequence (`mcs/`, Astrogator-class):
 - `validateMcs`, the `Mcs` IR (`Segment`, `StopCondition`, `ControlVar`, `Goal`,
   `DcSettings`, `DEFAULT_DC_SETTINGS`).
 - `createMissionEnv`, `MissionEnv`, `BodyDynamics`: the SPICE-free dynamics seam.
-- `runDifferentialCorrector`, `DcReport`, and the `McsError` family.
+- `runDifferentialCorrector`, `DcReport`, and the `McsError` family. Targets nest: a
+  Target child inside another Target solves its own corrector to convergence as part of
+  evaluating the outer residual (an inner loop per outer iteration), and both `DcReport`s
+  surface on the run.
+- Finite (continuous-thrust) burns: a `Maneuver` with `mode: 'Finite'` carries `isp` (s),
+  `thrustN` (N), and `duration` (s); its `dv` gives only the thrust DIRECTION (in the
+  `attitude` frame, frozen at ignition). `runFiniteBurn` integrates a 7-state arc
+  `[r, v, m]` under the central-body force model plus a constant-thrust term, with the mass
+  co-integrated via `dm/dt = -T / (Isp * g0)`, so `a_thrust = (T / m(t)) * dirHat` tracks
+  the true instantaneous mass. The post-burn state and depleted mass flow into the next
+  segment; impulsive burns are unchanged. A finite burn's `duration` or `thrustN` may be a
+  corrector control (`Maneuver.duration`, `Maneuver.thrustN`), taken on the
+  finite-difference Jacobian columns. `constantThrust` exposes the bare force term.
 
 Frames (`frames/`):
 
@@ -96,7 +108,11 @@ Tests live in `packages/propagator/src/*.test.ts`. Numeric oracles:
   guard.
 - `mcs/**/*.test.ts`: the differential corrector converges against the vis-viva
   delta-v, a flight-path-angle null, and a pure-STM (zero finite-difference)
-  downrange-radius oracle, plus fail-loud payloads.
+  downrange-radius oracle, plus fail-loud payloads. `finite-burn.test.ts` checks the
+  rocket-equation delta-v and mass change and the quadratic convergence to the impulsive
+  limit; `executor.depth.test.ts` targets a finite-burn duration to a downstream apoapsis
+  and runs a nested (multi-level) corrector where an inner Target nulls a condition while an
+  outer Target hits a radius.
 - `frames/teme.test.ts`: TEME to J2000 validated to sub-meter against the Vallado
   teme2eci worked example, with orthonormality and round-trip oracles.
 - `spherical-harmonics.test.ts`: the NxN field with only C[2][0] = -J2/sqrt(5)
@@ -144,8 +160,8 @@ harmonics (sectoral and tesseral, body-fixed evaluation rotated to inertial),
 atmospheric drag (cannonball with a co-rotating atmosphere and a pluggable
 exponential-atmosphere density model, NRLMSISE-00 ready behind the `DensityModel`
 seam), cannonball solar radiation pressure (cylindrical umbra shadow), and
-third-body. Mean-element propagation covers J2/J4 secular
-rates only (no periodic terms). The MCS corrector is single-level (multi-level
-targeting, finite burns, and gradient optimizers are pending); the TEME to J2000
-transform takes the celestial-pole EOP offsets but the time argument is TT
-approximated from TDB (sub-millisecond).
+third-body. Mean-element propagation covers J2/J4 secular rates only (no periodic
+terms). The MCS corrector supports nested (multi-level) targeting and finite
+(continuous-thrust) burns with mass depletion; gradient optimizers are still
+pending. The TEME to J2000 transform takes the celestial-pole EOP offsets but the
+time argument is TT approximated from TDB (sub-millisecond).

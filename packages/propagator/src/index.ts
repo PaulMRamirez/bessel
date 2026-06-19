@@ -52,6 +52,7 @@ export {
   type SunPositionAt,
 } from './force/srp.ts';
 export { thirdBody, sampledPosition, type PositionAt } from './force/third-body.ts';
+export { constantThrust, type ConstantThrustOptions } from './force/thrust.ts';
 export { IntegrationError, OutOfDomainError, EventError, StmUnsupportedError } from './errors.ts';
 export type { ForceModel, ForceTerm, ForceContext, Vector3, Mat3, AccelPartials } from './force/types.ts';
 
