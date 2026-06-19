@@ -12,7 +12,8 @@
     "@bessel/scene": "workspace:*",
     "@bessel/timeline": "workspace:*",
     "@bessel/state": "workspace:*",
-    "@bessel/color": "workspace:*"
+    "@bessel/color": "workspace:*",
+    "@bessel/map-projection": "workspace:*"
   },
   "peerDependencies": {
     "react": "^18.3.1",

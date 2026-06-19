@@ -31,6 +31,10 @@ export {
 } from './capture.ts';
 export { AppBar, type AppBarProps } from './AppBar.tsx';
 export { PanelContainer, type PanelContainerProps } from './PanelContainer.tsx';
+export { IntervalTimeline, type IntervalTimelineProps } from './IntervalTimeline.tsx';
+export { TimeSeriesChart, type TimeSeriesChartProps } from './TimeSeriesChart.tsx';
+export { GroundTrackMap, type GroundTrackMapProps } from './GroundTrackMap.tsx';
+export { ReportTable, type ReportTableProps } from './ReportTable.tsx';
 export { ThemeToggle, type ThemeToggleProps, type ThemeName } from './ThemeToggle.tsx';
 export { Tooltip, type TooltipProps } from './Tooltip.tsx';
 export { SearchBox, type SearchBoxProps } from './SearchBox.tsx';

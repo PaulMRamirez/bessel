@@ -47,8 +47,9 @@ describe('buildScene', () => {
     expect(target.calls['setSpacecraft']?.[0]).toEqual(['Cassini', undefined]);
     expect(target.calls['setTrajectory']?.[0]).toEqual([[[1, 2, 3]], 'Saturn', undefined]);
     expect(target.calls['setRings']?.[0]).toEqual(['Saturn', 100, 200, undefined, undefined]);
-    expect(target.calls['centerOn']?.[0]).toEqual(['Saturn']);
-    expect(target.calls['setView']?.[0]).toEqual([0.6, 0.35, 0.7]);
+    // A (re)build snaps the camera (animate=false) rather than flying from the old view.
+    expect(target.calls['centerOn']?.[0]).toEqual(['Saturn', false]);
+    expect(target.calls['setView']?.[0]).toEqual([0.6, 0.35, 0.7, false]);
   });
 
   it('passes per-vertex trajectory colors through to setTrajectory', () => {

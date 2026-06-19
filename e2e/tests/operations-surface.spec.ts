@@ -10,12 +10,16 @@ test('operations panel: empty missions, telemetry residual, and guided tour', as
   await page.goto('/');
   await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
 
-  // No bundled missions, and no telemetry until a spacecraft mission is loaded.
+  // Operations now live in the top-bar "Mission" menu. No bundled missions, and no
+  // telemetry until a spacecraft mission is loaded.
+  await page.getByTestId('mission-menu').click();
   await expect(page.getByTestId('panel-ops')).toContainText('none bundled');
   await expect(page.getByTestId('telemetry-residual')).toHaveText('Telemetry: none');
+  await page.keyboard.press('Escape');
 
   // Load a mission (the sample), then telemetry publishes a residual.
   await loadCassiniSample(page);
+  await page.getByTestId('mission-menu').click();
   await expect(page.getByTestId('telemetry-residual')).toContainText('km', { timeout: 10_000 });
 
   // Scripting API: the guided tour starts playback (Play becomes Pause).

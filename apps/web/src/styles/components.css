@@ -149,15 +149,6 @@
   max-width: calc(100% - 6rem);
 }
 
-/* Camera target + view controls live inside the left Camera panel (not floating),
-   so they wrap freely without overlapping the floating instruments toolbar. */
-.bessel-camera-controls {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-}
-
 .bessel-selection {
   color: var(--text-1);
   font-size: 0.8rem;
@@ -289,8 +280,7 @@ button[aria-pressed='true'] {
   font-variant-numeric: tabular-nums;
 }
 
-.bessel-settings,
-.bessel-object-browser ul {
+.bessel-settings {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
@@ -305,11 +295,153 @@ button[aria-pressed='true'] {
   font-weight: 600;
 }
 
-.bessel-object-browser li {
+/* Camera view-mode segmented control ------------------------------------- */
+
+.bessel-view-modes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  margin-bottom: var(--space-2);
+  background: var(--border);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.bessel-view-modes button {
+  border: 0;
+  border-radius: 0;
+  background: var(--bg-2);
+  padding: var(--space-1) var(--space-2);
+  font-size: 0.78rem;
+}
+
+.bessel-view-modes button:hover:not([disabled]) {
+  background: var(--bg-1);
+}
+
+.bessel-view-modes button[aria-pressed='true'] {
+  background: var(--accent-bg);
+  color: var(--accent-text);
+}
+
+.bessel-view-modes button[disabled] {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.bessel-view-modes + .bessel-view-modes {
+  margin-top: calc(-1 * var(--space-1));
+}
+
+/* Object/body rows ------------------------------------------------------- */
+
+.bessel-body-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bessel-body-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-1);
+  gap: var(--space-2);
+  border-left: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  padding-right: var(--space-1);
+}
+
+.bessel-body-row:hover {
+  background: var(--bg-2);
+}
+
+.bessel-body-row:has(.bessel-body-name[aria-current='true']) {
+  border-left-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.bessel-body-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+  margin-left: var(--space-2);
+  background: var(--text-1);
+}
+
+.bessel-body-row[data-kind='spacecraft'] .bessel-body-dot {
+  background: var(--accent);
+  border-radius: 1px;
+}
+
+.bessel-body-row[data-kind='instrument'] .bessel-body-dot {
+  background: transparent;
+  border: 1px solid var(--border-strong);
+}
+
+.bessel-body-name {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) 0;
+  color: var(--text-0);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bessel-body-row[data-visible='false'] .bessel-body-name {
+  color: var(--text-1);
+}
+
+.bessel-body-name[aria-pressed='true'] {
+  font-weight: 600;
+}
+
+.bessel-body-center,
+.bessel-eye {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 1.6rem;
+  height: 1.6rem;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--text-1);
+  line-height: 0;
+}
+
+/* The per-row controls stay quiet until the row is hovered or they are active. */
+.bessel-body-center {
+  opacity: 0;
+}
+
+.bessel-body-row:hover .bessel-body-center,
+.bessel-body-center:focus-visible,
+.bessel-body-center[aria-pressed='true'] {
+  opacity: 1;
+}
+
+.bessel-body-center[aria-pressed='true'] {
+  color: var(--accent);
+}
+
+.bessel-body-center:hover,
+.bessel-eye:hover {
+  color: var(--text-0);
+}
+
+.bessel-eye[aria-checked='false'] {
+  color: var(--border-strong);
 }
 
 /* Timeline scrubber markers --------------------------------------------- */
@@ -367,12 +499,75 @@ button[aria-pressed='true'] {
 }
 
 .bessel-help-button {
-  position: absolute;
-  top: var(--space-2);
-  right: var(--space-2);
   width: 2rem;
   height: 2rem;
   border-radius: 50%;
+  flex: none;
+}
+
+/* Canvas overlay clusters and popovers ----------------------------------- */
+
+.bessel-canvas-topright {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.bessel-popover {
+  position: relative;
+  display: inline-flex;
+}
+
+.bessel-popover-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  min-width: 12rem;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: var(--bg-1);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: var(--space-3);
+  z-index: 30;
+}
+
+.bessel-popover-left {
+  left: 0;
+}
+
+.bessel-popover-right {
+  right: 0;
+}
+
+/* A top-bar menu may stack several panels; separate them with a rule. */
+.bessel-menu-section {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+/* Selection-driven inspector card (floats over the canvas) ---------------- */
+
+.bessel-inspector-card {
+  position: absolute;
+  right: var(--space-2);
+  bottom: var(--space-2);
+  width: 16rem;
+  max-height: 65%;
+  overflow-y: auto;
+  background: var(--bg-1);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  z-index: 25;
 }
 
 /* Theme toggle ----------------------------------------------------------- */
@@ -601,6 +796,148 @@ button[aria-pressed='true'] {
   color: var(--text-1);
   margin: 0;
   font-size: 0.78rem;
+}
+
+.bessel-analysis {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 16rem;
+}
+
+/* Analysis charts (Gantt intervals + time series) ----------------------- */
+
+.bessel-gantt {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.bessel-gantt-track {
+  position: relative;
+  height: 14px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.bessel-gantt-bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 1px;
+  background: var(--accent);
+  opacity: 0.85;
+}
+
+.bessel-gantt-meta {
+  color: var(--text-1);
+  font-size: 0.75rem;
+}
+
+.bessel-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.bessel-chart-line {
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+
+/* The data-provider workbench form and report table. */
+.bessel-report-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 18rem;
+}
+
+.bessel-report-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.75rem;
+  color: var(--text-1);
+}
+
+.bessel-report-grid-inputs {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.bessel-report-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.7rem;
+}
+
+.bessel-report-table th,
+.bessel-report-table td {
+  border: 1px solid var(--border);
+  padding: 2px 6px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.bessel-report-table th {
+  background: var(--bg-2);
+  position: sticky;
+  top: 0;
+}
+
+.bessel-report {
+  max-height: 16rem;
+  overflow: auto;
+}
+
+.bessel-report-meta {
+  margin-top: 4px;
+  font-size: 0.7rem;
+  color: var(--text-1);
+}
+
+/* A compact secondary action under an analysis result (CSV export, etc.). */
+.bessel-csv-button {
+  align-self: flex-start;
+  padding: 2px 8px;
+  font-size: 0.7rem;
+}
+
+/* A scalar analysis readout (conjunction, constellation, transfer, FOM). */
+.bessel-analysis-stat {
+  margin: 0;
+  color: var(--text-1);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+/* 2D equirectangular ground-track overlay. */
+.bessel-groundtrack {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.bessel-groundtrack-bg {
+  fill: var(--bg-2);
+}
+
+.bessel-groundtrack-grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.bessel-groundtrack-line {
+  stroke: var(--accent);
+  stroke-width: 1.5;
 }
 
 /* Utilities -------------------------------------------------------------- */

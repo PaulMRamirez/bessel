@@ -5,11 +5,27 @@
 import { createSpiceEngine, type SpiceEngineOptions } from './engine.ts';
 import type { SpiceEngine } from './index.ts';
 import type { SpiceWorkerRequest, SpiceWorkerResponse } from './protocol.ts';
+import { runEvalSpec } from './eval-series.ts';
 
 export interface SpiceWorkerScope {
   onmessage: ((ev: MessageEvent<SpiceWorkerRequest>) => void) | null;
-  postMessage(message: SpiceWorkerResponse): void;
+  postMessage(message: SpiceWorkerResponse, transfer?: Transferable[]): void;
 }
+
+/**
+ * Buffers to transfer zero-copy: collect every typed-array buffer reachable in the
+ * result (a bare typed array, or an EvalSeriesResult's et + columns), so batched and
+ * series results are handed off rather than copied.
+ */
+function transferList(result: unknown, depth = 0): Transferable[] {
+  if (ArrayBuffer.isView(result)) return [(result as ArrayBufferView).buffer];
+  if (depth > 2 || result === null || typeof result !== 'object') return [];
+  if (Array.isArray(result)) return result.flatMap((v) => transferList(v, depth + 1));
+  return Object.values(result as Record<string, unknown>).flatMap((v) => transferList(v, depth + 1));
+}
+
+/** A macrotask yield so the worker can deliver a queued cancelJob between batches. */
+const macrotaskYield = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
 export async function dispatchSpice(engine: SpiceEngine, req: SpiceWorkerRequest): Promise<unknown> {
   switch (req.method) {
@@ -29,8 +45,54 @@ export async function dispatchSpice(engine: SpiceEngine, req: SpiceWorkerRequest
       return engine.utc2et(req.utc);
     case 'spkpos':
       return engine.spkpos(req.target, req.et, req.frame, req.abcorr, req.observer);
+    case 'spkposBatch':
+      return engine.spkposBatch(req.target, req.etArray, req.frame, req.abcorr, req.observer);
     case 'spkezr':
       return engine.spkezr(req.target, req.et, req.frame, req.abcorr, req.observer);
+    case 'oscelt':
+      return engine.oscelt(req.state, req.et, req.mu);
+    case 'conics':
+      return engine.conics(req.elements, req.et);
+    case 'prop2b':
+      return engine.prop2b(req.mu, req.state, req.dt);
+    case 'gfoclt':
+      return engine.gfoclt(
+        req.occtyp,
+        req.front,
+        req.fshape,
+        req.fframe,
+        req.back,
+        req.bshape,
+        req.bframe,
+        req.abcorr,
+        req.observer,
+        req.step,
+        req.start,
+        req.stop,
+      );
+    case 'gfdist':
+      return engine.gfdist(
+        req.target,
+        req.abcorr,
+        req.observer,
+        req.relate,
+        req.refval,
+        req.step,
+        req.start,
+        req.stop,
+      );
+    case 'occult':
+      return engine.occult(
+        req.targ1,
+        req.shape1,
+        req.frame1,
+        req.targ2,
+        req.shape2,
+        req.frame2,
+        req.abcorr,
+        req.observer,
+        req.et,
+      );
     case 'getfov':
       return engine.getfov(req.instId, req.room);
     case 'bodvrd':
@@ -71,8 +133,31 @@ export async function dispatchSpice(engine: SpiceEngine, req: SpiceWorkerRequest
         req.observer,
         req.point,
       );
+    case 'writeSpkType13':
+      return engine.writeSpkType13(
+        req.name,
+        req.body,
+        req.center,
+        req.frame,
+        req.segid,
+        req.degree,
+        req.et,
+        req.states,
+      );
+    case 'twovec':
+      return engine.twovec(req.axdef, req.indexa, req.plndef, req.indexp);
+    case 'm2q':
+      return engine.m2q(req.matrix);
+    case 'q2m':
+      return engine.q2m(req.quat);
+    case 'raxisa':
+      return engine.raxisa(req.matrix);
     case 'readDsk':
       return engine.readDsk(req.name, req.bytes);
+    case 'recgeo':
+      return engine.recgeo(req.rectan, req.re, req.f);
+    case 'et2lst':
+      return engine.et2lst(req.et, req.body, req.lon, req.lstType);
     case 'tkvrsn':
       return engine.tkvrsn();
   }
@@ -82,20 +167,59 @@ export function installSpiceWorker(scope: SpiceWorkerScope, options?: SpiceEngin
   let enginePromise: Promise<SpiceEngine> | null = null;
   const engine = (): Promise<SpiceEngine> => (enginePromise ??= createSpiceEngine(options));
 
+  // Cancellation tokens for in-flight evalSeries jobs, keyed by the request id.
+  const jobs = new Map<number, { cancelled: boolean }>();
+
+  const ok = (id: number, result: unknown): void =>
+    scope.postMessage({ id, ok: true, result }, transferList(result));
+  const fail = (id: number, err: unknown): void => {
+    const error = err instanceof Error ? err.message : String(err);
+    const shortMessage =
+      err && typeof err === 'object' && 'shortMessage' in err
+        ? String((err as { shortMessage?: unknown }).shortMessage)
+        : undefined;
+    scope.postMessage({ id, ok: false, error, shortMessage });
+  };
+
   scope.onmessage = (ev) => {
     const req = ev.data;
+    // Job control: cancel runs synchronously so a long evalSeries can observe it at
+    // its next yield. It does not need the engine.
+    if (req.method === 'cancelJob') {
+      const token = jobs.get(req.jobId);
+      if (token) token.cancelled = true;
+      ok(req.id, undefined);
+      return;
+    }
+    if (req.method === 'evalSeries') {
+      const token = { cancelled: false };
+      jobs.set(req.id, token);
+      engine()
+        .then((e) =>
+          runEvalSpec(e, req.spec, {
+            yieldNow: macrotaskYield,
+            isCancelled: () => token.cancelled,
+          }),
+        )
+        .then(
+          (result) => {
+            jobs.delete(req.id);
+            ok(req.id, result);
+          },
+          (err: unknown) => {
+            jobs.delete(req.id);
+            fail(req.id, err);
+          },
+        );
+      return;
+    }
     engine()
       .then((e) => dispatchSpice(e, req))
       .then(
-        (result) => scope.postMessage({ id: req.id, ok: true, result }),
-        (err: unknown) => {
-          const error = err instanceof Error ? err.message : String(err);
-          const shortMessage =
-            err && typeof err === 'object' && 'shortMessage' in err
-              ? String((err as { shortMessage?: unknown }).shortMessage)
-              : undefined;
-          scope.postMessage({ id: req.id, ok: false, error, shortMessage });
-        },
+        (result) => ok(req.id, result),
+        (err: unknown) => fail(req.id, err),
       );
   };
 }
+
+export { JobCancelledError } from './eval-series.ts';

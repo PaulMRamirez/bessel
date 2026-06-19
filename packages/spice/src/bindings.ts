@@ -8,10 +8,12 @@ import type { CSpiceModule } from '@bessel/spice/wasm/cspice.mjs';
 import {
   SpiceError,
   type AberrationCorrection,
+  type CartesianState,
   type DskShape,
   type FovResult,
   type IluminResult,
   type InterceptResult,
+  type OsculatingElements,
   type PositionResult,
   type StateVector,
   type SubPointResult,
@@ -125,6 +127,46 @@ export class SpiceBindings {
     return this.mod.UTF8ToString(out);
   }
 
+  /** Rectangular (body-fixed km) to geodetic longitude/latitude (rad) and altitude (km). */
+  recgeo(rectan: Vec3, re: number, f: number): { lon: number; lat: number; alt: number } {
+    const r = this.mod._malloc(24);
+    const lon = this.mod._malloc(8);
+    const lat = this.mod._malloc(8);
+    const alt = this.mod._malloc(8);
+    this.writeVec3(r, rectan);
+    this.call('recgeo_c', r, re, f, lon, lat, alt);
+    this.checkFailed();
+    const result = { lon: this.readDouble(lon), lat: this.readDouble(lat), alt: this.readDouble(alt) };
+    [r, lon, lat, alt].forEach((p) => this.mod._free(p));
+    return result;
+  }
+
+  /** Local solar time at a body-fixed longitude (rad): hour/min/sec and formatted strings. */
+  et2lst(
+    et: number,
+    body: number,
+    lon: number,
+    type: string,
+  ): { hr: number; mn: number; sc: number; time: string; ampm: string } {
+    const len = 64;
+    const hr = this.mod._malloc(4);
+    const mn = this.mod._malloc(4);
+    const sc = this.mod._malloc(4);
+    const time = this.mod._malloc(len);
+    const ampm = this.mod._malloc(len);
+    this.call('et2lst_c', et, body, lon, this.str(type), len, len, hr, mn, sc, time, ampm);
+    this.checkFailed();
+    const result = {
+      hr: this.readInt(hr),
+      mn: this.readInt(mn),
+      sc: this.readInt(sc),
+      time: this.mod.UTF8ToString(time),
+      ampm: this.mod.UTF8ToString(ampm),
+    };
+    [hr, mn, sc, time, ampm].forEach((p) => this.mod._free(p));
+    return result;
+  }
+
   spkpos(
     target: string,
     et: number,
@@ -198,6 +240,388 @@ export class SpiceBindings {
 
   private readVec3(ptr: number): Vec3 {
     return { x: this.readDouble(ptr), y: this.readDouble(ptr + 8), z: this.readDouble(ptr + 16) };
+  }
+
+  /**
+   * Batched spkpos over an epoch array: returns n*3 interleaved positions (km) in a
+   * single call (one worker round-trip instead of n), reusing the string and scratch
+   * allocations across the loop. (STK_PARITY_SPEC F3.)
+   */
+  spkposBatch(
+    target: string,
+    etArray: Float64Array,
+    frame: string,
+    abcorr: AberrationCorrection,
+    observer: string,
+  ): Float64Array {
+    const n = etArray.length;
+    const out = new Float64Array(n * 3);
+    const t = this.str(target);
+    const f = this.str(frame);
+    const a = this.str(abcorr);
+    const o = this.str(observer);
+    const pos = this.mod._malloc(24);
+    const lt = this.mod._malloc(8);
+    for (let k = 0; k < n; k++) {
+      this.call('spkpos_c', t, etArray[k]!, f, a, o, pos, lt);
+      this.checkFailed();
+      out[k * 3] = this.readDouble(pos);
+      out[k * 3 + 1] = this.readDouble(pos + 8);
+      out[k * 3 + 2] = this.readDouble(pos + 16);
+    }
+    this.mod._free(pos);
+    this.mod._free(lt);
+    return out;
+  }
+
+  private writeState(ptr: number, s: CartesianState): void {
+    this.mod.setValue(ptr, s.position.x, 'double');
+    this.mod.setValue(ptr + 8, s.position.y, 'double');
+    this.mod.setValue(ptr + 16, s.position.z, 'double');
+    this.mod.setValue(ptr + 24, s.velocity.x, 'double');
+    this.mod.setValue(ptr + 32, s.velocity.y, 'double');
+    this.mod.setValue(ptr + 40, s.velocity.z, 'double');
+  }
+
+  private readState(ptr: number): CartesianState {
+    return { position: this.readVec3(ptr), velocity: this.readVec3(ptr + 24) };
+  }
+
+  private writeVec3(ptr: number, v: Vec3): void {
+    this.mod.setValue(ptr, v.x, 'double');
+    this.mod.setValue(ptr + 8, v.y, 'double');
+    this.mod.setValue(ptr + 16, v.z, 'double');
+  }
+
+  private readMat3(ptr: number): number[] {
+    const m: number[] = [];
+    for (let i = 0; i < 9; i++) m.push(this.readDouble(ptr + i * 8));
+    return m;
+  }
+
+  private writeMat3(ptr: number, m: readonly number[]): void {
+    for (let i = 0; i < 9; i++) this.mod.setValue(ptr + i * 8, m[i]!, 'double');
+  }
+
+  /** Two-vector attitude (twovec): the rotation whose axis `indexa` aligns with
+   * `axdef` and whose axis `indexp` lies in the axdef-plndef plane (indices 1..3). */
+  twovec(axdef: Vec3, indexa: number, plndef: Vec3, indexp: number): number[] {
+    const ax = this.mod._malloc(24);
+    const pl = this.mod._malloc(24);
+    const out = this.mod._malloc(72);
+    this.writeVec3(ax, axdef);
+    this.writeVec3(pl, plndef);
+    this.call('twovec_c', ax, indexa, pl, indexp, out);
+    this.checkFailed();
+    const m = this.readMat3(out);
+    [ax, pl, out].forEach((p) => this.mod._free(p));
+    return m;
+  }
+
+  /** Rotation matrix -> SPICE quaternion [w, x, y, z] (m2q). */
+  m2q(matrix: readonly number[]): number[] {
+    const r = this.mod._malloc(72);
+    const q = this.mod._malloc(32);
+    this.writeMat3(r, matrix);
+    this.call('m2q_c', r, q);
+    this.checkFailed();
+    const out = [0, 1, 2, 3].map((i) => this.readDouble(q + i * 8));
+    this.mod._free(r);
+    this.mod._free(q);
+    return out;
+  }
+
+  /** SPICE quaternion [w, x, y, z] -> rotation matrix (q2m). */
+  q2m(quat: readonly number[]): number[] {
+    const q = this.mod._malloc(32);
+    const r = this.mod._malloc(72);
+    for (let i = 0; i < 4; i++) this.mod.setValue(q + i * 8, quat[i]!, 'double');
+    this.call('q2m_c', q, r);
+    this.checkFailed();
+    const m = this.readMat3(r);
+    this.mod._free(q);
+    this.mod._free(r);
+    return m;
+  }
+
+  /** Rotation axis and angle of a rotation matrix (raxisa). */
+  raxisa(matrix: readonly number[]): { axis: Vec3; angle: number } {
+    const r = this.mod._malloc(72);
+    const axis = this.mod._malloc(24);
+    const angle = this.mod._malloc(8);
+    this.writeMat3(r, matrix);
+    this.call('raxisa_c', r, axis, angle);
+    this.checkFailed();
+    const result = { axis: this.readVec3(axis), angle: this.readDouble(angle) };
+    [r, axis, angle].forEach((p) => this.mod._free(p));
+    return result;
+  }
+
+  /** Osculating elements (RP,ECC,INC,LNODE,ARGP,M0,T0,MU) of a state about mu. */
+  oscelt(state: CartesianState, et: number, mu: number): OsculatingElements {
+    const st = this.mod._malloc(48);
+    this.writeState(st, state);
+    const elts = this.mod._malloc(64);
+    this.call('oscelt_c', st, et, mu, elts);
+    this.checkFailed();
+    const e: OsculatingElements = {
+      rp: this.readDouble(elts),
+      ecc: this.readDouble(elts + 8),
+      inc: this.readDouble(elts + 16),
+      lnode: this.readDouble(elts + 24),
+      argp: this.readDouble(elts + 32),
+      m0: this.readDouble(elts + 40),
+      t0: this.readDouble(elts + 48),
+      mu: this.readDouble(elts + 56),
+    };
+    this.mod._free(st);
+    this.mod._free(elts);
+    return e;
+  }
+
+  /** Cartesian state from osculating elements, propagated to et. */
+  conics(el: OsculatingElements, et: number): CartesianState {
+    const elts = this.mod._malloc(64);
+    const values = [el.rp, el.ecc, el.inc, el.lnode, el.argp, el.m0, el.t0, el.mu];
+    values.forEach((v, i) => this.mod.setValue(elts + i * 8, v, 'double'));
+    const st = this.mod._malloc(48);
+    this.call('conics_c', elts, et, st);
+    this.checkFailed();
+    const state = this.readState(st);
+    this.mod._free(elts);
+    this.mod._free(st);
+    return state;
+  }
+
+  /** Two-body propagation of a state by dt seconds about gravitational parameter mu. */
+  prop2b(mu: number, state: CartesianState, dt: number): CartesianState {
+    const pv = this.mod._malloc(48);
+    this.writeState(pv, state);
+    const out = this.mod._malloc(48);
+    this.call('prop2b_c', mu, pv, dt, out);
+    this.checkFailed();
+    const result = this.readState(out);
+    this.mod._free(pv);
+    this.mod._free(out);
+    return result;
+  }
+
+  /**
+   * Write an SPK Type 13 (Hermite, unequal step) segment for `body` about `center`
+   * into the in-memory FS and furnsh it, so the propagated arc is queryable through
+   * the identical spkpos/spkezr path. `states` is n*6 interleaved (x,y,z,vx,vy,vz);
+   * `et` is the n epochs (strictly increasing). (STK_PARITY_SPEC PROP-6.)
+   */
+  writeSpkType13(
+    name: string,
+    body: number,
+    center: number,
+    frame: string,
+    segid: string,
+    degree: number,
+    et: Float64Array,
+    states: Float64Array,
+  ): void {
+    const path = `${KERNEL_DIR}/${name}`;
+    if (this.mod.FS.analyzePath(path).exists) this.mod.FS.unlink(path);
+    const n = et.length;
+    if (n < 2 || states.length !== n * 6) {
+      throw new SpiceError(`writeSpkType13: need >=2 epochs and states of length 6n (n=${n})`);
+    }
+    const handlePtr = this.mod._malloc(4);
+    this.call('spkopn_c', this.str(path), this.str(segid.slice(0, 60) || 'BESSEL'), 0, handlePtr);
+    this.checkFailed();
+    const handle = this.readInt(handlePtr);
+
+    const statesPtr = this.mod._malloc(n * 6 * 8);
+    for (let i = 0; i < n * 6; i++) this.mod.setValue(statesPtr + i * 8, states[i]!, 'double');
+    const epochsPtr = this.mod._malloc(n * 8);
+    for (let k = 0; k < n; k++) this.mod.setValue(epochsPtr + k * 8, et[k]!, 'double');
+
+    this.call(
+      'spkw13_c',
+      handle,
+      body,
+      center,
+      this.str(frame),
+      et[0]!,
+      et[n - 1]!,
+      this.str(segid),
+      degree,
+      n,
+      statesPtr,
+      epochsPtr,
+    );
+    this.checkFailed();
+    this.call('spkcls_c', handle);
+    this.checkFailed();
+    [handlePtr, statesPtr, epochsPtr].forEach((p) => this.mod._free(p));
+
+    this.call('furnsh_c', this.str(path));
+    this.checkFailed();
+  }
+
+  // --- SpiceCell windows (geometry-finder confinement and result cells) ---------
+  // A SpiceCell double window is a 9-field struct (36 bytes in wasm32) pointing at
+  // a (CTRLSZ + size) double array; the first CTRLSZ=6 doubles are the control
+  // area, the rest hold interval endpoints. Mirrors the SPICEDOUBLE_CELL macro.
+  private static readonly CELL_CTRLSZ = 6;
+  private static readonly CELL_BYTES = 36;
+
+  /** Allocate a double window cell holding up to `size` endpoints (size/2 intervals). */
+  private makeWindowCell(size: number): { cell: number; data: number } {
+    const ctrl = SpiceBindings.CELL_CTRLSZ;
+    const data = this.mod._malloc((ctrl + size) * 8);
+    for (let i = 0; i < ctrl; i++) this.mod.setValue(data + i * 8, 0, 'double'); // zero control area
+    const cell = this.mod._malloc(SpiceBindings.CELL_BYTES);
+    this.mod.setValue(cell + 0, 1, 'i32'); // dtype = SPICE_DP
+    this.mod.setValue(cell + 4, 0, 'i32'); // length (strings only)
+    this.mod.setValue(cell + 8, size, 'i32'); // size (max elements)
+    this.mod.setValue(cell + 12, 0, 'i32'); // card (current elements)
+    this.mod.setValue(cell + 16, 1, 'i32'); // isSet = SPICETRUE
+    this.mod.setValue(cell + 20, 0, 'i32'); // adjust
+    this.mod.setValue(cell + 24, 0, 'i32'); // init (CSPICE initializes on first use)
+    this.mod.setValue(cell + 28, data, 'i32'); // base
+    this.mod.setValue(cell + 32, data + ctrl * 8, 'i32'); // data (first endpoint)
+    return { cell, data };
+  }
+
+  /** Read a window cell's intervals: card endpoints from the data pointer. */
+  private readWindowCell(cell: number): [number, number][] {
+    const card = this.readInt(cell + 12);
+    const dataPtr = this.readInt(cell + 32);
+    const out: [number, number][] = [];
+    for (let i = 0; i + 1 < card; i += 2) {
+      out.push([this.readDouble(dataPtr + i * 8), this.readDouble(dataPtr + (i + 1) * 8)]);
+    }
+    return out;
+  }
+
+  private freeCell(c: { cell: number; data: number }): void {
+    this.mod._free(c.data);
+    this.mod._free(c.cell);
+  }
+
+  /**
+   * Occultation/eclipse interval finder (gfoclt): intervals over [start,stop] in
+   * which `back` is occulted by `front` as seen from the observer. Returns [s,e]
+   * ET-second intervals.
+   */
+  gfoclt(
+    occtyp: string,
+    front: string,
+    fshape: string,
+    fframe: string,
+    back: string,
+    bshape: string,
+    bframe: string,
+    abcorr: AberrationCorrection,
+    observer: string,
+    step: number,
+    start: number,
+    stop: number,
+    maxIntervals = 1000,
+  ): [number, number][] {
+    const cnfine = this.makeWindowCell(2);
+    this.call('wninsd_c', start, stop, cnfine.cell);
+    this.checkFailed();
+    const result = this.makeWindowCell(2 * maxIntervals);
+    this.call(
+      'gfoclt_c',
+      this.str(occtyp),
+      this.str(front),
+      this.str(fshape),
+      this.str(fframe),
+      this.str(back),
+      this.str(bshape),
+      this.str(bframe),
+      this.str(abcorr),
+      this.str(observer),
+      step,
+      cnfine.cell,
+      result.cell,
+    );
+    this.checkFailed();
+    const intervals = this.readWindowCell(result.cell);
+    this.freeCell(cnfine);
+    this.freeCell(result);
+    return intervals;
+  }
+
+  /**
+   * Distance interval finder (gfdist): intervals over [start,stop] in which the
+   * observer-to-target distance (km) satisfies `relate` (e.g. "<", ">") against
+   * refval. Returns [s,e] ET-second intervals.
+   */
+  gfdist(
+    target: string,
+    abcorr: AberrationCorrection,
+    observer: string,
+    relate: string,
+    refval: number,
+    step: number,
+    start: number,
+    stop: number,
+    maxIntervals = 1000,
+  ): [number, number][] {
+    const cnfine = this.makeWindowCell(2);
+    this.call('wninsd_c', start, stop, cnfine.cell);
+    this.checkFailed();
+    const result = this.makeWindowCell(2 * maxIntervals);
+    this.call(
+      'gfdist_c',
+      this.str(target),
+      this.str(abcorr),
+      this.str(observer),
+      this.str(relate),
+      refval,
+      0, // adjust (used only by ABSMAX/ABSMIN/LOCMAX/LOCMIN)
+      step,
+      maxIntervals,
+      cnfine.cell,
+      result.cell,
+    );
+    this.checkFailed();
+    const intervals = this.readWindowCell(result.cell);
+    this.freeCell(cnfine);
+    this.freeCell(result);
+    return intervals;
+  }
+
+  /**
+   * Instantaneous occultation state (occult) at et: the occultation code for the
+   * configuration of targ1 (shape1/frame1) and targ2 (shape2/frame2) seen from the
+   * observer. Negative = targ1 occulted by targ2; positive = the reverse; 0 = none.
+   */
+  occult(
+    targ1: string,
+    shape1: string,
+    frame1: string,
+    targ2: string,
+    shape2: string,
+    frame2: string,
+    abcorr: AberrationCorrection,
+    observer: string,
+    et: number,
+  ): number {
+    const out = this.mod._malloc(4);
+    this.call(
+      'occult_c',
+      this.str(targ1),
+      this.str(shape1),
+      this.str(frame1),
+      this.str(targ2),
+      this.str(shape2),
+      this.str(frame2),
+      this.str(abcorr),
+      this.str(observer),
+      et,
+      out,
+    );
+    this.checkFailed();
+    const code = this.readInt(out);
+    this.mod._free(out);
+    return code;
   }
 
   getfov(instId: number, room = 16): FovResult {

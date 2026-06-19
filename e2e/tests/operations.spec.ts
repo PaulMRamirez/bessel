@@ -45,11 +45,14 @@ test('object browser, settings, readouts, and multi-select are wired', async ({ 
   expect(selection).toContain('Earth');
   expect(selection).toContain('Jupiter');
 
-  // Settings toggle flips a checkbox (mapped to a scene layer seam).
+  // Settings toggle flips a checkbox (mapped to a scene layer seam). Visualization
+  // toggles live in the canvas "Layers" popover.
+  await page.getByTestId('layers-popover').click();
   const stars = page.getByTestId('setting-stars');
   await expect(stars).toBeChecked();
   await stars.click();
   await expect(stars).not.toBeChecked();
+  await page.getByTestId('layers-popover').click(); // close the popover
 
   // Object browser visibility toggle hides a body.
   const saturnVisible = page.getByTestId('visible-Saturn');

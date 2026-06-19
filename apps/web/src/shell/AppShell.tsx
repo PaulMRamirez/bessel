@@ -13,7 +13,7 @@ export interface AppShellProps {
   readonly actions?: ReactNode;
   readonly left: ReactNode;
   readonly center: ReactNode;
-  readonly right: ReactNode;
+  readonly right?: ReactNode;
   readonly bottom: ReactNode;
 }
 

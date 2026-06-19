@@ -4,16 +4,22 @@
 import {
   SpiceError,
   type AberrationCorrection,
+  type CartesianState,
   type DskShape,
   type FovResult,
+  type GeodeticPoint,
   type IluminResult,
   type InterceptResult,
+  type LocalSolarTime,
   type Mat3,
+  type OsculatingElements,
   type PositionResult,
-  type SpiceEngine,
+  type SpiceComputeEngine,
   type StateVector,
   type SubPointResult,
+  type Vec3,
 } from './index.ts';
+import type { EvalSeriesResult, EvalSpec } from './eval-series.ts';
 import type { SpiceWorkerRequest, SpiceWorkerResponse } from './protocol.ts';
 
 interface Pending {
@@ -25,7 +31,7 @@ interface Pending {
 // shared keys (method) and drops each variant's payload fields.
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 
-export function createSpiceWorkerClient(worker: Worker): SpiceEngine {
+export function createSpiceWorkerClient(worker: Worker): SpiceComputeEngine {
   let nextId = 1;
   const pending = new Map<number, Pending>();
 
@@ -56,8 +62,54 @@ export function createSpiceWorkerClient(worker: Worker): SpiceEngine {
     utc2et: (utc) => send<number>({ method: 'utc2et', utc }),
     spkpos: (target, et, frame, abcorr: AberrationCorrection, observer) =>
       send<PositionResult>({ method: 'spkpos', target, et, frame, abcorr, observer }),
+    spkposBatch: (target, etArray, frame, abcorr: AberrationCorrection, observer) =>
+      send<Float64Array>({ method: 'spkposBatch', target, etArray, frame, abcorr, observer }),
     spkezr: (target, et, frame, abcorr: AberrationCorrection, observer) =>
       send<StateVector>({ method: 'spkezr', target, et, frame, abcorr, observer }),
+    oscelt: (state, et, mu) => send<OsculatingElements>({ method: 'oscelt', state, et, mu }),
+    conics: (elements, et) => send<CartesianState>({ method: 'conics', elements, et }),
+    prop2b: (mu, state, dt) => send<CartesianState>({ method: 'prop2b', mu, state, dt }),
+    gfoclt: (occtyp, front, fshape, fframe, back, bshape, bframe, abcorr, observer, step, start, stop) =>
+      send<[number, number][]>({
+        method: 'gfoclt',
+        occtyp,
+        front,
+        fshape,
+        fframe,
+        back,
+        bshape,
+        bframe,
+        abcorr,
+        observer,
+        step,
+        start,
+        stop,
+      }),
+    gfdist: (target, abcorr, observer, relate, refval, step, start, stop) =>
+      send<[number, number][]>({
+        method: 'gfdist',
+        target,
+        abcorr,
+        observer,
+        relate,
+        refval,
+        step,
+        start,
+        stop,
+      }),
+    occult: (targ1, shape1, frame1, targ2, shape2, frame2, abcorr, observer, et) =>
+      send<number>({
+        method: 'occult',
+        targ1,
+        shape1,
+        frame1,
+        targ2,
+        shape2,
+        frame2,
+        abcorr,
+        observer,
+        et,
+      }),
     getfov: (instId, room) => send<FovResult>({ method: 'getfov', instId, room }),
     bodvrd: (body, item) => send<number[]>({ method: 'bodvrd', body, item }),
     bodvcd: (bodyId, item) => send<number[]>({ method: 'bodvcd', bodyId, item }),
@@ -96,7 +148,30 @@ export function createSpiceWorkerClient(worker: Worker): SpiceEngine {
         observer,
         point,
       }),
+    writeSpkType13: (name, body, center, frame, segid, degree, et, states) =>
+      send<void>({ method: 'writeSpkType13', name, body, center, frame, segid, degree, et, states }),
+    twovec: (axdef, indexa, plndef, indexp) => send<Mat3>({ method: 'twovec', axdef, indexa, plndef, indexp }),
+    m2q: (matrix) => send<number[]>({ method: 'm2q', matrix }),
+    q2m: (quat) => send<Mat3>({ method: 'q2m', quat }),
+    raxisa: (matrix) => send<{ axis: Vec3; angle: number }>({ method: 'raxisa', matrix }),
     readDsk: (name, bytes) => send<DskShape>({ method: 'readDsk', name, bytes }),
+    recgeo: (rectan, re, f) => send<GeodeticPoint>({ method: 'recgeo', rectan, re, f }),
+    et2lst: (et, body, lon, lstType) =>
+      send<LocalSolarTime>({ method: 'et2lst', et, body, lon, lstType }),
     tkvrsn: () => send<string>({ method: 'tkvrsn' }),
+    evalSeries: (spec: EvalSpec, signal?: AbortSignal): Promise<EvalSeriesResult> => {
+      const id = nextId++;
+      const promise = new Promise<EvalSeriesResult>((resolve, reject) => {
+        pending.set(id, { resolve: resolve as (v: unknown) => void, reject });
+        worker.postMessage({ method: 'evalSeries', spec, id } as SpiceWorkerRequest);
+      });
+      if (signal) {
+        const cancel = (): void =>
+          worker.postMessage({ method: 'cancelJob', jobId: id, id: nextId++ } as SpiceWorkerRequest);
+        if (signal.aborted) cancel();
+        else signal.addEventListener('abort', cancel, { once: true });
+      }
+      return promise;
+    },
   };
 }

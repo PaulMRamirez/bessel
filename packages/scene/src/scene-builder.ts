@@ -51,8 +51,8 @@ export interface SceneTarget {
   setKeplerianSwarms(specs: readonly KeplerianSwarmSpec[]): void;
   setTimeSwitched(specs: readonly TimeSwitchedSpec[]): void;
   setLabels(specs: readonly { id: string; text: string; anchorBody: string }[]): void;
-  centerOn(name: string): void;
-  setView(azimuth: number, elevation: number, distance: number): void;
+  centerOn(name: string, animate?: boolean): void;
+  setView(azimuth: number, elevation: number, distance: number, animate?: boolean): void;
 }
 
 export function buildScene(target: SceneTarget, spec: SceneSpec): void {
@@ -116,8 +116,9 @@ export function buildScene(target: SceneTarget, spec: SceneSpec): void {
   }
 
   if (spec.camera) {
-    target.centerOn(spec.camera.focus);
-    target.setView(spec.camera.azimuth, spec.camera.elevation, spec.camera.distance);
+    // Snap on (re)build: a new mission should not fly from the old view.
+    target.centerOn(spec.camera.focus, false);
+    target.setView(spec.camera.azimuth, spec.camera.elevation, spec.camera.distance, false);
   }
 }
 

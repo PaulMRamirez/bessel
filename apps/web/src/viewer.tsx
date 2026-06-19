@@ -29,6 +29,10 @@ import { createAppStore, useStore, type AppStore } from './store/index.ts';
 import { useBesselEngine } from './engine/index.ts';
 import { createMissionRegistry } from './missions.ts';
 import { AppShell } from './shell/index.ts';
+import { Popover } from './overlays/Popover.tsx';
+import { AnalysisPanel } from './panels/AnalysisPanel.tsx';
+import { PropagatePanel } from './panels/PropagatePanel.tsx';
+import { ReportPanel } from './panels/ReportPanel.tsx';
 
 const SPICE_IDS: Readonly<Record<string, string>> = Object.fromEntries(
   SOLAR_SYSTEM.map((p) => [p.name, p.spiceId]),
@@ -55,6 +59,7 @@ export function BesselViewer(): JSX.Element {
   const fovOk = useStore(store, (s) => s.fovOk);
   const selection = useStore(store, (s) => s.selection);
   const track = useStore(store, (s) => s.track);
+  const cameraMode = useStore(store, (s) => s.cameraMode);
   const settings = useStore(store, (s) => s.settings);
   const visibility = useStore(store, (s) => s.visibility);
   const readouts = useStore(store, (s) => s.readouts);
@@ -87,13 +92,6 @@ export function BesselViewer(): JSX.Element {
     return q ? objects.filter((e) => e.name.toLowerCase().includes(q)) : objects;
   }, [query, objects]);
 
-  // "Center on" targets come from the loaded mission (bodies and spacecraft), so
-  // there is no hardcoded body list and they update when a catalog loads.
-  const centerTargets = useMemo(
-    () => objects.filter((e) => e.kind !== 'instrument').map((e) => e.name),
-    [objects],
-  );
-
   // The bundled missions come from the plugin registry (surfacing it in the shell).
   const registryRef = useRef(createMissionRegistry());
   const missions = useMemo(
@@ -104,8 +102,13 @@ export function BesselViewer(): JSX.Element {
   const focusEntry = objects.find((e) => e.id === focus);
   const inspectorFields = [{ label: 'SPICE id', value: SPICE_IDS[focus] ?? '-' }];
 
+  // Spacecraft-only chrome (instrument and tracking controls, mission event
+  // markers) appears only once a mission with a spacecraft is loaded, so the
+  // default solar-system view stays uncluttered.
+  const hasSpacecraft = objects.some((e) => e.kind === 'spacecraft');
+
   const annotations =
-    bounds[1] > bounds[0]
+    hasSpacecraft && bounds[1] > bounds[0]
       ? [
           {
             id: 'soi',
@@ -116,41 +119,74 @@ export function BesselViewer(): JSX.Element {
       : [];
 
   const actions = (
-    <Tooltip label="Toggle light / dark theme">
-      <ThemeToggle theme={theme} onToggle={toggleTheme} />
-    </Tooltip>
-  );
-
-  const left = (
     <>
-      <PanelContainer title="Mission" testId="panel-mission">
+      <Popover label="Mission" title="Mission and operations" align="right" testId="mission-menu">
         <CatalogLoader
           onLoad={(file) => void engine?.loadCatalog(file)}
           status={loadedName ? `Loaded ${loadedName}: ${objects.length} objects` : null}
           error={loadError}
         />
-      </PanelContainer>
-      <PanelContainer title="Objects" testId="panel-objects">
-        <SearchBox value={query} onChange={setQuery} placeholder="Filter objects" />
-        <ObjectBrowser
-          entries={filteredEntries}
-          selection={selection}
-          visibility={visibility}
-          onToggleSelect={(id) => engine?.toggleSelectObject(id)}
-          onToggleVisible={(id, visible) => engine?.toggleVisibleObject(id, visible)}
+        <div className="bessel-menu-section" data-testid="panel-ops">
+          <OpsPanel
+            missions={missions}
+            onLoadMission={(id) => void engine?.loadMission(registryRef.current, id)}
+            onRunTour={() => engine?.runTour()}
+            telemetryResidualKm={telemetryResidualKm}
+          />
+        </div>
+      </Popover>
+      <Popover label="Capture" title="Capture" align="right" testId="capture-menu">
+        <CaptureControls
+          recording={recording}
+          onCaptureStill={() => engine?.captureStill()}
+          onToggleRecording={() => engine?.toggleRecording()}
         />
-      </PanelContainer>
-      <PanelContainer title="Camera" testId="panel-camera">
-        <ViewControls
-          bodies={centerTargets}
-          focus={focus}
-          onCenter={(b) => engine?.centerOn(b)}
-          onViewTopDown={() => engine?.viewTopDown()}
-          onViewFromSun={() => engine?.viewFromSun()}
-          onViewAlongVelocity={() => engine?.viewAlongVelocity()}
+      </Popover>
+      <Popover label="Propagate" title="Orbit propagation" align="right" testId="propagate-menu">
+        <PropagatePanel engine={engine} store={store} />
+      </Popover>
+      <Popover label="Report" title="Data-provider workbench" align="right" testId="report-menu">
+        <ReportPanel engine={engine} store={store} />
+      </Popover>
+      <Popover label="Views" title="Saved views" align="right" testId="views-menu">
+        <BookmarksPanel
+          bookmarks={bookmarks}
+          onSave={(name) => void engine?.saveBookmark(name)}
+          onApply={(id) => void engine?.applyBookmark(id)}
+          onDelete={(id) => void engine?.deleteBookmark(id)}
         />
-      </PanelContainer>
+      </Popover>
+      {hasSpacecraft ? (
+        <Popover label="Analysis" title="Analysis" align="right" testId="analysis-menu">
+          <AnalysisPanel engine={engine} store={store} />
+        </Popover>
+      ) : null}
+      <Tooltip label="Toggle light / dark theme">
+        <ThemeToggle theme={theme} onToggle={toggleTheme} />
+      </Tooltip>
     </>
+  );
+
+  const left = (
+    <PanelContainer title="Objects" testId="panel-objects">
+      <SearchBox value={query} onChange={setQuery} placeholder="Filter objects" />
+      <ViewControls
+        onViewTopDown={() => engine?.viewTopDown()}
+        onViewFromSun={() => engine?.viewFromSun()}
+        onViewAlongVelocity={hasSpacecraft ? () => engine?.viewAlongVelocity() : undefined}
+        mode={cameraMode}
+        onMode={(m) => engine?.setCameraMode(m)}
+      />
+      <ObjectBrowser
+        entries={filteredEntries}
+        focus={focus}
+        selection={selection}
+        visibility={visibility}
+        onToggleSelect={(id) => engine?.toggleSelectObject(id)}
+        onToggleVisible={(id, visible) => engine?.toggleVisibleObject(id, visible)}
+        onCenter={(id) => engine?.centerOn(id)}
+      />
+    </PanelContainer>
   );
 
   const center = (
@@ -174,22 +210,26 @@ export function BesselViewer(): JSX.Element {
         {status}
       </div>
       <div className="bessel-viewcontrols" role="group" aria-label="Instruments and sharing">
-        <button
-          type="button"
-          onClick={() => engine?.toggleInstruments()}
-          aria-pressed={instruments}
-          data-testid="toggle-instruments"
-        >
-          {instruments ? 'Hide instruments' : 'Show instruments'}
-        </button>
-        <button
-          type="button"
-          onClick={() => engine?.toggleTrack()}
-          aria-pressed={track}
-          data-testid="toggle-track"
-        >
-          {track ? 'Stop tracking' : 'Track spacecraft'}
-        </button>
+        {hasSpacecraft && (
+          <>
+            <button
+              type="button"
+              onClick={() => engine?.toggleInstruments()}
+              aria-pressed={instruments}
+              data-testid="toggle-instruments"
+            >
+              {instruments ? 'Hide instruments' : 'Show instruments'}
+            </button>
+            <button
+              type="button"
+              onClick={() => engine?.toggleTrack()}
+              aria-pressed={track}
+              data-testid="toggle-track"
+            >
+              {track ? 'Stop tracking' : 'Track spacecraft'}
+            </button>
+          </>
+        )}
         <button type="button" onClick={() => void engine?.share()} data-testid="share">
           Share view
         </button>
@@ -197,61 +237,39 @@ export function BesselViewer(): JSX.Element {
           {selection.length ? `Selected: ${selection.join(', ')}` : 'No selection'}
         </span>
       </div>
-      <button
-        type="button"
-        className="bessel-help-button"
-        onClick={() => engine?.setHelpOpen(true)}
-        aria-label="Keyboard shortcuts help"
-        data-testid="help-button"
-      >
-        ?
-      </button>
+      <div className="bessel-canvas-topright">
+        <Popover label="Layers" title="Visualization layers" align="right" testId="layers-popover">
+          <SettingsPanel settings={settings} onChange={(k, v) => engine?.setSetting(k, v)} />
+        </Popover>
+        <button
+          type="button"
+          className="bessel-help-button"
+          onClick={() => engine?.setHelpOpen(true)}
+          aria-label="Keyboard shortcuts help"
+          data-testid="help-button"
+        >
+          ?
+        </button>
+      </div>
       <KeyboardHelp open={helpOpen} onClose={() => engine?.setHelpOpen(false)} />
+      {selection.length > 0 ? (
+        <aside
+          className="bessel-inspector-card"
+          aria-label="Selection details"
+          data-testid="inspector-card"
+        >
+          <ObjectInspector name={focus} kind={focusEntry?.kind} fields={inspectorFields} />
+          <ReadoutPanel target={focus} readouts={readouts} />
+          <MeasurePanel
+            from={measurement?.from ?? null}
+            to={measurement?.to ?? null}
+            distanceKm={measurement?.distanceKm ?? null}
+            relativeSpeedKmS={measurement?.relativeSpeedKmS ?? null}
+            angleDeg={measurement?.angleDeg ?? null}
+          />
+        </aside>
+      ) : null}
     </div>
-  );
-
-  const right = (
-    <>
-      <PanelContainer title="Visualization" testId="panel-visualization">
-        <SettingsPanel settings={settings} onChange={(k, v) => engine?.setSetting(k, v)} />
-      </PanelContainer>
-      <PanelContainer title="Selection" testId="panel-selection">
-        <ObjectInspector name={focus} kind={focusEntry?.kind} fields={inspectorFields} />
-        <ReadoutPanel target={focus} readouts={readouts} />
-      </PanelContainer>
-      <PanelContainer title="Measure" testId="panel-measure">
-        <MeasurePanel
-          from={measurement?.from ?? null}
-          to={measurement?.to ?? null}
-          distanceKm={measurement?.distanceKm ?? null}
-          relativeSpeedKmS={measurement?.relativeSpeedKmS ?? null}
-          angleDeg={measurement?.angleDeg ?? null}
-        />
-      </PanelContainer>
-      <PanelContainer title="Operations" testId="panel-ops">
-        <OpsPanel
-          missions={missions}
-          onLoadMission={(id) => void engine?.loadMission(registryRef.current, id)}
-          onRunTour={() => engine?.runTour()}
-          telemetryResidualKm={telemetryResidualKm}
-        />
-      </PanelContainer>
-      <PanelContainer title="Saved views" testId="panel-views">
-        <BookmarksPanel
-          bookmarks={bookmarks}
-          onSave={(name) => void engine?.saveBookmark(name)}
-          onApply={(id) => void engine?.applyBookmark(id)}
-          onDelete={(id) => void engine?.deleteBookmark(id)}
-        />
-      </PanelContainer>
-      <PanelContainer title="Capture" testId="panel-capture">
-        <CaptureControls
-          recording={recording}
-          onCaptureStill={() => engine?.captureStill()}
-          onToggleRecording={() => engine?.toggleRecording()}
-        />
-      </PanelContainer>
-    </>
   );
 
   const bottom = (
@@ -277,7 +295,6 @@ export function BesselViewer(): JSX.Element {
       actions={actions}
       left={left}
       center={center}
-      right={right}
       bottom={bottom}
     />
   );

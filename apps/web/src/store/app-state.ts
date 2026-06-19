@@ -22,6 +22,39 @@ export interface AppState {
   focus: string;
   selection: readonly string[];
   track: boolean;
+  /** Base camera mode; spacecraft tracking overrides it while active. */
+  cameraMode: 'orbit' | 'sync' | 'free';
+  /** Eclipse (umbra) intervals from the last lighting analysis, with their span. */
+  eclipseUmbra: readonly (readonly [number, number])[] | null;
+  eclipseSpan: readonly [number, number] | null;
+  /** Range time series (spacecraft to center body) from the last range analysis. */
+  rangeSeries: Series | null;
+  /** Line-of-sight access windows (spacecraft to the Sun) from the last access run. */
+  accessWindow: readonly (readonly [number, number])[] | null;
+  accessSpan: readonly [number, number] | null;
+  accessLabel: string;
+  /** Figure-of-merit reduction of the access window (coverage %, gaps), or null. */
+  accessFom: AccessFom | null;
+  /** Downlink Eb/N0 (dB) time series (spacecraft to Earth) from the last link run. */
+  linkSeries: Series | null;
+  /** Closest-approach + collision-probability summary from the last conjunction run. */
+  conjunction: ConjunctionResult | null;
+  /** Walker constellation summary from the last coverage/constellation run. */
+  constellation: ConstellationResult | null;
+  /** Eigen-axis slew angle (deg) over time from the last attitude run. */
+  slewSeries: Series | null;
+  /** Lambert transfer summary (delta-v) from the last maneuver-design run. */
+  transfer: TransferResult | null;
+  /** Sub-spacecraft ground track (lon/lat radians) from the last ground-track run. */
+  groundTrack: GroundTrack | null;
+  /** SGP4-propagated TLE orbit (altitude series + ground track) from the last run. */
+  tleOrbit: TleOrbit | null;
+  /** Ground-station visible-pass windows (elevation mask intersected with sunlit). */
+  stationAccess: StationAccess | null;
+  /** Altitude (km) from a numerical (HPOP, 2-body + J2) propagation of the TLE state. */
+  hpopAltitude: Series | null;
+  /** The last data-provider workbench report (table + raw series for CSV export). */
+  report: ReportResult | null;
   // Instruments.
   instruments: boolean;
   footprintPoints: number;
@@ -47,6 +80,84 @@ export interface AppState {
   bookmarks: readonly Bookmark[];
 }
 
+export interface Series {
+  /** Sample epochs (ET seconds) and the measured quantity at each (km, dB, ...). */
+  readonly et: Float64Array;
+  readonly value: Float64Array;
+  /** What the series measures, for the panel label (e.g. "Cassini to Saturn (km)"). */
+  readonly label: string;
+}
+
+export interface AccessFom {
+  /** Covered fraction of the span, in [0, 1]. */
+  readonly percentCoverage: number;
+  readonly accessCount: number;
+  readonly maxGapSec: number;
+}
+
+export interface ConjunctionResult {
+  /** Time of closest approach relative to the current epoch (s). */
+  readonly tcaSec: number;
+  readonly missKm: number;
+  readonly relSpeedKmS: number;
+  /** 2D probability of collision under an assumed covariance and hard-body radius. */
+  readonly pc: number;
+  readonly label: string;
+}
+
+export interface ConstellationResult {
+  readonly totalSats: number;
+  readonly planes: number;
+  readonly perPlane: number;
+  readonly pattern: 'delta' | 'star';
+  /** Inclination (deg) and altitude (km) of the generated Walker pattern. */
+  readonly inclinationDeg: number;
+  readonly altitudeKm: number;
+}
+
+export interface TransferResult {
+  /** Total impulsive delta-v of the Lambert transfer (km/s). */
+  readonly deltaVKmS: number;
+  /** Departure-to-arrival time of flight (hours). */
+  readonly tofHours: number;
+  readonly label: string;
+}
+
+export interface GroundTrack {
+  /** Sub-spacecraft longitude and latitude samples (radians). */
+  readonly lon: Float64Array;
+  readonly lat: Float64Array;
+  readonly label: string;
+}
+
+export interface ReportResult {
+  /** Column headers (with units), e.g. ["UTC", "range (km)"]. */
+  readonly headers: readonly string[];
+  /** Display rows (downsampled): a UTC label plus the column values. */
+  readonly rows: readonly (readonly (string | number)[])[];
+  /** The full series backing the report, for CSV export. */
+  readonly series: { readonly et: Float64Array; readonly columns: Float64Array[]; readonly names: string[] };
+  readonly label: string;
+}
+
+export interface StationAccess {
+  /** Visible-pass intervals (ET seconds): above the elevation mask and sunlit. */
+  readonly window: readonly (readonly [number, number])[];
+  readonly span: readonly [number, number];
+  readonly fom: AccessFom;
+  readonly label: string;
+}
+
+export interface TleOrbit {
+  /** Altitude above the Earth ellipsoid over one day (km vs ET). */
+  readonly altitude: Series;
+  /** Sub-satellite ground track (lon/lat radians) over one day. */
+  readonly track: GroundTrack;
+  /** Orbit period (minutes) from the TLE mean motion. */
+  readonly periodMin: number;
+  readonly label: string;
+}
+
 export interface Measurement {
   readonly from: string;
   readonly to: string;
@@ -65,9 +176,29 @@ export const initialAppState: AppState = {
   et: 0,
   bounds: [0, 1],
   epochLabel: '',
-  focus: 'Saturn',
+  // Default to a heliocentric whole-system view; a loaded mission recenters on
+  // its own center body.
+  focus: 'Sun',
   selection: [],
   track: false,
+  cameraMode: 'orbit',
+  eclipseUmbra: null,
+  eclipseSpan: null,
+  rangeSeries: null,
+  accessWindow: null,
+  accessSpan: null,
+  accessLabel: '',
+  accessFom: null,
+  linkSeries: null,
+  conjunction: null,
+  constellation: null,
+  slewSeries: null,
+  transfer: null,
+  groundTrack: null,
+  tleOrbit: null,
+  stationAccess: null,
+  hpopAltitude: null,
+  report: null,
   instruments: false,
   footprintPoints: 0,
   fovOk: false,

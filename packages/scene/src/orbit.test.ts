@@ -3,7 +3,7 @@
 // right size; a hyperbolic state yields nothing to draw.
 
 import { describe, it, expect } from 'vitest';
-import { orbitEllipse } from './orbit.ts';
+import { orbitEllipse, orbitPeriod } from './orbit.ts';
 
 const MU = 1.0; // unit gravity for clean numbers
 
@@ -48,5 +48,25 @@ describe('orbitEllipse', () => {
   it('returns nothing for a degenerate state', () => {
     expect(orbitEllipse([0, 0, 0], [0, 1, 0], MU)).toEqual([]);
     expect(orbitEllipse([1, 0, 0], [1, 0, 0], MU)).toEqual([]); // radial
+  });
+});
+
+describe('orbitPeriod', () => {
+  it('gives 2*pi for a unit circular orbit (a=1, mu=1)', () => {
+    // T = 2*pi*sqrt(a^3/mu); a=1, mu=1 -> 2*pi.
+    expect(orbitPeriod([1, 0, 0], [0, 1, 0], MU)).toBeCloseTo(2 * Math.PI, 9);
+  });
+
+  it('scales with the semi-major axis via Kepler III', () => {
+    // Circular orbit at r=4: a=4, T = 2*pi*sqrt(64) = 16*pi.
+    expect(orbitPeriod([4, 0, 0], [0, Math.sqrt(MU / 4), 0], MU)).toBeCloseTo(16 * Math.PI, 6);
+  });
+
+  it('returns null for an unbound (hyperbolic) state', () => {
+    expect(orbitPeriod([1, 0, 0], [0, 2, 0], MU)).toBeNull();
+  });
+
+  it('returns null for a degenerate state', () => {
+    expect(orbitPeriod([0, 0, 0], [0, 1, 0], MU)).toBeNull();
   });
 });

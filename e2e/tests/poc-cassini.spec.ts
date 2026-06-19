@@ -52,9 +52,11 @@ test('poc-cassini renders the trajectory and the timeline changes the frame', as
   expect(sizing.cssW).toBeGreaterThan(0);
   expect(sizing.bufW / sizing.bufH).toBeCloseTo(sizing.cssW / sizing.cssH, 2);
 
-  // The neutral scene draws planet orbit paths (toggleable) and offers a top-down
-  // view; neither is Cassini-specific.
+  // The neutral scene draws planet orbit paths (toggleable, in the Layers popover)
+  // and offers a top-down view; neither is Cassini-specific.
+  await page.getByTestId('layers-popover').click();
   await expect(page.getByTestId('setting-orbits')).toBeChecked();
+  await page.getByTestId('layers-popover').click(); // close before using the canvas
   await expect(page.getByTestId('view-top-down')).toBeVisible();
   await page.getByTestId('view-top-down').click();
   await page.waitForTimeout(300);

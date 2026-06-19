@@ -14,6 +14,17 @@ function displayKey(key: string): string {
   return key.replace('Arrow', '');
 }
 
+// Mouse and camera controls handled directly by the engine (not the keymap).
+const CAMERA_HELP: readonly { keys: string; description: string }[] = [
+  { keys: 'Drag', description: 'Orbit / look' },
+  { keys: 'Shift+Drag / Right-drag', description: 'Pan (truck)' },
+  { keys: 'Wheel / Pinch', description: 'Zoom toward cursor' },
+  { keys: 'W A S D', description: 'Free-fly move (Free mode)' },
+  { keys: 'Q E', description: 'Free-fly down / up' },
+  { keys: ', .', description: 'Roll left / right' },
+  { keys: '- =', description: 'Widen / narrow field of view' },
+];
+
 export function KeyboardHelp(props: KeyboardHelpProps): JSX.Element | null {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -43,6 +54,17 @@ export function KeyboardHelp(props: KeyboardHelpProps): JSX.Element | null {
           <div key={b.key}>
             <dt>
               <kbd>{displayKey(b.key)}</kbd>
+            </dt>
+            <dd>{b.description}</dd>
+          </div>
+        ))}
+      </dl>
+      <h2>Camera</h2>
+      <dl>
+        {CAMERA_HELP.map((b) => (
+          <div key={b.keys}>
+            <dt>
+              <kbd>{b.keys}</kbd>
             </dt>
             <dd>{b.description}</dd>
           </div>

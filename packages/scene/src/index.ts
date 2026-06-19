@@ -15,7 +15,7 @@ export {
 } from './geometry-builders.ts';
 export { buildDskGeometry, buildDskMesh } from './dsk-mesh.ts';
 export { buildRingVertices, buildRingMesh } from './rings.ts';
-export { orbitEllipse } from './orbit.ts';
+export { orbitEllipse, orbitPeriod } from './orbit.ts';
 export { buildAxisTriad, buildTriadBuffers } from './axis-triad.ts';
 export { buildArrow, buildDirectionVectors, type DirectionSpec } from './direction-vectors.ts';
 export { buildStarField, buildStarPoints, magnitudeToSize } from './star-field.ts';

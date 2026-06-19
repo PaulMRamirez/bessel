@@ -22,10 +22,15 @@ export async function applyViewModel(
     clock.setEpoch(sharedEt);
     store.setState({ et: sharedEt });
   }
-  if (view.camera.target) scene.centerOn(view.camera.target);
-  scene.setView(view.camera.azimuth, view.camera.elevation, view.camera.distance);
+  // Reconstruct exactly: snap rather than fly, and reset the camera mode and FOV
+  // (not captured in the view model) so a restored view is deterministic.
+  scene.setCameraMode('orbit');
+  scene.setCameraFov(45, false);
+  if (view.camera.target) scene.centerOn(view.camera.target, false);
+  scene.setView(view.camera.azimuth, view.camera.elevation, view.camera.distance, false);
   store.setState({
     focus: view.camera.target ?? scene.focusBody,
     selection: view.selection,
+    cameraMode: 'orbit',
   });
 }

@@ -6,9 +6,13 @@ import { expect, type Page } from '@playwright/test';
 // builder to rebuild the rich scene (spacecraft, FOV instrument, rings,
 // atmosphere, orbits), focusing Saturn.
 export async function loadCassiniSample(page: Page): Promise<void> {
+  // The catalog loader lives in the top-bar "Mission" menu; open it to reach the
+  // hidden file input, then close it so it does not sit over the scene.
+  await page.getByTestId('mission-menu').click();
   await page
     .getByTestId('catalog-file-input')
     .setInputFiles('apps/web/public/samples/cassini-saturn.json');
+  await page.keyboard.press('Escape');
   await expect(page.getByTestId('select-Cassini')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 30_000 });
   // Let the rebuilt scene settle (positions, instrument FOV) before assertions.

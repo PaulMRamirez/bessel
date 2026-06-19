@@ -68,3 +68,22 @@ export {
   markerFraction,
   type TimelineAnnotation,
 } from './annotations.ts';
+
+export {
+  EMPTY as EMPTY_WINDOW,
+  windowFromIntervals,
+  windowInsert,
+  windowMeasure,
+  windowCard,
+  windowContains,
+  windowUnion,
+  windowUnionAll,
+  windowIntersect,
+  windowIntersectAll,
+  windowDifference,
+  windowComplement,
+  windowContract,
+  type Interval,
+  type Window,
+} from './window.ts';
+export { findConstraintWindow, type ConstraintFn } from './geometry-finder.ts';

@@ -3,16 +3,21 @@
 
 import type {
   AberrationCorrection,
+  CartesianState,
   DskShape,
   FovResult,
+  GeodeticPoint,
   IluminResult,
   InterceptResult,
+  LocalSolarTime,
   Mat3,
+  OsculatingElements,
   PositionResult,
   StateVector,
   SubPointResult,
   Vec3,
 } from './index.ts';
+import type { EvalSeriesResult, EvalSpec } from './eval-series.ts';
 
 export type SpiceWorkerRequest =
   | { id: number; method: 'furnsh'; name: string; bytes: Uint8Array }
@@ -36,6 +41,59 @@ export type SpiceWorkerRequest =
       method: 'spkezr';
       target: string;
       et: number;
+      frame: string;
+      abcorr: AberrationCorrection;
+      observer: string;
+    }
+  | { id: number; method: 'oscelt'; state: CartesianState; et: number; mu: number }
+  | { id: number; method: 'conics'; elements: OsculatingElements; et: number }
+  | { id: number; method: 'prop2b'; mu: number; state: CartesianState; dt: number }
+  | {
+      id: number;
+      method: 'gfoclt';
+      occtyp: string;
+      front: string;
+      fshape: string;
+      fframe: string;
+      back: string;
+      bshape: string;
+      bframe: string;
+      abcorr: AberrationCorrection;
+      observer: string;
+      step: number;
+      start: number;
+      stop: number;
+    }
+  | {
+      id: number;
+      method: 'gfdist';
+      target: string;
+      abcorr: AberrationCorrection;
+      observer: string;
+      relate: string;
+      refval: number;
+      step: number;
+      start: number;
+      stop: number;
+    }
+  | {
+      id: number;
+      method: 'occult';
+      targ1: string;
+      shape1: string;
+      frame1: string;
+      targ2: string;
+      shape2: string;
+      frame2: string;
+      abcorr: AberrationCorrection;
+      observer: string;
+      et: number;
+    }
+  | {
+      id: number;
+      method: 'spkposBatch';
+      target: string;
+      etArray: Float64Array;
       frame: string;
       abcorr: AberrationCorrection;
       observer: string;
@@ -78,8 +136,28 @@ export type SpiceWorkerRequest =
       observer: string;
       point: Vec3;
     }
+  | {
+      id: number;
+      method: 'writeSpkType13';
+      name: string;
+      body: number;
+      center: number;
+      frame: string;
+      segid: string;
+      degree: number;
+      et: Float64Array;
+      states: Float64Array;
+    }
+  | { id: number; method: 'twovec'; axdef: Vec3; indexa: number; plndef: Vec3; indexp: number }
+  | { id: number; method: 'm2q'; matrix: Mat3 }
+  | { id: number; method: 'q2m'; quat: readonly number[] }
+  | { id: number; method: 'raxisa'; matrix: Mat3 }
   | { id: number; method: 'readDsk'; name: string; bytes: Uint8Array }
-  | { id: number; method: 'tkvrsn' };
+  | { id: number; method: 'recgeo'; rectan: Vec3; re: number; f: number }
+  | { id: number; method: 'et2lst'; et: number; body: number; lon: number; lstType: string }
+  | { id: number; method: 'tkvrsn' }
+  | { id: number; method: 'evalSeries'; spec: EvalSpec }
+  | { id: number; method: 'cancelJob'; jobId: number };
 
 export type SpiceWorkerResultMap = {
   furnsh: void;
@@ -90,7 +168,14 @@ export type SpiceWorkerResultMap = {
   et2utc: string;
   utc2et: number;
   spkpos: PositionResult;
+  spkposBatch: Float64Array;
   spkezr: StateVector;
+  oscelt: OsculatingElements;
+  conics: CartesianState;
+  prop2b: CartesianState;
+  gfoclt: [number, number][];
+  gfdist: [number, number][];
+  occult: number;
   getfov: FovResult;
   bodvrd: number[];
   bodvcd: number[];
@@ -99,8 +184,17 @@ export type SpiceWorkerResultMap = {
   sincpt: InterceptResult;
   subpnt: SubPointResult;
   ilumin: IluminResult;
+  writeSpkType13: void;
+  twovec: Mat3;
+  m2q: number[];
+  q2m: Mat3;
+  raxisa: { axis: Vec3; angle: number };
   readDsk: DskShape;
+  recgeo: GeodeticPoint;
+  et2lst: LocalSolarTime;
   tkvrsn: string;
+  evalSeries: EvalSeriesResult;
+  cancelJob: void;
 };
 
 export type SpiceWorkerResponse =

@@ -10,7 +10,8 @@ import { useMediaQuery } from './use-media-query.ts';
 export interface DockLayoutProps {
   readonly left: ReactNode;
   readonly center: ReactNode;
-  readonly right: ReactNode;
+  /** Optional right tools column. When omitted the canvas takes the freed width. */
+  readonly right?: ReactNode;
 }
 
 export function DockLayout(props: DockLayoutProps): JSX.Element {
@@ -34,13 +35,17 @@ export function DockLayout(props: DockLayoutProps): JSX.Element {
         {props.left}
       </Panel>
       <PanelResizeHandle className="bessel-resize-handle" aria-label="Resize object panel" />
-      <Panel order={2} defaultSize={56} minSize={30} className="bessel-dock-center">
+      <Panel order={2} defaultSize={props.right ? 56 : 80} minSize={30} className="bessel-dock-center">
         {props.center}
       </Panel>
-      <PanelResizeHandle className="bessel-resize-handle" aria-label="Resize tools panel" />
-      <Panel order={3} defaultSize={24} minSize={14} className="bessel-dock-side">
-        {props.right}
-      </Panel>
+      {props.right ? (
+        <>
+          <PanelResizeHandle className="bessel-resize-handle" aria-label="Resize tools panel" />
+          <Panel order={3} defaultSize={24} minSize={14} className="bessel-dock-side">
+            {props.right}
+          </Panel>
+        </>
+      ) : null}
     </PanelGroup>
   );
 }

@@ -51,10 +51,10 @@ import { buildAtmosphere, type AtmosphereParams } from './atmosphere.ts';
 import { buildSunLight } from './shadows.ts';
 import { rowMajor3x3ToMatrix4, applyAttitude, applyQuaternion } from './orientation.ts';
 import {
-  computeOrbitCameraPosition,
-  computeTrackCameraPosition,
-  type CameraMode as SceneCameraMode,
-} from './camera-modes.ts';
+  CameraController,
+  framingDistance,
+  type CameraControlMode,
+} from './camera-controller.ts';
 
 export type { Km3 };
 
@@ -76,6 +76,31 @@ function disposeDeep(root: Object3D): void {
 // Bodies are kept at true scale; this fraction of the camera-to-body distance is
 // the floor on apparent radius so distant planets never collapse to sub-pixel.
 const MIN_APPARENT = 0.012;
+
+// Orbit lines keep their true geometry but fade by apparent size, where the
+// metric is the orbit's radius over the camera distance to its center (so it
+// tracks how much of the frame the ring spans). Tiny rings (distant clutter,
+// e.g. a moon orbit seen at solar-system scale) fade in over [IN_LO, IN_HI];
+// rings that grow past the frame and would dominate fade out over [OUT_LO,
+// OUT_HI]. The camera FOV is 45 deg, so apparent radius ~ frame edge near 0.41.
+const ORBIT_FADE_IN_LO = 0.02;
+const ORBIT_FADE_IN_HI = 0.06;
+const ORBIT_FADE_OUT_LO = 0.45;
+const ORBIT_FADE_OUT_HI = 1.6;
+const ORBIT_BASE_OPACITY = 0.45;
+
+function smoothstep(edge0: number, edge1: number, x: number): number {
+  const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
+
+/** Opacity multiplier in [0, 1] for an orbit of the given apparent-size ratio. */
+export function orbitFade(ratio: number): number {
+  return (
+    smoothstep(ORBIT_FADE_IN_LO, ORBIT_FADE_IN_HI, ratio) *
+    (1 - smoothstep(ORBIT_FADE_OUT_LO, ORBIT_FADE_OUT_HI, ratio))
+  );
+}
 
 interface BodyNode {
   readonly def: PlanetDef;
@@ -125,18 +150,22 @@ export class SolarSystemScene {
   private spacecraftAttitudeTarget: Object3D | null = null;
   // Objects that track a body each frame (rings, axes, DSK mesh, direction vectors).
   private readonly anchored = new Map<Object3D, string>();
-  private mode: SceneCameraMode = 'orbit';
+  private readonly controller = new CameraController();
   private focusVelocity: Km3 = [0, 0, 0];
-
+  private syncFrame: readonly number[] | null = null;
   private focus = 'Sun';
-  private azimuth = 0.6;
-  private elevation = 0.35;
-  private distance = 3000;
 
   constructor(canvas: HTMLCanvasElement) {
-    this.renderer = new WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+    this.renderer = new WebGLRenderer({
+      canvas,
+      antialias: true,
+      preserveDrawingBuffer: true,
+      logarithmicDepthBuffer: true,
+    });
     this.renderer.setClearColor(new Color('#05070b'), 1);
-    this.camera = new PerspectiveCamera(45, canvas.width / Math.max(1, canvas.height), 0.01, 1e7);
+    // A small near plane (the logarithmic depth buffer keeps precision across the
+    // huge near:far ratio) lets the camera frame small bodies and spacecraft.
+    this.camera = new PerspectiveCamera(45, canvas.width / Math.max(1, canvas.height), 1e-4, 1e7);
     this.scene.add(this.world);
     this.scene.add(new AmbientLight(0xffffff, 0.55));
     const sun = new PointLight(0xfff4e0, 2.2, 0, 0.0);
@@ -227,19 +256,26 @@ export class SolarSystemScene {
     for (const spec of specs) {
       if (spec.points.length < 2) continue;
       const coords = new Float32Array(spec.points.length * 3);
+      let maxRadiusKm = 0;
       spec.points.forEach((p, i) => {
         coords[i * 3] = p[0] * SCALE;
         coords[i * 3 + 1] = p[1] * SCALE;
         coords[i * 3 + 2] = p[2] * SCALE;
+        const r = Math.hypot(p[0], p[1], p[2]);
+        if (r > maxRadiusKm) maxRadiusKm = r;
       });
       const geometry = new BufferGeometry();
       geometry.setAttribute('position', new Float32BufferAttribute(coords, 3));
       const material = new LineBasicMaterial({
         color: new Color(spec.color ?? 0x3a5a96),
         transparent: true,
-        opacity: 0.45,
+        opacity: ORBIT_BASE_OPACITY,
       });
       const line = new Line(geometry, material);
+      // Carry the apoapsis radius (world units) and anchor so render() can fade
+      // the ring by its apparent size each frame.
+      line.userData['orbitRadius'] = maxRadiusKm * SCALE;
+      line.userData['anchorBody'] = spec.anchorBody;
       line.visible = this.orbitsVisible;
       this.replaceAnchored(null, line, spec.anchorBody);
       this.orbits.push(line);
@@ -551,16 +587,54 @@ export class SolarSystemScene {
     }
   }
 
-  setCameraMode(mode: SceneCameraMode): void {
-    this.mode = mode;
+  setCameraMode(mode: CameraControlMode): void {
+    this.controller.setMode(mode);
   }
 
-  get cameraMode(): SceneCameraMode {
-    return this.mode;
+  get cameraMode(): CameraControlMode {
+    return this.controller.mode;
   }
 
   setFocusVelocity(velocityKm: Km3): void {
     this.focusVelocity = velocityKm;
+  }
+
+  /** Body-fixed -> J2000 rotation (3x3 row-major) used by sync-orbit mode. */
+  setSyncFrame(matrix: readonly number[] | null): void {
+    this.syncFrame = matrix;
+  }
+
+  /** Pan (truck) the view in the screen plane, as a fraction of the distance. */
+  panBy(dxFraction: number, dyFraction: number): void {
+    this.controller.panBy(dxFraction, dyFraction);
+  }
+
+  rollBy(dRoll: number): void {
+    this.controller.rollBy(dRoll);
+  }
+
+  /** Multiply the field of view (telephoto when < 1, wide when > 1). */
+  fovBy(factor: number): void {
+    this.controller.fovBy(factor);
+  }
+
+  /** Translate the free-fly camera along its own axes (scene units). */
+  flyMove(forward: number, right: number, up: number): void {
+    this.controller.flyMove(forward, right, up);
+  }
+
+  /** Current (damped) vertical field of view in degrees. */
+  get cameraFovDeg(): number {
+    return this.controller.fovValue;
+  }
+
+  /** Distance (scene units) of the free-fly camera from the view center. */
+  get freeRadius(): number {
+    return this.controller.freeRadius;
+  }
+
+  setCameraFov(fovDeg: number, animate = false): void {
+    this.controller.setFovDeg(fovDeg, animate);
   }
 
   /** Update body and spacecraft positions (km relative to the Sun). */
@@ -610,8 +684,28 @@ export class SolarSystemScene {
     if (this.atmosphere) this.atmosphere.visible = visible;
   }
 
-  centerOn(name: string): void {
-    if (this.bodies.has(name) || this.spacecraft?.name === name) this.focus = name;
+  /**
+   * Focus a body and frame it. The view center glides to the body (fly-to) and
+   * the distance is computed from the body's radius (Sun frames the whole system).
+   * Pass animate=false to snap (scene (re)build / boot).
+   */
+  centerOn(name: string, animate = true): void {
+    if (!(this.bodies.has(name) || this.spacecraft?.name === name)) return;
+    this.focus = name;
+    if (animate) this.controller.flyTo();
+    else {
+      const pos = this.positions.get(name) ?? [0, 0, 0];
+      this.controller.snapCenter(pos);
+    }
+    this.controller.setView(0.6, 0.35, this.framingDistance(name), animate);
+  }
+
+  /** Distance (scene units) that frames a body; the Sun frames the whole system. */
+  private framingDistance(name: string): number {
+    if (name === 'Sun') return 7000;
+    const radius = this.bodies.get(name)?.radius ?? this.spacecraft?.radius ?? 0;
+    if (radius <= 0) return 600;
+    return framingDistance(radius, this.controller.fovValue);
   }
 
   /**
@@ -634,27 +728,23 @@ export class SolarSystemScene {
   }
 
   orbitBy(dAzimuth: number, dElevation: number): void {
-    this.azimuth += dAzimuth;
-    const limit = Math.PI / 2 - 0.05;
-    this.elevation = Math.max(-limit, Math.min(limit, this.elevation + dElevation));
+    this.controller.orbitBy(dAzimuth, dElevation);
   }
 
   zoomBy(factor: number): void {
-    this.distance = Math.max(0.5, Math.min(5e6, this.distance * factor));
+    this.controller.zoomBy(factor);
   }
 
-  setView(azimuth: number, elevation: number, distance: number): void {
-    this.azimuth = azimuth;
-    this.elevation = elevation;
-    this.distance = distance;
+  setView(azimuth: number, elevation: number, distance: number, animate = false): void {
+    this.controller.setView(azimuth, elevation, distance, animate);
   }
 
   getView(): { focus: string; azimuth: number; elevation: number; distance: number } {
     return {
       focus: this.focus,
-      azimuth: this.azimuth,
-      elevation: this.elevation,
-      distance: this.distance,
+      azimuth: this.controller.azimuthValue,
+      elevation: this.controller.elevationValue,
+      distance: this.controller.distance,
     };
   }
 
@@ -681,9 +771,15 @@ export class SolarSystemScene {
     this.labelLayer.setSize(width, height);
   }
 
-  render(): void {
+  render(dt = 0): void {
     const focusPos = this.positions.get(this.focus) ?? [0, 0, 0];
-    this.world.position.set(-focusPos[0] * SCALE, -focusPos[1] * SCALE, -focusPos[2] * SCALE);
+    const pose = this.controller.step({
+      dt,
+      focusPos,
+      focusVelocity: this.focusVelocity,
+      bodyFrame: this.cameraMode === 'sync' ? (this.syncFrame ?? undefined) : undefined,
+    });
+    this.world.position.set(-pose.center[0] * SCALE, -pose.center[1] * SCALE, -pose.center[2] * SCALE);
 
     if (this.trajectory) {
       const anchor = this.positions.get(this.trajectoryAnchor) ?? [0, 0, 0];
@@ -698,16 +794,33 @@ export class SolarSystemScene {
       obj.position.set(anchor[0] * SCALE, anchor[1] * SCALE, anchor[2] * SCALE);
     }
 
-    const camPos =
-      this.mode === 'track'
-        ? computeTrackCameraPosition(this.focusVelocity, this.distance)
-        : computeOrbitCameraPosition(this.azimuth, this.elevation, this.distance);
-    this.camera.position.set(camPos[0], camPos[1], camPos[2]);
-    this.camera.lookAt(new Vector3(0, 0, 0));
+    this.camera.position.set(pose.position[0], pose.position[1], pose.position[2]);
+    this.camera.up.set(pose.up[0], pose.up[1], pose.up[2]);
+    this.camera.lookAt(new Vector3(pose.target[0], pose.target[1], pose.target[2]));
+    if (Math.abs(this.camera.fov - pose.fov) > 1e-3) {
+      this.camera.fov = pose.fov;
+      this.camera.updateProjectionMatrix();
+    }
 
     // Enforce a minimum apparent size so distant bodies stay visible while the
     // close-up keeps true proportions.
     const cam = this.camera.position;
+
+    // Fade orbit rings by apparent size: invisible when they shrink to clutter
+    // or grow large enough to dominate the frame, full opacity in between. The
+    // geometry stays true scale; only opacity changes.
+    for (const line of this.orbits) {
+      if (!line.visible) continue;
+      const radius = (line.userData['orbitRadius'] as number) ?? 0;
+      const anchor = this.positions.get(line.userData['anchorBody'] as string) ?? [0, 0, 0];
+      const ax = this.world.position.x + anchor[0] * SCALE - cam.x;
+      const ay = this.world.position.y + anchor[1] * SCALE - cam.y;
+      const az = this.world.position.z + anchor[2] * SCALE - cam.z;
+      const dist = Math.sqrt(ax * ax + ay * ay + az * az);
+      const ratio = dist > 1e-9 ? radius / dist : 0;
+      (line.material as LineBasicMaterial).opacity = ORBIT_BASE_OPACITY * orbitFade(ratio);
+    }
+
     const apply = (mesh: Object3D, radius: number): void => {
       const dx = this.world.position.x + mesh.position.x - cam.x;
       const dy = this.world.position.y + mesh.position.y - cam.y;

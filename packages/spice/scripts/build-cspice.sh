@@ -47,7 +47,15 @@ EXPORTS='[
   "_spkopn_c","_spksub_c","_spkcls_c",
   "_dasopr_c","_dascls_c","_dlabfs_c","_dlafns_c",
   "_dskobj_c","_dsksrf_c","_dskgd_c","_dskz02_c","_dskv02_c","_dskp02_c","_dskb02_c",
-  "_dskw02_c","_dskmi2_c","_dskrb2_c"
+  "_dskw02_c","_dskmi2_c","_dskrb2_c",
+  "_prop2b_c","_conics_c","_oscelt_c","_oscltx_c",
+  "_spkw09_c","_spkw13_c",
+  "_gfdist_c","_gfsep_c","_gfposc_c","_gfoclt_c","_gfrfov_c","_gftfov_c","_occult_c",
+  "_ssize_c","_scard_c","_wninsd_c","_wncard_c","_wnfetd_c",
+  "_wnintd_c","_wnunid_c","_wndifd_c","_wnsumd_c",
+  "_recgeo_c","_recpgr_c","_et2lst_c","_georec_c",
+  "_twovec_c","_m2q_c","_q2m_c","_raxisa_c","_axisar_c","_eul2m_c","_m2eul_c","_mxv_c","_mtxv_c",
+  "_illumf_c","_phaseq_c","_edterm_c","_gfilum_c"
 ]'
 
 RUNTIME_METHODS='["FS","ccall","cwrap","getValue","setValue","UTF8ToString","stringToUTF8","lengthBytesUTF8","writeArrayToMemory"]'

@@ -61,3 +61,18 @@ export function orbitEllipse(
   }
   return points;
 }
+
+/**
+ * Osculating orbital period (seconds) from a state vector, via the vis-viva
+ * semi-major axis and Kepler's third law. Returns null for a non-elliptical
+ * (parabolic/hyperbolic) or degenerate state, where no period is defined. Used
+ * to size the time window when tracing a body's true ephemeris path.
+ */
+export function orbitPeriod(position: V3, velocity: V3, mu: number): number | null {
+  const r = mag(position);
+  if (r < 1e-9 || mu <= 0) return null;
+  const energy = dot(velocity, velocity) / 2 - mu / r; // specific orbital energy
+  if (energy >= 0) return null; // not bound: no closed period
+  const a = -mu / (2 * energy); // semi-major axis
+  return 2 * Math.PI * Math.sqrt((a * a * a) / mu);
+}

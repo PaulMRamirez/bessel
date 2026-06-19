@@ -19,6 +19,9 @@ test('loading a native catalog rebuilds the rendered scene generically', async (
   const before = await frameStats(viewport);
   expect(before.nonBackground).toBeGreaterThan(200);
 
+  // The catalog loader (and its load-error region) live in the top-bar "Mission"
+  // menu; keep it open so the error live region stays mounted for the assertion.
+  await page.getByTestId('mission-menu').click();
   await page.getByTestId('catalog-file-input').setInputFiles('e2e/fixtures/native-cassini.json');
 
   // The generic builder samples SPICE and rebuilds: the object browser becomes

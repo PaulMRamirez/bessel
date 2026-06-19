@@ -14,6 +14,7 @@ import {
   SOLAR_SYSTEM,
   loadSpacecraftModel,
   orbitEllipse,
+  orbitPeriod,
   parseStarCatalog,
   type PlanetDef,
   type SceneSpec,
@@ -405,10 +406,16 @@ async function resolveAttitude(
   return undefined;
 }
 
+/** Points traced along a body's orbit path (true sampling or osculating fallback). */
+const ORBIT_SAMPLES = 256;
+
 /**
- * Osculating orbit ellipse for each body: around the Sun, except the Moon, which
- * orbits Earth. Drawn from one state vector so a full orbit renders without
- * ephemeris over the whole period.
+ * Orbit path for each body: around the Sun, except the Moon, which orbits Earth.
+ * The path is the body's true ephemeris over one osculating period, sampled from
+ * SPICE, so real perturbations show (notably the Moon's solar-driven wobble).
+ * When the loaded ephemeris does not span a full period (e.g. the bundled
+ * inner-system + Cassini kernel for an outer planet), fall back to the
+ * osculating ellipse, which needs only the start-epoch state vector.
  */
 async function buildOrbits(
   spice: SpiceEngine,
@@ -427,21 +434,49 @@ async function buildOrbits(
     const centerId = moon ? '399' : '10';
     const anchorBody = moon ? 'Earth' : 'Sun';
     const mu = moon ? muEarth : muSun;
+    let state;
     try {
-      const st = await spice.spkezr(b.spiceId, et0, 'J2000', 'NONE', centerId);
-      const points = orbitEllipse(
-        [st.position.x, st.position.y, st.position.z],
-        [st.velocity.x, st.velocity.y, st.velocity.z],
-        mu,
-      );
-      if (points.length > 1) {
-        orbits.push({ id: `${b.name}-orbit`, anchorBody, points, color: dimColor(b.color) });
-      }
+      state = await spice.spkezr(b.spiceId, et0, 'J2000', 'NONE', centerId);
     } catch {
-      // No usable state for this body (e.g. outside the loaded ephemeris): skip it.
+      // No usable state at the start epoch (e.g. outside the loaded ephemeris).
+      continue;
+    }
+    const pos: Km3 = [state.position.x, state.position.y, state.position.z];
+    const vel: Km3 = [state.velocity.x, state.velocity.y, state.velocity.z];
+    const period = orbitPeriod(pos, vel, mu);
+    // True path when the ephemeris spans a period; else the osculating ellipse.
+    let points: Km3[] = [];
+    if (period !== null) {
+      points = await sampleTruePath(spice, b.spiceId, centerId, et0, period).catch(() => []);
+    }
+    if (points.length < 2) points = orbitEllipse(pos, vel, mu);
+    if (points.length > 1) {
+      orbits.push({ id: `${b.name}-orbit`, anchorBody, points, color: dimColor(b.color) });
     }
   }
   return orbits;
+}
+
+/**
+ * Trace a body's true path relative to centerId over one period, as a closed
+ * polyline (km, J2000). Rejects if any sample falls outside the loaded
+ * ephemeris, so the caller can fall back to the osculating ellipse.
+ */
+async function sampleTruePath(
+  spice: SpiceEngine,
+  spiceId: string,
+  centerId: string,
+  et0: number,
+  period: number,
+): Promise<Km3[]> {
+  const results = await Promise.all(
+    Array.from({ length: ORBIT_SAMPLES }, (_, i) =>
+      spice.spkpos(spiceId, et0 + (i / ORBIT_SAMPLES) * period, 'J2000', 'NONE', centerId),
+    ),
+  );
+  const points: Km3[] = results.map((r) => [r.position.x, r.position.y, r.position.z]);
+  if (points.length > 0) points.push(points[0]!); // close the ring
+  return points;
 }
 
 /** A body's GM (km^3/s^2) from the PCK, or a fallback when bodvrd has no GM. */

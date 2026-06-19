@@ -7,7 +7,7 @@
 
 import { createWebPlatform } from '@bessel/pal-web';
 import { SolarSystemScene, buildScene } from '@bessel/scene';
-import type { SpiceEngine } from '@bessel/spice';
+import type { SpiceComputeEngine, SpiceEngine } from '@bessel/spice';
 import type { Storage, FileSystem } from '@bessel/pal';
 import { Clock } from '@bessel/timeline';
 import { decodeView } from '@bessel/state';
@@ -33,7 +33,7 @@ export interface EngineCore {
   scene: SolarSystemScene;
   clock: Clock;
   table: EphemerisTable;
-  spice: SpiceEngine;
+  spice: SpiceComputeEngine;
   // The active mission's instrument, or null for a neutral or instrument-less
   // mission. Mutable so loading a new catalog re-points FOV and footprint.
   instrument: LoadedInstrument | null;

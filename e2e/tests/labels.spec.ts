@@ -14,6 +14,8 @@ test('object labels render over the viewport and toggle off', async ({ page }) =
     timeout: 5_000,
   });
 
+  // Visualization toggles live in the canvas "Layers" popover.
+  await page.getByTestId('layers-popover').click();
   await page.getByTestId('setting-labels').uncheck();
   await expect(page.locator('.bessel-label-layer')).toBeHidden();
 

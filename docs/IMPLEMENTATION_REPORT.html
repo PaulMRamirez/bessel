@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Bessel Implementation &amp; Gap-Analysis Report</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --ink: #1c2230;
+    --muted: #5a6678;
+    --line: #e2e6ec;
+    --header-bg: #11161f;
+    --header-ink: #eef2f7;
+    --accent: #2f6df6;
+    --green: #1f8a4c;
+    --green-bg: #e4f5ea;
+    --teal: #0f7d8c;
+    --teal-bg: #e0f3f5;
+    --amber: #9a6a00;
+    --amber-bg: #fbf0d6;
+    --red: #b5341f;
+    --red-bg: #fbe4df;
+    --grey: #586172;
+    --grey-bg: #eceff3;
+    --p0: #b5341f;
+    --p1: #c2641a;
+    --p2: #9a6a00;
+    --p3: #586172;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.55;
+    font-size: 15px;
+  }
+  header.masthead {
+    background: var(--header-bg);
+    color: var(--header-ink);
+    padding: 38px 24px 30px;
+  }
+  header.masthead .wrap { max-width: 1100px; margin: 0 auto; }
+  header.masthead h1 { margin: 0 0 6px; font-size: 28px; letter-spacing: -0.2px; }
+  header.masthead .sub { color: #aab6c8; font-size: 14px; margin-bottom: 18px; }
+  header.masthead .exec {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 8px;
+    padding: 16px 18px;
+    font-size: 14.5px;
+    color: #dde4ee;
+  }
+  main { max-width: 1100px; margin: 0 auto; padding: 28px 24px 60px; }
+  section { margin-bottom: 40px; }
+  h2 {
+    font-size: 21px;
+    margin: 0 0 14px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--line);
+    letter-spacing: -0.2px;
+  }
+  h3 { font-size: 16px; margin: 22px 0 8px; }
+  p { margin: 0 0 12px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* Status banner */
+  .banner {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+  .metric {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .metric .num { font-size: 19px; font-weight: 700; color: var(--ink); }
+  .metric .lbl { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .banner-note {
+    margin-top: 8px; font-size: 13px; color: var(--muted);
+  }
+  .green-pill {
+    display: inline-block; background: var(--green-bg); color: var(--green);
+    border-radius: 999px; padding: 2px 10px; font-weight: 600; font-size: 12.5px;
+  }
+
+  /* Scorecard cards */
+  .cards { display: grid; grid-template-columns: 1fr; gap: 14px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 8px; padding: 16px 18px;
+  }
+  .card h3 { margin: 0 0 4px; font-size: 16px; }
+  .verdict {
+    display: inline-block; font-size: 12px; font-weight: 700;
+    border-radius: 4px; padding: 2px 8px; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.4px;
+  }
+  .verdict.exceed { background: var(--green-bg); color: var(--green); }
+  .verdict.parity { background: var(--amber-bg); color: var(--amber); }
+  .verdict.seam { background: var(--teal-bg); color: var(--teal); }
+  .card p { font-size: 13.5px; color: var(--ink); margin: 0; }
+
+  /* Tables */
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  thead th {
+    position: sticky; top: 0; z-index: 2;
+    background: #2a3242; color: #eef2f7; text-align: left;
+    padding: 10px 11px; font-weight: 600; font-size: 12.5px;
+    border-bottom: 1px solid #1b2230;
+  }
+  tbody td { padding: 10px 11px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tbody tr:nth-child(even) { background: #fafbfc; }
+  tbody tr:hover { background: #eef4ff; }
+  td.domain { font-weight: 600; min-width: 170px; }
+
+  /* Badges */
+  .badge {
+    display: inline-block; border-radius: 4px; padding: 2px 7px;
+    font-size: 11.5px; font-weight: 700; white-space: nowrap;
+  }
+  .b-doneui { background: var(--green-bg); color: var(--green); }
+  .b-coreui { background: var(--teal-bg); color: var(--teal); }
+  .b-core { background: var(--amber-bg); color: var(--amber); }
+  .b-partial { background: var(--red-bg); color: var(--red); }
+  .b-na { background: var(--grey-bg); color: var(--grey); }
+  .b-exceed { background: var(--green-bg); color: var(--green); }
+
+  .sev-critical, .pri-p0 { background: var(--red-bg); color: var(--red); }
+  .sev-major, .pri-p1 { background: var(--amber-bg); color: var(--p1); }
+  .sev-minor, .pri-p2 { background: #fff6e0; color: var(--amber); }
+  .sev-na, .pri-p3 { background: var(--grey-bg); color: var(--grey); }
+  .sev-exceed { background: var(--green-bg); color: var(--green); }
+  .eff { background: #eaeefb; color: #3552a8; }
+
+  /* Callout */
+  .callout {
+    background: #eef4ff; border: 1px solid #c9dcff; border-left: 5px solid var(--accent);
+    border-radius: 8px; padding: 16px 20px;
+  }
+  .callout h3 { margin-top: 0; color: #1f47a8; }
+  .callout ul { margin: 8px 0 0; padding-left: 20px; }
+  .callout li { margin-bottom: 6px; font-size: 13.5px; }
+
+  /* Roadmap */
+  .roadmap { display: grid; grid-template-columns: 1fr; gap: 16px; }
+  .phase {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px;
+  }
+  .phase h3 { margin-top: 0; display: flex; align-items: center; gap: 10px; }
+  .phase .tag {
+    font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.4px;
+  }
+  .tag.near { background: var(--red-bg); color: var(--red); }
+  .tag.mid { background: var(--amber-bg); color: var(--p1); }
+  .tag.long { background: var(--grey-bg); color: var(--grey); }
+  .phase ol { margin: 4px 0 0; padding-left: 20px; }
+  .phase li { margin-bottom: 10px; font-size: 13.5px; }
+  .phase li .why { color: var(--muted); display: block; font-size: 12.5px; margin-top: 2px; }
+
+  /* Uncertainties */
+  .unc { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 18px 14px; }
+  .unc h3 { margin-bottom: 4px; }
+  .unc ul { margin: 6px 0 14px; padding-left: 20px; }
+  .unc li { font-size: 13px; color: var(--ink); margin-bottom: 5px; }
+
+  footer {
+    max-width: 1100px; margin: 0 auto; padding: 22px 24px 50px;
+    color: var(--muted); font-size: 12.5px; border-top: 1px solid var(--line);
+  }
+  footer code { background: #eef0f3; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+
+  .legend { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+  .legend .badge { margin-right: 4px; }
+
+  @media print {
+    body { background: #fff; font-size: 11.5px; }
+    header.masthead { background: #11161f !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .badge, .verdict, .tag, .metric, thead th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    tbody tr:hover { background: transparent; }
+    .tablewrap { overflow: visible; }
+    thead th { position: static; }
+    section { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wrap">
+    <h1>Bessel: Implementation &amp; Gap-Analysis Report</h1>
+    <div class="sub">SPICE-aware 3D mission-visualization (Apache-2.0; PWA + iOS/Capacitor + desktop/Electron; TypeScript strict, Three.js, CSPICE-WASM). Generated 2026-06-17.</div>
+    <div class="exec">
+      <strong>Executive summary.</strong> Bessel has implemented its analysis-engine layer as 14 numerically validated headless core packages, with all Phase B and C domains (access, lighting, comms/RF, conjunction, coverage, attitude, mission/Lambert, OEM interop, 2D ground track) now surfaced in an Analysis workbench UI and proven end-to-end by Playwright e2e on the Cassini sample. Every physics quantity is pinned to an independent reference (SGP4-VER sub-meter, Vallado Lambert 7-5, EPSG:3857, NAIF occult/gfoclt, analytic Pc/eclipse/footprint), so the algorithms are demonstrably correct on fixtures. The honest positioning: Bessel reaches parity on the SHAPE of each STK domain but exercises a thin, often-hardcoded slice. The real remaining gap versus STK is the heavy numerical and estimation tier (HPOP force-model propagation, orbit determination, an optimizing Astrogator-class Mission Control Sequence, large-catalog SSA screening), plus the absent automation SDK and the cross-cutting F3 cancellable-job worker pool that gates every heavy sweep.
+    </div>
+  </div>
+</header>
+
+<main>
+
+<!-- ============ STATUS BANNER ============ -->
+<section id="status">
+  <h2>Current status banner</h2>
+  <div class="banner">
+    <div class="metric"><div class="num">337</div><div class="lbl">Vitest unit/contract tests passing</div></div>
+    <div class="metric"><div class="num">69</div><div class="lbl">Vitest test files</div></div>
+    <div class="metric"><div class="num">20</div><div class="lbl">Playwright e2e cases (14 spec files)</div></div>
+    <div class="metric"><div class="num">312.36 kB</div><div class="lbl">Initial JS, gzipped (budget 350 kB)</div></div>
+    <div class="metric"><div class="num">359 kB</div><div class="lbl">CSPICE WASM, brotli (budget 4 MB)</div></div>
+    <div class="metric"><div class="num"><span class="green-pill">green</span></div><div class="lbl">pnpm verify &amp; pnpm e2e</div></div>
+  </div>
+  <p class="banner-note">e2e includes the Electron DSK path and the axe accessibility scan gate. <code>pnpm verify</code> = typecheck, lint (zero warnings), test, build:web, size in sequence.</p>
+</section>
+
+<!-- ============ SCORECARD ============ -->
+<section id="scorecard">
+  <h2>Scorecard: how Bessel compares to each reference</h2>
+  <div class="cards">
+
+    <div class="card">
+      <h3>Ansys STK (Systems Tool Kit) Premium Space / STK Pro</h3>
+      <span class="verdict parity">Useful parity on shape, trails on the numerical/estimation tier</span>
+      <p>Bessel reaches demonstrable end-to-end parity on the SHAPE of each STK analytical domain (the algorithms exist and are correct on a fixture), and ten domains are surfaced into an Analysis workbench proven by e2e, but it exercises only a thin, often-hardcoded slice (single LOS constraint, fixed DSN params, illustrative Pc covariance, Walker 24/3/1, umbra-only eclipse, single-rev Lambert, equirectangular-only map). STK remains far ahead on fidelity, scale, and breadth in every domain that requires a numerical force-model integrator (HPOP, Astrogator finite burns/optimizers, OD), large-catalog screening (CAT all-vs-all), or a general automation/SDK surface. Bessel's structural edges STK cannot match: open license, zero-install offline PWA from one codebase, SPICE-native data model, and a reproducible headless runner once built. The single biggest cross-cutting blocker is the absent F3 cancellable-job worker pool. Three validated cores (propagator, sensors, terrain) and one (map-projection) are library-only or shadowed by parallel shell code despite the status table implying otherwise.</p>
+    </div>
+
+    <div class="card">
+      <h3>NASA GMAT (R2026a, Apache-2.0) as a potential backend</h3>
+      <span class="verdict seam">Seam-only oracle/backend, never a browser runtime</span>
+      <p>Per the binding spec decision, GMAT is NOT a runtime dependency and cannot be one for the PWA or iOS: GMAT's native stack (wxWidgets, f2c Fortran, CSPICE, Xerces-C, PCRE2, SOFA, SWIG, pthreads) has no clean Emscripten build, so a browser-side GMAT is impractical and would defeat Bessel's offline-PWA core value. GMAT is relevant in three roles only: (R1, deferred) an optional desktop/server high-fidelity ComputeProvider behind the PAL seam, gated on three unmet conditions; (R2) an offline committed-fixture validation oracle that keeps CI GMAT-free; (R3) an algorithm/test-case reference. Its value is concentrated and deep exactly where Bessel is thinnest: numerical propagation/HPOP, full Astrogator-class mission/maneuver design, and orbit determination. GMAT does NOT supply most of Bessel's STK-parity surface (no coverage grids, comms/RF, large-catalog conjunction, 2D mapping, terrain, reporting workbench). The shared CSPICE/SPK substrate makes R2 low-cost and high-leverage today; R1 stays seam-only until the decision gate is met, with OD as the single most likely future justification.</p>
+    </div>
+
+    <div class="card">
+      <h3>Cosmographia (NASA/JPL SPICE-enhanced 3D visualization)</h3>
+      <span class="verdict exceed">Exceeds: adds a validated analysis layer + modern web app</span>
+      <p>Bessel is at or beyond Cosmographia across the core viewer surface and is a net exceed on platform, UX, analysis, and interoperability. The SPICE/geometry engine (11/11), geometry taxonomy (6/7 Done), measurement, and modern UI/UX are at or past parity, and Bessel adds entire capability classes Cosmographia lacks: a numerically validated analysis workbench (11 domains with e2e), tri-target delivery (web/PWA + iOS + desktop vs desktop-only), shareable URL state, MMGIS deep links, CZML export, light/dark theming, and loud located errors instead of the silent jump-to-Sun defect. The residual viz gaps are content and surfacing, not missing capability: no bundled photographic NASA textures and no auto-download manager, no real CK/SCLK fixture, no model reflections, and two operational parity gaps (a headless/CLI/batch entry point and live telemetry wiring).</p>
+    </div>
+
+  </div>
+</section>
+
+<!-- ============ PER-DOMAIN TABLE ============ -->
+<section id="domains">
+  <h2>Per-domain comparison</h2>
+  <p class="legend">
+    Status:
+    <span class="badge b-doneui">Done+UI</span>
+    <span class="badge b-coreui">Core done+UI</span>
+    <span class="badge b-core">Core done (no UI)</span>
+    <span class="badge b-partial">Partial</span>
+    <span class="badge b-exceed">Exceeds</span>
+    &nbsp; Priority:
+    <span class="badge pri-p0">P0</span>
+    <span class="badge pri-p1">P1</span>
+    <span class="badge pri-p2">P2</span>
+    <span class="badge pri-p3">P3</span>
+  </p>
+  <div class="tablewrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Domain</th>
+        <th>Bessel status</th>
+        <th>STK capability &amp; gap</th>
+        <th>GMAT coverage (seam-only)</th>
+        <th>Cosmographia</th>
+        <th>Priority</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="domain">Foundations (GF, SpiceCell windows, window algebra, batched worker)</td>
+        <td><span class="badge b-doneui">Done+UI</span></td>
+        <td>STK's analysis substrate (interval algebra, threading, Report &amp; Graph data providers) is pervasive and battle-tested. <strong>Gap:</strong> F3 cancellable long-running job lifecycle and a worker POOL are NOT implemented (only single-shot + batched spkposBatch); no evalSeries EvalSpec interpreter. All sweeps are bounded single-shot.</td>
+        <td>Does not supply. GF/SpiceCell/window/worker stay native regardless; GMAT contributes nothing here.</td>
+        <td><span class="badge b-exceed">Exceeds</span> engine 11/11; worker isolation + PAL kernel sourcing exceed the incumbent.</td>
+        <td><span class="badge pri-p0">P0</span></td>
+      </tr>
+      <tr>
+        <td class="domain">Propagation (two-body, J2/J4, SGP4, TLE, SPK publish)</td>
+        <td><span class="badge b-core">Core done</span><br><span class="badge b-partial">no UI</span></td>
+        <td>STK: TwoBody/J2-J4/SGP4-SDP4 plus HPOP (NxN gravity, tides, drag, SRP, third-body, relativity; RKF/Gauss-Jackson). <strong>Gap:</strong> no UI surface or e2e (PROP-13 unproven in-app); no numerical Cowell/HPOP integrator, no SDP4 in app, no @bessel/astro, no EOP/TEME-&gt;J2000.</td>
+        <td><strong>Supplies (deep, desktop/server).</strong> HPOP NxN gravity + RK integrators + SPK output is exactly the Cowell engine Bessel lacks. Strong R2 fixture oracle now; R1 runtime gated on ephemeris round-trip.</td>
+        <td>N/A (viewer consumes pre-built SPK).</td>
+        <td><span class="badge pri-p1">P1</span></td>
+      </tr>
+      <tr>
+        <td class="domain">Access / Visibility / Chains</td>
+        <td><span class="badge b-coreui">Core done+UI</span></td>
+        <td>STK: composable constraints (range, range-rate, elevation/azimuth, lighting, FOV inclusion, terrain), multi-hop chains, constellation any-to-any, Gantt + CSV/CZML. <strong>Gap:</strong> in-app exercises only the lineOfSight-to-Sun constraint; range/elevation/facility library-tested but not user-selectable; no FOV inclusion, range-rate, ACC-7, exports, or worker cancel.</td>
+        <td>Partial (narrow). ContactLocator gives LOS/contact intervals as a secondary oracle only; does not close composable-constraint, constellation, or export gaps.</td>
+        <td>N/A (no access computation).</td>
+        <td><span class="badge pri-p0">P0</span></td>
+      </tr>
+      <tr>
+        <td class="domain">Lighting / Eclipse / Temporal geometry</td>
+        <td><span class="badge b-coreui">Done+UI (umbra only)</span></td>
+        <td>STK: umbra/penumbra/annular/sunlit, asset lighting, solar-intensity series, terminator, local solar time, lighting-as-constraint. <strong>Gap:</strong> library classifies all four conditions but UI charts UMBRA only; no cylindrical-shadow/beta-angle LEO model, no intensity series, no edterm/phaseq/et2lst, lighting not consumable as a constraint.</td>
+        <td>Partial (narrow oracle). EclipseLocator is an additional committed-fixture oracle, redundant with the existing occult-code check; supplies none of the remaining models.</td>
+        <td>N/A.</td>
+        <td><span class="badge pri-p2">P2</span></td>
+      </tr>
+      <tr>
+        <td class="domain">Communications &amp; RF link budgets</td>
+        <td><span class="badge b-doneui">Done+UI</span></td>
+        <td>STK: antenna pattern library, full link budgets, ITU-R P.676/P.618/P.840 attenuation, noise-temperature roll-up, Doppler, multi-hop, interference, radar; catalog Tx/Rx/Antenna/CommLink. <strong>Gap:</strong> app uses fixed EIRP/G-T constants not entities; no ITU-R models, no G/T roll-up, no patterns beyond parabolic, no M-PSK/M-QAM BER, no schema; anchors are textbook closed-forms NOT ITU-R worked examples.</td>
+        <td>Does not supply (out of GMAT scope).</td>
+        <td>N/A (part of the workbench Bessel adds; <span class="badge b-exceed">Exceeds</span>).</td>
+        <td><span class="badge pri-p1">P1</span></td>
+      </tr>
+      <tr>
+        <td class="domain">Coverage &amp; Constellation design</td>
+        <td><span class="badge b-coreui">Core done+UI</span></td>
+        <td>STK: grid/region coverage with a FOM field (% cover, revisit/gap, N-in-view, response time), point-by-point sweep, color-contour overlays, Walker/train flown by the propagator, GeoJSON/CSV. <strong>Gap:</strong> only scalar FOM reduction of one access window + pure Walker generation; no grid, no sweep, no revisit field, no contour overlay, no export; Walker never flown.</td>
+        <td>Does not supply coverage itself; can only propagate Walker member states (same value as the Propagation row).</td>
+        <td>N/A (<span class="badge b-exceed">Exceeds</span>).</td>
+        <td><span class="badge pri-p1">P1</span></td>
+      </tr>
+      <tr>
+        <td class="domain">Attitude &amp; Pointing</td>
+        <td><span class="badge b-coreui">Core done+UI</span></td>
+        <td>STK: profile library + two-vector laws, attitude simulator, rate/accel-limited slews, keep-out constraint windows, CK/AEM read+write, attitude drives sensor boresight. <strong>Gap:</strong> no CK read (ckgp/ckgpav/sce2c) or CK/AEM write, no profiles beyond nadir/sun, no keep-out/rate checking, no analytic angular velocity, attitude does not drive the boresight in-app.</td>
+        <td>Partial (modeling, not Bessel's gaps). GMAT models attitude for force/SRP and consumes CK; CK read/write and keep-out are native CSPICE-WASM work.</td>
+        <td>CK-attitude pxform path tested in isolation but no bundled CK/SCLK fixture (sample uses procedural spin).</td>
+        <td><span class="badge pri-p1">P1</span></td>
+      </tr>
+      <tr>
+        <td class="domain">Sensors &amp; Time-evolving footprints</td>
+        <td><span class="badge b-core">Core done</span><br><span class="badge b-partial">render-only, lib unwired</span></td>
+        <td>STK: rich FOV taxonomy (Simple/Complex conic, Rectangular, Custom, SAR), targeting, sensor Access with constraints, time-evolving swath + equal-area covered-area/revisit/max-gap, limb/terminator. <strong>Gap:</strong> @bessel/sensors is unimported; live FOV/footprint is a separate shell impl (apps/web/src/instruments.ts) via raw getfov/sincpt; no Sensor schema, no swath accumulation, sphere-only footprint, no limbpt/termpt; footprint lives in the wrong layer.</td>
+        <td>Does not supply meaningfully (no footprint/swath engine).</td>
+        <td>Live in-scene FOV cone + footprint render exists (parity); 6/7 geometry types Done.</td>
+        <td><span class="badge pri-p1">P1</span></td>
+      </tr>
+      <tr>
+        <td class="domain">Conjunction / SSA (CAT)</td>
+        <td><span class="badge b-coreui">Core done+UI</span></td>
+        <td>STK: all-vs-all and primary-vs-catalog screening with smart-sieve over large RSO catalogs, SGP4-driven propagation, curved two-body TCA root-find, 6x6 RIC covariance + STM + B-plane, Pc via Foster/Chan/Monte-Carlo/Alfano, CDM export. <strong>Gap:</strong> single-pair rectilinear (linear) closest-approach with an assumed 1 km sigma / 100 m HBR; no screening, no covariance propagation, no B-plane, no CDM, no worker pool.</td>
+        <td>Does not supply (no large-catalog screening). Only adjacent value is high-fidelity propagation feeding the screen.</td>
+        <td>N/A (<span class="badge b-exceed">Exceeds</span>).</td>
+        <td><span class="badge pri-p2">P2</span></td>
+      </tr>
+      <tr>
+        <td class="domain">Mission &amp; Maneuver design (Astrogator)</td>
+        <td><span class="badge b-coreui">Core done+UI</span></td>
+        <td>STK flagship: Mission Control Sequence, differential correctors + SQP optimizers (SNOPT/VF13), Izzo multi-rev Lambert + porkchop, finite-burn optimization, B-plane targeting, delta-v budgets over a numerical propagator. <strong>Gap (Critical):</strong> single-rev Lambert only; no MCS executor, no corrector/optimizer, no finite burns, no stopping conditions, no B-plane, no numerical propagator, no SPK publish of converged arcs.</td>
+        <td><strong>Supplies (deep, desktop/server).</strong> GMAT's strongest case: full MCS/DC/optimizer/finite-burn/B-plane over its numerical propagator. Strong R2 oracle now; R1 is the prime use case to evaluate at the decision gate.</td>
+        <td>N/A (<span class="badge b-exceed">Exceeds</span>).</td>
+        <td><span class="badge pri-p1">P1</span></td>
+      </tr>
+      <tr>
+        <td class="domain">Reporting / Graphs / Analysis Workbench</td>
+        <td><span class="badge b-coreui">Core done+UI</span></td>
+        <td>STK: Report &amp; Graph Manager over a unit-tagged data-provider registry (CSV, selectable units/time-format), plus Vector Geometry / Calculation (expression graph + dimensional analysis) / Time tools usable as constraints. <strong>Gap:</strong> no provider registry, no worker-side EvalSpec/evalSeries interpreter, no Calc/Time tools, no report table view, no analytic BetaAngle/RangeRate providers, no persisted definitions, no CSV export; the workbench is fixed-purpose buttons.</td>
+        <td>Does not supply the workbench; ReportFile outputs may at most seed oracle fixtures.</td>
+        <td>N/A (<span class="badge b-exceed">Exceeds</span>; viewer has no analysis).</td>
+        <td><span class="badge pri-p1">P1</span></td>
+      </tr>
+      <tr>
+        <td class="domain">Automation, SDK &amp; Interoperability (CCSDS / TLE / BCL)</td>
+        <td><span class="badge b-coreui">Core done+UI</span><br><span class="badge b-partial">no SDK</span></td>
+        <td>STK: Connect, Object Model, Python, headless Engine; full CCSDS family (OEM/OMM/AEM/CDM/TDM/VCM) plus TLE/3LE and STK .e/.a. <strong>Gap:</strong> OEM parse+write only (export-oem button is the one with no e2e assertion); no OMM/AEM/CDM/TDM/VCM, no TLE-&gt;TEME-&gt;J2000 ingest, no OEM-&gt;SPK import; ENTIRE @bessel/sdk/BCL/headless-runner absent. Domain where Bessel can structurally surpass STK.</td>
+        <td>Partial. GMAT produces SPK/OEM fixtures (R2) and could return ephemeris in an R1 desktop backend, but that round-trip is the explicitly UNVERIFIED gate condition; it does not supply @bessel/sdk/BCL.</td>
+        <td>Bessel adds URL state, MMGIS deep links, CZML export (<span class="badge b-exceed">advantages</span>); Cosmographia has command-line/batch usage Bessel lacks.</td>
+        <td><span class="badge pri-p1">P1</span></td>
+      </tr>
+      <tr>
+        <td class="domain">2D Map &amp; ground track</td>
+        <td><span class="badge b-partial">Partial</span></td>
+        <td>STK: multi-projection 2D map with ground tracks, swaths, coverage-FOM overlays, time-synced beside the globe, toggleable layers, geodetic readouts. <strong>Gap:</strong> @bessel/map-projection is not imported by the UI (ground track projects lon/lat inline, bypassing it); equirectangular-only, no Mercator/polar view, no swath/FOM overlays, no antimeridian/pole split in-app, no recgeo/recpgr readouts, no 2D-beside-3D.</td>
+        <td>Does not supply (no 2D mapping).</td>
+        <td>Bessel adds ground track + MMGIS deep links; parity on the viewer surface.</td>
+        <td><span class="badge pri-p1">P1</span></td>
+      </tr>
+      <tr>
+        <td class="domain">Terrain masking</td>
+        <td><span class="badge b-core">Core done</span><br><span class="badge b-partial">no UI</span></td>
+        <td>STK: DTED/imagery terrain for terrain-masked access/LOS and facility horizon masks. <strong>Gap:</strong> @bessel/terrain is fully unwired (library-only, synthetic-ridge tests only); no PAL terrain/DEM source, no facility horizon mask, not consumed by Access.</td>
+        <td>Does not supply (no terrain/DEM engine).</td>
+        <td>N/A (general GIS routes to MMGIS by design per ADR-0008).</td>
+        <td><span class="badge pri-p2">P2</span></td>
+      </tr>
+      <tr>
+        <td class="domain">Orbit Determination / Estimation</td>
+        <td><span class="badge b-partial">Not started</span></td>
+        <td>STK: batch least-squares / sequential estimation (ODTK-class), measurement models, residuals, realistic covariance. <strong>Gap (whole missing pillar):</strong> no @bessel/od, no batch-LS, no EKF/UKF, no measurement models, no residuals; every downstream covariance (e.g. conjunction Pc) is illustrative because no estimator produces a real one.</td>
+        <td><strong>Most likely future R1 justification.</strong> GMAT has OD/estimation; named as the single most likely reason to activate an R1 GMAT backend (desktop/server only).</td>
+        <td>N/A.</td>
+        <td><span class="badge pri-p2">P2</span></td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<!-- ============ GAP REGISTER ============ -->
+<section id="gaps">
+  <h2>Gap register (sorted by priority then severity)</h2>
+  <p class="legend">Severity:
+    <span class="badge sev-critical">Critical</span>
+    <span class="badge sev-major">Major</span>
+    <span class="badge sev-minor">Minor</span>
+    <span class="badge sev-na">N/A</span>
+    &nbsp; Effort: <span class="badge eff">S / M / L / XL</span>
+  </p>
+  <div class="tablewrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Gap</th>
+        <th>Source</th>
+        <th>Severity</th>
+        <th>Priority</th>
+        <th>Effort</th>
+        <th>Recommendation</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>F3 cancellable-job protocol + worker pool absent</strong> (no start/progress/cancel/result, no jobId machinery in packages/spice/src), plus no F5 evalSeries/EvalSpec interpreter. All sweeps are bounded single-shot.</td>
+        <td>STK / Critique</td>
+        <td><span class="badge sev-major">Major</span></td>
+        <td><span class="badge pri-p0">P0</span></td>
+        <td><span class="badge eff">L</span></td>
+        <td>Build it now. It is the single cross-cutting blocker for five XL domains (coverage grids, CAT all-vs-all, porkchop, OD batch iterations, HPOP sweeps). Also build the evalSeries interpreter so the workbench becomes a general provider system, not fixed buttons.</td>
+      </tr>
+      <tr>
+        <td><strong>Full composable Access constraint set not surfaced</strong> (UI wires only LOS-to-Sun); no range/elevation/azimuth/range-rate/FOV-inclusion selection, no CSV/CZML interval export.</td>
+        <td>STK / Critique</td>
+        <td><span class="badge sev-major">Major</span></td>
+        <td><span class="badge pri-p0">P0</span></td>
+        <td><span class="badge eff">M</span></td>
+        <td>Surface the constraints the library already computes (mostly UI plumbing), add the span-scoped worker channel (depends on F3) and CSV/CZML export. Access is the interval beachhead that unlocks Coverage, Comms, and Sensor access.</td>
+      </tr>
+      <tr>
+        <td><strong>Four validated cores are shadowed / unwired</strong> (@bessel/propagator, @bessel/sensors, @bessel/map-projection, @bessel/terrain have zero imports under apps/web/src); FOV/footprint is a parallel shell impl, ground track projects inline. The largest status-inflation gap.</td>
+        <td>Critique</td>
+        <td><span class="badge sev-major">Major</span></td>
+        <td><span class="badge pri-p1">P1</span></td>
+        <td><span class="badge eff">L</span></td>
+        <td>Wire propagator (TLE -&gt; SPK-13 -&gt; render orbit + e2e), migrate instruments.ts footprint into core @bessel/sensors/@bessel/scene, drive GroundTrackMap through @bessel/map-projection, and add the missing export-oem e2e assertion. Cheap; converts validated-library into demonstrated-UI.</td>
+      </tr>
+      <tr>
+        <td><strong>Numerical integrator + pluggable ForceModel (HPOP) absent</strong>: no Cowell/Encke, no DOP853/RKF7(8)/Gauss-Jackson, no NxN gravity (no EGM/GGM data), no drag/SRP/tides/third-body/relativity. @bessel/propagator is analytic-only.</td>
+        <td>STK / GMAT / Critique</td>
+        <td><span class="badge sev-major">Major</span></td>
+        <td><span class="badge pri-p1">P1</span></td>
+        <td><span class="badge eff">XL</span></td>
+        <td>Build natively (DOP853/RKF7(8) + pluggable ForceModel), validated against committed GMAT/Horizons fixtures with empirically-set tolerances (do NOT assume the refuted 0.05 mm/s figure). The deepest single technical gap; unblocks Propagation, Mission, Coverage flying, and SSA propagation at once.</td>
+      </tr>
+      <tr>
+        <td><strong>Astrogator-class mission design absent</strong>: no MCS segment model/executor, no differential corrector (finite-difference Newton), no SQP/NLP solver, no finite burns, no stopping conditions, no B-plane targeting, no Izzo multi-rev/porkchop. Single-rev Lambert demo only.</td>
+        <td>STK / GMAT / Critique</td>
+        <td><span class="badge sev-critical">Critical</span></td>
+        <td><span class="badge pri-p1">P1</span></td>
+        <td><span class="badge eff">XL</span></td>
+        <td>Build the typed serializable MCS + executor, JOB-1 worker lifecycle (F3), stopping conditions (dense-output sign-change + Brent), a finite-difference corrector, then multi-rev Lambert + porkchop as a cancellable job. Validate against GMAT/Horizons fixtures. Do not chase SNOPT/VF13 breadth; a damped-Newton corrector + one SQP is the realistic open target.</td>
+      </tr>
+      <tr>
+        <td><strong>ITU-R RF fidelity + comm-entity schema absent</strong>: no P.676/P.618/P.840 attenuation, no G/T noise roll-up, no antenna patterns beyond parabolic, no M-PSK/M-QAM BER, no Tx/Rx/Antenna/CommLink catalog; UI uses hardcoded DSN constants and textbook anchors.</td>
+        <td>STK</td>
+        <td><span class="badge sev-major">Major</span></td>
+        <td><span class="badge pri-p1">P1</span></td>
+        <td><span class="badge eff">XL</span></td>
+        <td>Add the ITU-R models with their actual worked-example anchors (current closed-form anchors are an honest weakness), G/T roll-up, broader patterns + modulation BER, and the catalog comm-entity schema. ITU tables arrive via the PAL as kernels-as-data. Radar stays a thin MAY-level adjunct.</td>
+      </tr>
+      <tr>
+        <td><strong>Attitude analysis tier absent</strong>: no CK read (ckgp/ckgpav/sce2c) or CK/AEM write, no profile library beyond nadir/sun, no keep-out/rate constraint windows, attitude does not drive the sensor boresight.</td>
+        <td>STK</td>
+        <td><span class="badge sev-major">Major</span></td>
+        <td><span class="badge pri-p1">P1</span></td>
+        <td><span class="badge eff">XL</span></td>
+        <td>Add CK read + SCLK via sce2c, expand the profile library (LVLH/target-track/spin/velocity) with priority/gap resolution, add keep-out + max-rate constraint windows (consume the shared SpiceWindow), couple attitude to the boresight, and add CK-3 + AEM write.</td>
+      </tr>
+      <tr>
+        <td><strong>Sensors as a typed analysis domain absent</strong>: footprint lives in the shell (wrong layer); no Sensor schema (Simple/Complex/Rectangular/Custom/SAR), no pointing layer, no sensor Access, no time-evolving swath/equal-area covered-area, sphere-only footprint, no limb/terminator.</td>
+        <td>STK / Critique</td>
+        <td><span class="badge sev-major">Major</span></td>
+        <td><span class="badge pri-p1">P1</span></td>
+        <td><span class="badge eff">XL</span></td>
+        <td>Migrate instruments.ts into core, build the typed Sensor schema + pointing layer (couples to Attitude), sensor Access with constraints, equal-area swath accumulation for authoritative covered-area/revisit/max-gap, ellipsoid footprint via sincpt, and limb closure via limbpt/termpt. SAR/Custom later.</td>
+      </tr>
+      <tr>
+        <td><strong>Coverage grid sweep + FOM field absent</strong>: only scalar FOM reduction + Walker generation; no grid model, no point-by-point sweep, no revisit field, no contour overlay, no GeoJSON/CSV; Walker never flown.</td>
+        <td>STK</td>
+        <td><span class="badge sev-major">Major</span></td>
+        <td><span class="badge pri-p1">P1</span></td>
+        <td><span class="badge eff">XL</span></td>
+        <td>Build an equal-area Fibonacci grid over a triaxial ellipsoid and a cancellable grid sweep over the existing single-point Access API (gated on F3), then the FOM field, the camera-relative contour overlay, and Walker flown through @bessel/propagator. Rests on Access + Propagation + F3.</td>
+      </tr>
+      <tr>
+        <td><strong>Automation SDK / Connect-equivalent absent</strong>: no @bessel/sdk, no headless Session facade, no Bessel Command Language (BCL) batch runner, no CLI entry, no machine-readable RunReport, no byte-stable product hashing.</td>
+        <td>STK / Cosmographia / Critique</td>
+        <td><span class="badge sev-major">Major</span></td>
+        <td><span class="badge pri-p1">P1</span></td>
+        <td><span class="badge eff">XL</span></td>
+        <td>Build the semver-governed Session facade + BCL (JSON discriminated-union 1:1 with SDK methods) + a .bcl batch runner with a RunReport and byte-stable hashing. The domain where Bessel can STRUCTURALLY SURPASS both incumbents; also unblocks reproducible cross-validation fixtures everywhere.</td>
+      </tr>
+      <tr>
+        <td><strong>General data-provider workbench absent</strong>: no unit-tagged provider registry, no worker-side EvalSpec interpreter, no Calculation/Time tools, no report table view, no analytic BetaAngle/RangeRate providers, no persisted definitions, no CSV export. Ten fixed buttons, not a system.</td>
+        <td>STK</td>
+        <td><span class="badge sev-major">Major</span></td>
+        <td><span class="badge pri-p1">P1</span></td>
+        <td><span class="badge eff">L</span></td>
+        <td>Build the unit-tagged registry + EvalSpec interpreter (F5/RPT-0/RPT-2), the Calculation Tool (allow-listed expression graph + dimensional analysis), the Time Tool, a report table with selectable units, analytic providers, persisted definitions (OPFS/URL), and CSV export.</td>
+      </tr>
+      <tr>
+        <td><strong>2D map duplication + missing views</strong>: @bessel/map-projection is bypassed by inline UI projection; equirectangular-only, no Mercator/polar map, no swath/FOM overlays, no 2D-beside-3D, no geodetic readouts.</td>
+        <td>STK / Critique</td>
+        <td><span class="badge sev-major">Major</span></td>
+        <td><span class="badge pri-p1">P1</span></td>
+        <td><span class="badge eff">XL</span></td>
+        <td>Reconcile the duplication: drive the UI through @bessel/map-projection (Mercator/polar), add the time-synced 2D-beside-3D view with toggleable layers, geodetic readouts (recgeo/recpgr/et2lst), swath + FOM overlays, and antimeridian/pole splitting. Stay within orbital-overlay scope; general GIS routes to MMGIS.</td>
+      </tr>
+      <tr>
+        <td><strong>CCSDS family beyond OEM absent</strong>: no OMM/AEM/CDM/TDM/VCM, no TLE-&gt;TEME-&gt;J2000 ingest, no OEM-&gt;SPK import (spkw13 exists, unused). One format of the six the domains actually need.</td>
+        <td>STK / Critique</td>
+        <td><span class="badge sev-major">Major</span></td>
+        <td><span class="badge pri-p1">P1</span></td>
+        <td><span class="badge eff">L</span></td>
+        <td>Round out interop (OMM/AEM/CDM, TLE-&gt;TEME-&gt;J2000 ingest, OEM-&gt;SPK import via spkw13) alongside the SDK. AEM unblocks attitude write; CDM unblocks SSA interop; TDM is consumed by future OD.</td>
+      </tr>
+      <tr>
+        <td><strong>Real-data / operational fixtures absent</strong>: every anchor is a textbook closed form or a single Cassini/Saturn + de440 fixture. No LEO/GEO scenario, no real TLE snapshot, no real CDM/OEM/OMM, no committed GMAT/Horizons cross-validation. Validation is real but narrow.</td>
+        <td>Critique</td>
+        <td><span class="badge sev-major">Major</span></td>
+        <td><span class="badge pri-p1">P1</span></td>
+        <td><span class="badge eff">M</span></td>
+        <td>Commit operational fixtures (TLE snapshot, real OEM/CDM, GMAT/Horizons reference trajectories) and run the cores against them at operational tolerances. Begins closing the "validated only on Cassini/textbook" credibility gap that pervades all comparisons.</td>
+      </tr>
+      <tr>
+        <td><strong>Frame / time infrastructure gaps</strong>: no EOP-aware TEME-&gt;J2000 (SGP4 outputs are TEME with no validated path to inertial), no et2lst local solar time, no recgeo/recpgr geodetic readouts wired. Silently undermines the propagator once wired.</td>
+        <td>Critique</td>
+        <td><span class="badge sev-major">Major</span></td>
+        <td><span class="badge pri-p1">P1</span></td>
+        <td><span class="badge eff">M</span></td>
+        <td>Implement the EOP-aware TEME-&gt;J2000 transform (prerequisite for placing SGP4 states in the scene), plus et2lst and recgeo/recpgr readouts in the UI.</td>
+      </tr>
+      <tr>
+        <td><strong>Orbit Determination / Estimation entirely absent</strong>: no @bessel/od, no batch-LS, no EKF/UKF, no measurement models or residuals; every downstream covariance is illustrative. A whole missing pillar.</td>
+        <td>STK / GMAT / Critique</td>
+        <td><span class="badge sev-major">Major</span></td>
+        <td><span class="badge pri-p2">P2</span></td>
+        <td><span class="badge eff">XL</span></td>
+        <td>Future domain; shares normal-equations machinery with the differential corrector. The single most likely justification for ever activating an R1 GMAT backend (desktop/server only). Sequence after the corrector and HPOP integrator exist.</td>
+      </tr>
+      <tr>
+        <td><strong>Large-catalog SSA screening absent</strong>: no all-vs-all/primary-vs-catalog smart-sieve, no SGP4-driven propagation callback, no curved two-body TCA, no 6x6 RIC covariance/STM, no B-plane, no Chan/Monte-Carlo/Alfano, no CDM export. Single-pair rectilinear demo.</td>
+        <td>STK / Critique</td>
+        <td><span class="badge sev-major">Major</span></td>
+        <td><span class="badge pri-p2">P2</span></td>
+        <td><span class="badge eff">XL</span></td>
+        <td>Build after the F3 worker pool: a coarse smart-sieve (apogee/perigee band) + all-vs-all over an SGP4-propagated catalog, curved two-body TCA root-find, 6x6 RIC covariance/STM + B-plane, and Alfano/Foster/Chan Pc cross-checks with a regime detector. CDM export closes interop.</td>
+      </tr>
+      <tr>
+        <td><strong>Performance / scale unproven</strong>: all sweeps bounded (1-day, 240-360 samples); no catalog-scale benchmark, no runtime-performance budget, no large-N stress test, no WASM-heap memory-pressure analysis.</td>
+        <td>Critique</td>
+        <td><span class="badge sev-minor">Minor</span></td>
+        <td><span class="badge pri-p2">P2</span></td>
+        <td><span class="badge eff">M</span></td>
+        <td>Add a runtime-performance budget and large-N stress tests (thousands of RSOs, dense grids, porkchop matrices) once the worker pool exists; characterize WASM-heap pressure under big sweeps.</td>
+      </tr>
+      <tr>
+        <td><strong>Lighting models + surfacing</strong>: UI charts umbra only; no cylindrical-shadow/beta-angle LEO model, no solar-intensity series, no terminator/et2lst, lighting not consumable as a constraint.</td>
+        <td>STK</td>
+        <td><span class="badge sev-minor">Minor</span></td>
+        <td><span class="badge pri-p2">P2</span></td>
+        <td><span class="badge eff">M</span></td>
+        <td>Cheap wins: surface penumbra/annular/sunlit (already computed), add the cylindrical-shadow LEO model (gfoclt cannot do it), the solar-intensity series, and the lighting-window-as-constraint generator. The core is the strongest in the suite; mostly surfacing + one model.</td>
+      </tr>
+      <tr>
+        <td><strong>Terrain unwired + hi-res content gaps</strong> (Cosmographia tier): @bessel/terrain unused, no PAL DEM source, no facility horizon mask; plus no bundled photographic NASA textures / auto-download manager, no real CK/SCLK fixture, no model reflections; headless/CLI and live telemetry are the two operational parity gaps with Cosmographia.</td>
+        <td>Cosmographia / Critique</td>
+        <td><span class="badge sev-minor">Minor</span></td>
+        <td><span class="badge pri-p2">P2</span></td>
+        <td><span class="badge eff">M</span></td>
+        <td>Wire @bessel/terrain via a PAL DEM source + facility horizon mask consumable by Access; build a texture auto-download/cache manager and ship a hi-res body set; add a real CK+SCLK fixture to prove the pxform path end-to-end; wire live telemetry (the CLI gap folds into the SDK above).</td>
+      </tr>
+      <tr>
+        <td><strong>Spec-vs-implementation divergence</strong>: @bessel/astro (named in spec §10) does not exist (scope folded into @bessel/propagator); the parity matrix and §9 status table do not reconcile this. The module map is stale.</td>
+        <td>Critique</td>
+        <td><span class="badge sev-minor">Minor</span></td>
+        <td><span class="badge pri-p3">P3</span></td>
+        <td><span class="badge eff">S</span></td>
+        <td>Reconcile the spec module map: either create @bessel/astro or document the fold into @bessel/propagator so the status table matches reality.</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<!-- ============ GMAT DECISION ============ -->
+<section id="gmat-decision">
+  <h2>GMAT integration decision</h2>
+  <div class="callout">
+    <h3>Seam-only, native-first, committed-fixture oracle (binding per spec §8)</h3>
+    <p>GMAT is NOT a runtime dependency for Bessel and cannot be one for the PWA or iOS targets. A browser-side GMAT is impractical: GMAT's native stack (wxWidgets, f2c Fortran, CSPICE, Xerces-C, PCRE2, SOFA, SWIG, pthreads) has no clean Emscripten build, and bundling it would defeat Bessel's offline-PWA core value (it also bundles its own CSPICE, duplicating CSPICE-WASM). GMAT is therefore relevant in exactly three roles:</p>
+    <ul>
+      <li><strong>R1 (deferred runtime backend).</strong> An optional desktop/server-only high-fidelity ComputeProvider behind the PAL seam, used for HPOP propagation, Astrogator-class mission design, and OD. Held in reserve behind a three-condition decision gate: (1) a concrete fidelity need, (2) a verified production-grade headless API, (3) a verified SPK/OEM ephemeris round-trip back into Bessel's pipeline. Conditions (2) and (3) are explicitly UNVERIFIED today.</li>
+      <li><strong>R2 (validation oracle, adopt now).</strong> Offline, committed-static-fixture reference trajectories and targeting/maneuver products that keep CI GMAT-free. Low-cost and high-leverage given the shared CSPICE/SPK substrate. Set tolerances empirically against the fixtures; do NOT assume the refuted 0.05 mm/s agreement figure.</li>
+      <li><strong>R3 (algorithm reference).</strong> Documented MCS / differential-corrector / optimizer / OD algorithms inform native implementations.</li>
+    </ul>
+    <p style="margin-top:10px;">Recommended posture: build the ComputeProvider seam now with only the native provider; invest in R2 GMAT fixtures for propagation and mission/maneuver design; hold R1 in reserve, with orbit determination the single most likely future justification for activating it. GMAT does NOT close the broad STK gap (no coverage grids, comms/RF, large-catalog SSA, 2D mapping, terrain, or reporting workbench).</p>
+  </div>
+</section>
+
+<!-- ============ ROADMAP ============ -->
+<section id="roadmap">
+  <h2>Recommended roadmap</h2>
+  <div class="roadmap">
+
+    <div class="phase">
+      <h3><span class="tag near">Near-term</span> Foundations &amp; honest surfacing (unblock everything; correct the status labels)</h3>
+      <ol>
+        <li><strong>Build the F3 cancellable-job protocol + worker pool and the F5 evalSeries/EvalSpec interpreter.</strong> <span class="why">Confirmed absent. The single cross-cutting blocker that five XL domains depend on (coverage grids, CAT all-vs-all, porkchop, OD batch iterations, HPOP sweeps); nothing deep ships until it exists. Effort L.</span></li>
+        <li><strong>Wire the four shadowed cores into the UI and delete the parallel shell impl.</strong> <span class="why">Import @bessel/propagator (TLE -&gt; SPK-13 -&gt; render orbit + e2e), migrate apps/web/src/instruments.ts footprint into core @bessel/sensors, drive GroundTrackMap through @bessel/map-projection, add the missing export-oem e2e assertion. Largest inflation gap and the cheapest to close; mostly plumbing over validated cores. Effort L.</span></li>
+        <li><strong>Surface the full composable Access constraint set + CSV/CZML export, and add real-data fixtures.</strong> <span class="why">The library already computes range/elevation/range-rate/FOV/lighting; the UI wires only LOS-to-Sun. Access is the interval beachhead for Coverage, Comms, and Sensor access. Pairing with operational TLE/OEM/CDM fixtures begins closing the Cassini/textbook-only credibility gap. Effort M.</span></li>
+      </ol>
+    </div>
+
+    <div class="phase">
+      <h3><span class="tag mid">Mid-term</span> The numerical tier and the general workbench</h3>
+      <ol>
+        <li><strong>Build the native numerical integrator + pluggable ForceModel (HPOP).</strong> <span class="why">DOP853/RKF7(8), NxN gravity, drag, SRP, third-body; validated against committed GMAT/Horizons fixtures with empirical tolerances. The deepest single technical gap; unblocks Propagation, Mission, Coverage flying, and SSA propagation at once. Native-first; GMAT only as an offline oracle. Effort XL.</span></li>
+        <li><strong>Build the general data-provider workbench.</strong> <span class="why">Unit-tagged registry + worker-side EvalSpec interpreter + Calculation/Time tools + report tables + analytic providers + CSV export; converts ten fixed buttons into STK's actual workbench model. Effort L.</span></li>
+        <li><strong>Round out interop and frame/time infrastructure.</strong> <span class="why">CCSDS OMM/AEM/CDM, OEM-&gt;SPK import via spkw13, EOP-aware TEME-&gt;J2000, et2lst, recgeo/recpgr; AEM unblocks attitude write, CDM unblocks SSA interop, TEME handling makes the propagator usable in-scene. Effort L+M.</span></li>
+        <li><strong>Add ITU-R RF fidelity + comm-entity schema, the attitude analysis tier (CK read/write, profiles, keep-out), and the typed Sensor schema with swath accumulation.</strong> <span class="why">Per-domain depth that closes the thin-slice gaps once Access and the workbench are general. Each is XL; sequence by mission need.</span></li>
+      </ol>
+    </div>
+
+    <div class="phase">
+      <h3><span class="tag long">Long-term</span> Scale, estimation, and the differentiating automation surface</h3>
+      <ol>
+        <li><strong>Stand up @bessel/sdk: headless Session facade + Bessel Command Language (BCL) batch runner + CLI, with a machine-readable RunReport and byte-stable product hashing.</strong> <span class="why">The one domain where an open, reproducible, CI-runnable headless runner can STRUCTURALLY SURPASS both STK and Cosmographia; also unblocks reproducible cross-validation fixtures for every other domain. Effort XL.</span></li>
+        <li><strong>Build the Astrogator-class optimizing Mission Control Sequence.</strong> <span class="why">Typed MCS + executor, finite-difference differential corrector, stopping conditions, multi-rev Lambert + porkchop, finite burns, B-plane targeting over the native integrator. Validate against GMAT/Horizons. Do not chase SNOPT/VF13 breadth initially. Effort XL.</span></li>
+        <li><strong>Build coverage grid sweeps + FOM fields and large-catalog SSA screening.</strong> <span class="why">Both rest on the F3 worker pool and the HPOP integrator: an equal-area grid sweep over Access with a FOM contour overlay, and an all-vs-all smart-sieve with 6x6 RIC covariance/STM + B-plane + CDM export. Effort XL each.</span></li>
+        <li><strong>Stand up orbit determination (@bessel/od).</strong> <span class="why">Batch-LS / EKF with measurement models, sharing the corrector's normal-equations machinery; produces the real covariances every downstream domain currently hardcodes. The most likely future justification for an R1 GMAT backend. Effort XL.</span></li>
+      </ol>
+    </div>
+
+  </div>
+</section>
+
+<!-- ============ UNCERTAINTIES ============ -->
+<section id="uncertainties">
+  <h2>Honest caveats / uncertainties</h2>
+  <div class="unc">
+    <h3>STK baseline (public record is thin on some specifics)</h3>
+    <ul>
+      <li>The STK baseline is grounded in Ansys/AGI product and help docs and the module set, but the STK Premium Space brochure PDF could not be retrieved (CDN timeouts); Premium-Space-only feature deltas vs STK Pro and exact module bundling are inferred.</li>
+      <li>Exact Astrogator optimizer set: SNOPT/VF13 are named, but the precise optimizer libraries shipped in the current Premium Space SKU are not confirmed.</li>
+      <li>STK's HPOP exact force-model menu (Jacchia/NRLMSISE/Harris-Priester drag, tides, relativity terms) is taken from the spec summary, not enumerated from primary brochure text.</li>
+      <li>Large-catalog CAT screening scale, smart-sieve specifics, and the Pc method menu (Foster/Chan/Alfano/Monte-Carlo per SKU) are described at a capability level, not pinned to a primary CAT reference.</li>
+      <li>Radar and EOIR are explicit non-goals; their capability surface is out of scope and not characterized.</li>
+      <li>STK's exact ITU-R model coverage (which of P.676/P.618/P.840 and which rain/cloud/scintillation submodels ship in Premium Space Comms) is asserted at the capability level.</li>
+      <li>Whether STK Premium Space includes built-in orbit determination or whether that is a separate ODTK product is not confirmed in the cited material.</li>
+    </ul>
+    <h3>GMAT as a backend (key conditions explicitly unverified)</h3>
+    <ul>
+      <li>Whether GMAT's SWIG Python/C++ API is production-grade for headless/embedded use at R2026a is UNVERIFIED (the public record cited reflects the API as of 2020); this gates R1 condition (2).</li>
+      <li>Whether GMAT can write SPK and/or CCSDS OEM/AEM that round-trips cleanly back into Bessel's SPK pipeline is UNVERIFIED and is decision-gate condition (3).</li>
+      <li>A specific GMAT validation tolerance was REFUTED: do NOT assume the published 0.05 mm/s FreeFlyer-agreement figure; R2 tolerances must be established empirically against committed fixtures.</li>
+      <li>The maturity, performance, and stability of GMAT's pluggable NLP solvers (SNOPT requires a separate commercial license; IPOPT) and of its OD/estimation measurement models for Bessel's cases are not characterized beyond their existence.</li>
+      <li>GMAT's batch/headless invocation cost, state/ephemeris marshalling overhead, and per-platform packaging size (it bundles its own CSPICE) are noted as costs but not quantified.</li>
+      <li>GMAT's coverage of equal-area/grid coverage, comms/RF, radar, and large-catalog conjunction is asserted as "does not provide" at a high level; contributed-plugin boundaries are not exhaustively verified.</li>
+    </ul>
+    <h3>Cosmographia (parity bar is approximate in places)</h3>
+    <ul>
+      <li>Cosmographia's exact camera move-verb set (crane/dolly/pan granularity) is asserted from cosmoguide.org docs; the precise vocabulary Bessel must match for full parity is not fully enumerated.</li>
+      <li>The hi-res-texture auto-download manager is cited from the README; its exact source/CDN list and threading model are not documented, so replication effort is estimated.</li>
+      <li>Cosmographia's timeline event-annotation richness is described as "Limited" without a precise feature list, so the parity bar for Bessel's deferred annotations is approximate.</li>
+      <li>The command-line/batch usage surface is not detailed in-repo; the scope of CLI parity (and overlap with the absent @bessel/sdk/BCL) is inferred.</li>
+      <li>Ring-texture and Globe cloud-map fidelity is noted as present but the visual quality bar is subjective and not pinned to a reference image.</li>
+      <li>CK-attitude parity cannot be fully demonstrated either way without a real CK+SCLK fixture; the pxform code path is tested in isolation only.</li>
+    </ul>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <p>This report is generated from a repository audit plus a spec comparison against three reference systems (Ansys STK Premium Space, NASA GMAT R2026a, Cosmographia). The audit cross-references the implemented files against the spec status tables and corrects status-table overstatements with file-level evidence (four validated cores are library-only or shadowed by parallel shell code despite "+UI" labels). Status: 337 Vitest unit/contract tests across 69 files, 20 Playwright e2e cases across 14 spec files, initial JS 312.36 kB gzip (budget 350 kB), CSPICE WASM 359 kB brotli (budget 4 MB); <code>pnpm verify</code> and <code>pnpm e2e</code> both green.</p>
+  <p>Key source documents: <code>SPEC.md</code>, <code>docs/STK_PARITY_SPEC.md</code>, <code>docs/PARITY_MATRIX.md</code>, <code>docs/adr/0008</code> (the GMAT seam-only / native-first ComputeProvider decision). Generated 2026-06-17.</p>
+</footer>
+
+</body>
+</html>

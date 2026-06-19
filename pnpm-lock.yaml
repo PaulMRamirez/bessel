@@ -115,21 +115,54 @@ importers:
 
   apps/web:
     dependencies:
+      '@bessel/access':
+        specifier: workspace:*
+        version: link:../../packages/access
+      '@bessel/attitude':
+        specifier: workspace:*
+        version: link:../../packages/attitude
       '@bessel/catalog':
         specifier: workspace:*
         version: link:../../packages/catalog
       '@bessel/color':
         specifier: workspace:*
         version: link:../../packages/color
+      '@bessel/conjunction':
+        specifier: workspace:*
+        version: link:../../packages/conjunction
+      '@bessel/coverage':
+        specifier: workspace:*
+        version: link:../../packages/coverage
+      '@bessel/events':
+        specifier: workspace:*
+        version: link:../../packages/events
+      '@bessel/interop':
+        specifier: workspace:*
+        version: link:../../packages/interop
+      '@bessel/map-projection':
+        specifier: workspace:*
+        version: link:../../packages/map-projection
+      '@bessel/mission':
+        specifier: workspace:*
+        version: link:../../packages/mission
       '@bessel/pal':
         specifier: workspace:*
         version: link:../../packages/pal
       '@bessel/pal-web':
         specifier: workspace:*
         version: link:../../packages/pal-web
+      '@bessel/propagator':
+        specifier: workspace:*
+        version: link:../../packages/propagator
+      '@bessel/rf':
+        specifier: workspace:*
+        version: link:../../packages/rf
       '@bessel/scene':
         specifier: workspace:*
         version: link:../../packages/scene
+      '@bessel/sensors':
+        specifier: workspace:*
+        version: link:../../packages/sensors
       '@bessel/spice':
         specifier: workspace:*
         version: link:../../packages/spice
@@ -186,6 +219,26 @@ importers:
         specifier: ^33.2.1
         version: 33.4.11
 
+  packages/access:
+    dependencies:
+      '@bessel/spice':
+        specifier: workspace:*
+        version: link:../spice
+      '@bessel/timeline':
+        specifier: workspace:*
+        version: link:../timeline
+
+  packages/analysis: {}
+
+  packages/attitude:
+    dependencies:
+      '@bessel/spice':
+        specifier: workspace:*
+        version: link:../spice
+      '@bessel/timeline':
+        specifier: workspace:*
+        version: link:../timeline
+
   packages/catalog:
     dependencies:
       '@bessel/pal':
@@ -199,6 +252,32 @@ importers:
         version: 3.0.1(ajv@8.20.0)
 
   packages/color: {}
+
+  packages/conjunction: {}
+
+  packages/coverage:
+    dependencies:
+      '@bessel/propagator':
+        specifier: workspace:*
+        version: link:../propagator
+      '@bessel/timeline':
+        specifier: workspace:*
+        version: link:../timeline
+
+  packages/events:
+    dependencies:
+      '@bessel/spice':
+        specifier: workspace:*
+        version: link:../spice
+      '@bessel/timeline':
+        specifier: workspace:*
+        version: link:../timeline
+
+  packages/interop: {}
+
+  packages/map-projection: {}
+
+  packages/mission: {}
 
   packages/pal:
     devDependencies:
@@ -246,6 +325,14 @@ importers:
         specifier: workspace:*
         version: link:../pal
 
+  packages/propagator:
+    dependencies:
+      '@bessel/spice':
+        specifier: workspace:*
+        version: link:../spice
+
+  packages/rf: {}
+
   packages/scene:
     dependencies:
       '@bessel/catalog':
@@ -271,6 +358,12 @@ importers:
         specifier: ^0.171.0
         version: 0.171.0
 
+  packages/sensors:
+    dependencies:
+      '@bessel/spice':
+        specifier: workspace:*
+        version: link:../spice
+
   packages/spice:
     dependencies:
       '@bessel/pal':
@@ -283,6 +376,8 @@ importers:
         specifier: ^3.23.1
         version: 3.23.2
 
+  packages/terrain: {}
+
   packages/timeline: {}
 
   packages/ui:
@@ -293,6 +388,9 @@ importers:
       '@bessel/color':
         specifier: workspace:*
         version: link:../color
+      '@bessel/map-projection':
+        specifier: workspace:*
+        version: link:../map-projection
       '@bessel/pal':
         specifier: workspace:*
         version: link:../pal

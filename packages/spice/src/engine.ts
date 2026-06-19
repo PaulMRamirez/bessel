@@ -44,6 +44,27 @@ export async function createSpiceEngine(options?: SpiceEngineOptions): Promise<S
     async spkezr(target, et, frame, abcorr: AberrationCorrection, observer) {
       return bindings.spkezr(target, et, frame, abcorr, observer);
     },
+    async oscelt(state, et, mu) {
+      return bindings.oscelt(state, et, mu);
+    },
+    async conics(elements, et) {
+      return bindings.conics(elements, et);
+    },
+    async prop2b(mu, state, dt) {
+      return bindings.prop2b(mu, state, dt);
+    },
+    async gfoclt(occtyp, front, fshape, fframe, back, bshape, bframe, abcorr, observer, step, start, stop) {
+      return bindings.gfoclt(occtyp, front, fshape, fframe, back, bshape, bframe, abcorr, observer, step, start, stop);
+    },
+    async gfdist(target, abcorr, observer, relate, refval, step, start, stop) {
+      return bindings.gfdist(target, abcorr, observer, relate, refval, step, start, stop);
+    },
+    async occult(targ1, shape1, frame1, targ2, shape2, frame2, abcorr, observer, et) {
+      return bindings.occult(targ1, shape1, frame1, targ2, shape2, frame2, abcorr, observer, et);
+    },
+    async spkposBatch(target, etArray, frame, abcorr: AberrationCorrection, observer) {
+      return bindings.spkposBatch(target, etArray, frame, abcorr, observer);
+    },
     async getfov(instId, room) {
       return bindings.getfov(instId, room);
     },
@@ -68,8 +89,29 @@ export async function createSpiceEngine(options?: SpiceEngineOptions): Promise<S
     async ilumin(method, target, et, fixref, abcorr: AberrationCorrection, observer, point) {
       return bindings.ilumin(method, target, et, fixref, abcorr, observer, point);
     },
+    async writeSpkType13(name, body, center, frame, segid, degree, et, states) {
+      return bindings.writeSpkType13(name, body, center, frame, segid, degree, et, states);
+    },
+    async twovec(axdef, indexa, plndef, indexp) {
+      return bindings.twovec(axdef, indexa, plndef, indexp);
+    },
+    async m2q(matrix) {
+      return bindings.m2q(matrix);
+    },
+    async q2m(quat) {
+      return bindings.q2m(quat);
+    },
+    async raxisa(matrix) {
+      return bindings.raxisa(matrix);
+    },
     async readDsk(name, bytes) {
       return bindings.readDsk(name, bytes);
+    },
+    async recgeo(rectan, re, f) {
+      return bindings.recgeo(rectan, re, f);
+    },
+    async et2lst(et, body, lon, type) {
+      return bindings.et2lst(et, body, lon, type);
     },
     async tkvrsn() {
       return bindings.tkvrsn();
