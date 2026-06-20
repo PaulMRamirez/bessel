@@ -6,6 +6,7 @@
 // it reads the mcsResult slice and calls the engine. (STK_PARITY_SPEC §4.3.)
 
 import { useState } from 'react';
+import { Button } from '@bessel/selene-design';
 import { TimeSeriesChart } from '@bessel/ui';
 import { type BesselEngine, DEFAULT_MCS_DESIGN, type McsDesign } from '../engine/index.ts';
 import { useStore, type AppStore } from '../store/index.ts';
@@ -75,9 +76,9 @@ export function MissionPanel(props: MissionPanelProps): JSX.Element {
         </label>
       </div>
 
-      <button type="button" onClick={() => void engine?.runMcsDesign(design)} data-testid="run-mcs">
+      <Button variant="primary" full testId="run-mcs" onClick={() => void engine?.runMcsDesign(design)}>
         Run mission sequence
-      </button>
+      </Button>
 
       {result ? (
         <div data-testid="mcs-result">

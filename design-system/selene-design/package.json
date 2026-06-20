@@ -18,6 +18,7 @@
       "default": "./dist/index.js"
     },
     "./styles.css": "./src/styles.css",
+    "./tokens": "./src/tokens.ts",
     "./tokens/*": "./src/tokens/*"
   },
   "files": [

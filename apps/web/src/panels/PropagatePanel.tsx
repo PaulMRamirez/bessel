@@ -5,6 +5,7 @@
 // (STK_PARITY_SPEC §4.1, Phase A.)
 
 import { useState } from 'react';
+import { Button } from '@bessel/selene-design';
 import { GroundTrackMap, IntervalTimeline, TimeSeriesChart, downloadBlob } from '@bessel/ui';
 import { intervalsToCsv } from '@bessel/interop';
 import { type BesselEngine, type HpopForceModel } from '../engine/index.ts';
@@ -36,9 +37,9 @@ export function PropagatePanel(props: PropagatePanelProps): JSX.Element {
 
   return (
     <div className="bessel-analysis" data-testid="propagate-panel">
-      <button type="button" onClick={() => void engine?.propagateTle()} data-testid="propagate-tle">
+      <Button variant="primary" full testId="propagate-tle" onClick={() => void engine?.propagateTle()}>
         Propagate sample TLE (SGP4)
-      </button>
+      </Button>
       {tleOrbit ? (
         <div data-testid="tle-result">
           <p className="bessel-analysis-stat" data-testid="tle-period">
@@ -58,13 +59,14 @@ export function PropagatePanel(props: PropagatePanelProps): JSX.Element {
             label={tleOrbit.track.label}
             testId="tle-ground-track"
           />
-          <button
-            type="button"
+          <Button
+            variant="primary"
+            full
+            testId="compute-station-access"
             onClick={() => void engine?.computeStationAccess()}
-            data-testid="compute-station-access"
           >
             Ground-station access (Goldstone, 10 deg, sunlit)
-          </button>
+          </Button>
           {stationAccess ? (
             <div data-testid="station-access-result">
               <div className="bessel-panel-title">{stationAccess.label}</div>
@@ -78,19 +80,19 @@ export function PropagatePanel(props: PropagatePanelProps): JSX.Element {
                 {stationAccess.fom.accessCount} pass
                 {stationAccess.fom.accessCount === 1 ? '' : 'es'}, {fmt(stationAccess.fom.percentCoverage * 100)}% of the day
               </p>
-              <button
-                type="button"
+              <Button
+                variant="secondary"
                 className="bessel-csv-button"
+                testId="station-access-csv"
                 onClick={() =>
                   downloadBlob(
                     new Blob([intervalsToCsv(stationAccess.window)], { type: 'text/csv' }),
                     'station-access.csv',
                   )
                 }
-                data-testid="station-access-csv"
               >
                 Export CSV
-              </button>
+              </Button>
             </div>
           ) : (
             <p className="bessel-loader-hint">Find visible passes over a ground station.</p>
@@ -113,13 +115,14 @@ export function PropagatePanel(props: PropagatePanelProps): JSX.Element {
             Frame note: the TLE state is TEME, integrated as J2000 (an arcminute-scale
             approximation near the epoch). SGP4 output is TEME -&gt; J2000.
           </p>
-          <button
-            type="button"
+          <Button
+            variant="primary"
+            full
+            testId="propagate-hpop"
             onClick={() => void engine?.propagateHpop(hpopModel)}
-            data-testid="propagate-hpop"
           >
             Propagate numerically (HPOP)
-          </button>
+          </Button>
           {hpopAltitude ? (
             <div data-testid="hpop-result">
               <div className="bessel-panel-title">{hpopAltitude.label}</div>

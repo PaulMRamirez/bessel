@@ -6,6 +6,7 @@
 // (STK_PARITY_SPEC F5 / §4.)
 
 import { useMemo, useState, type ReactNode } from 'react';
+import { Button } from '@bessel/selene-design';
 import { GroundTrackMap, IntervalTimeline, TimeSeriesChart, downloadBlob } from '@bessel/ui';
 import { seriesToCsv, intervalsToCsv } from '@bessel/interop';
 import type { BesselEngine } from '../engine/index.ts';
@@ -24,12 +25,26 @@ function exportCsv(filename: string, csv: string): void {
   downloadBlob(new Blob([csv], { type: 'text/csv' }), filename);
 }
 
+/** A primary panel action button (selene), preserving the data-testid test hook. */
+function Action(props: {
+  onClick: () => void;
+  testId: string;
+  children: ReactNode;
+  variant?: 'primary' | 'secondary';
+}): JSX.Element {
+  return (
+    <Button variant={props.variant ?? 'primary'} full testId={props.testId} onClick={props.onClick}>
+      {props.children}
+    </Button>
+  );
+}
+
 /** A small "Export CSV" button used under each analysis result. */
 function CsvButton(props: { onClick: () => void; testId: string }): JSX.Element {
   return (
-    <button type="button" className="bessel-csv-button" onClick={props.onClick} data-testid={props.testId}>
+    <Button variant="secondary" testId={props.testId} className="bessel-csv-button" onClick={props.onClick}>
       Export CSV
-    </button>
+    </Button>
   );
 }
 
@@ -169,9 +184,9 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
       </div>
 
       {/* Lighting (eclipse umbra) */}
-      <button type="button" onClick={() => void engine?.computeEclipse(span)} data-testid="compute-eclipse">
+      <Action onClick={() => void engine?.computeEclipse(span)} testId="compute-eclipse">
         Compute eclipse
-      </button>
+      </Action>
       <IntervalResult
         intervals={eclipseUmbra}
         span={eclipseSpan}
@@ -184,9 +199,9 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
       />
 
       {/* Range time series */}
-      <button type="button" onClick={() => void engine?.computeRange(targetSpan)} data-testid="compute-range">
+      <Action onClick={() => void engine?.computeRange(targetSpan)} testId="compute-range">
         Compute range
-      </button>
+      </Action>
       <SeriesResult
         series={rangeSeries}
         resultTestId="range-result"
@@ -196,9 +211,9 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
       />
 
       {/* Access windows + figure of merit */}
-      <button type="button" onClick={() => void engine?.computeAccess(targetSpan)} data-testid="compute-access">
+      <Action onClick={() => void engine?.computeAccess(targetSpan)} testId="compute-access">
         Compute access
-      </button>
+      </Action>
       <IntervalResult
         intervals={accessWindow}
         span={accessSpan}
@@ -219,9 +234,9 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
       />
 
       {/* Communications link budget */}
-      <button type="button" onClick={() => void engine?.computeLinkBudget(span)} data-testid="compute-link">
+      <Action onClick={() => void engine?.computeLinkBudget(span)} testId="compute-link">
         Compute downlink Eb/N0
-      </button>
+      </Action>
       <SeriesResult
         series={linkSeries}
         resultTestId="link-result"
@@ -230,13 +245,12 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
       />
 
       {/* Conjunction (closest approach + Pc) */}
-      <button
-        type="button"
+      <Action
         onClick={() => void engine?.computeConjunction(secondary ? { secondary } : {})}
-        data-testid="compute-conjunction"
+        testId="compute-conjunction"
       >
         Compute closest approach
-      </button>
+      </Action>
       <StatResult
         show={!!conjunction}
         resultTestId="conjunction-result"
@@ -251,9 +265,9 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
       </StatResult>
 
       {/* Constellation design */}
-      <button type="button" onClick={() => engine?.computeConstellation()} data-testid="compute-constellation">
+      <Action onClick={() => engine?.computeConstellation()} testId="compute-constellation">
         Design Walker constellation
-      </button>
+      </Action>
       <StatResult
         show={!!constellation}
         resultTestId="constellation-result"
@@ -269,9 +283,9 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
       </StatResult>
 
       {/* Attitude slew profile */}
-      <button type="button" onClick={() => void engine?.computeSlew()} data-testid="compute-slew">
+      <Action onClick={() => void engine?.computeSlew()} testId="compute-slew">
         Compute attitude slew
-      </button>
+      </Action>
       <SeriesResult
         series={slewSeries}
         resultTestId="slew-result"
@@ -280,9 +294,9 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
       />
 
       {/* Maneuver design (Lambert transfer) */}
-      <button type="button" onClick={() => void engine?.computeTransfer()} data-testid="compute-transfer">
+      <Action onClick={() => void engine?.computeTransfer()} testId="compute-transfer">
         Solve Lambert transfer
-      </button>
+      </Action>
       <StatResult
         show={!!transfer}
         resultTestId="transfer-result"
@@ -296,9 +310,9 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
       </StatResult>
 
       {/* 2D ground track */}
-      <button type="button" onClick={() => void engine?.computeGroundTrack(span)} data-testid="compute-groundtrack">
+      <Action onClick={() => void engine?.computeGroundTrack(span)} testId="compute-groundtrack">
         Compute ground track
-      </button>
+      </Action>
       {groundTrack ? (
         <div data-testid="groundtrack-result">
           <div className="bessel-panel-title">{groundTrack.label}</div>
@@ -309,9 +323,9 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
       )}
 
       {/* Interop: export CCSDS OEM */}
-      <button type="button" onClick={() => void engine?.exportOem()} data-testid="export-oem">
+      <Action variant="secondary" onClick={() => void engine?.exportOem()} testId="export-oem">
         Export CCSDS OEM
-      </button>
+      </Action>
     </div>
   );
 }

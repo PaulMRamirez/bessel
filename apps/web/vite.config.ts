@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
@@ -15,6 +16,20 @@ const base = process.env.BESSEL_BASE || '/';
 
 export default defineConfig({
   base,
+  resolve: {
+    // Bundle @bessel/selene-design from its TypeScript source (the workspace package
+    // ships no prebuilt dist). The alias is anchored to the bare specifier, so the
+    // ./styles.css and ./tokens subpath exports still resolve through the package's
+    // exports map. Matches the tsconfig path alias used for typechecking.
+    alias: [
+      {
+        find: /^@bessel\/selene-design$/,
+        replacement: fileURLToPath(
+          new URL('../../design-system/selene-design/src/index.ts', import.meta.url),
+        ),
+      },
+    ],
+  },
   plugins: [
     react(),
     VitePWA({

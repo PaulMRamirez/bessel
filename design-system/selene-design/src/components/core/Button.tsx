@@ -25,6 +25,12 @@ export interface ButtonProps {
   onClick?: () => void;
   disabled?: boolean;
   style?: CSSProperties;
+  /** Forwarded to the DOM as data-testid (for host-app test hooks). */
+  testId?: string;
+  /** Extra class names appended to the host element (host-app styling hooks). */
+  className?: string;
+  /** Native title/tooltip. */
+  title?: string;
 }
 
 /**
@@ -38,6 +44,9 @@ export function Button({
   onClick,
   disabled = false,
   style,
+  testId,
+  className,
+  title,
 }: ButtonProps) {
   const v = VARIANTS[variant];
   return (
@@ -45,6 +54,9 @@ export function Button({
       type="button"
       onClick={onClick}
       disabled={disabled}
+      data-testid={testId}
+      className={className}
+      title={title}
       style={{
         height: 'var(--control-lg)',
         padding: '0 14px',

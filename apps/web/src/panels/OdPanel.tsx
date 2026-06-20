@@ -5,6 +5,7 @@
 // it reads the odResult slice and calls the engine. (Tapley-Schutz-Born §4.3.)
 
 import { useState } from 'react';
+import { Button } from '@bessel/selene-design';
 import { type BesselEngine } from '../engine/index.ts';
 import { useStore, type AppStore } from '../store/index.ts';
 
@@ -37,9 +38,9 @@ export function OdPanel(props: OdPanelProps): JSX.Element {
         </label>
       </div>
 
-      <button type="button" onClick={() => engine?.runOd(noise)} data-testid="run-od">
+      <Button variant="primary" full testId="run-od" onClick={() => engine?.runOd(noise)}>
         Run batch least squares
-      </button>
+      </Button>
 
       {result ? (
         <div data-testid="od-result">

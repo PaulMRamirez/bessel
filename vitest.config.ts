@@ -8,9 +8,17 @@ const pkg = (p: string) => fileURLToPath(new URL(`./packages/${p}/src/index.ts`,
 // resolution via each package's exports map.
 const aliasFor = (name: string, p: string) => ({ find: new RegExp(`^@bessel/${name}$`), replacement: pkg(p) });
 
+// @bessel/selene-design lives under design-system/, not packages/, and ships no dist;
+// resolve the bare specifier to its source entry (subpath exports fall through).
+const selene = {
+  find: /^@bessel\/selene-design$/,
+  replacement: fileURLToPath(new URL('./design-system/selene-design/src/index.ts', import.meta.url)),
+};
+
 export default defineConfig({
   resolve: {
     alias: [
+      selene,
       aliasFor('spice', 'spice'),
       aliasFor('catalog', 'catalog'),
       aliasFor('scene', 'scene'),

@@ -4,6 +4,7 @@
 // configurable generalization of the fixed analysis buttons. (STK_PARITY_SPEC §4.10.)
 
 import { useMemo, useState } from 'react';
+import { Button } from '@bessel/selene-design';
 import { ReportTable, downloadBlob } from '@bessel/ui';
 import { seriesToCsv } from '@bessel/interop';
 import { PROVIDER_CATALOG, type ProviderKind } from '@bessel/spice';
@@ -105,16 +106,16 @@ export function ReportPanel(props: ReportPanelProps): JSX.Element {
           />
         </label>
       </div>
-      <button type="button" onClick={run} data-testid="run-report">
+      <Button variant="primary" full testId="run-report" onClick={run}>
         Run report
-      </button>
+      </Button>
       {report ? (
         <div data-testid="report-result">
           <div className="bessel-panel-title">{report.label}</div>
           <ReportTable columns={report.headers} rows={report.rows} testId="report-table" />
-          <button type="button" className="bessel-csv-button" onClick={exportCsv} data-testid="report-csv">
+          <Button variant="secondary" className="bessel-csv-button" testId="report-csv" onClick={exportCsv}>
             Export CSV
-          </button>
+          </Button>
         </div>
       ) : (
         <p className="bessel-loader-hint">Pick a provider and an observer/target pair, then run a report.</p>

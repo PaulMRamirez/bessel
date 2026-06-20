@@ -29,7 +29,8 @@ import {
   type ParticleSystemSpec,
   type TimeSwitchedSpec,
 } from '@bessel/scene';
-import { linearRamp } from '@bessel/color';
+import { linearRamp, oklchToRgb, rgbToHexNumber, rgbToHexString } from '@bessel/color';
+import { tokenValues } from '@bessel/selene-design/tokens';
 import type {
   BesselCatalog,
   CatalogBody,
@@ -101,6 +102,14 @@ export interface MissionScene {
 const INNER_BY_NAME = new Map(SOLAR_SYSTEM.map((p) => [p.name.toLowerCase(), p]));
 
 const DEFAULT_BODY_COLOR: readonly [number, number, number] = [0.6, 0.62, 0.66];
+
+// Scene accent colors derived from the @bessel/selene-design tokens so the 3D
+// overlays track the UI palette. oklch is not parseable by THREE.Color, so the
+// token's oklch source is converted to sRGB once here (amber as a hex number for
+// the direction vector, green/cyan as hex strings for the time-switched segments).
+const ACCENT_AMBER = rgbToHexNumber(oklchToRgb(tokenValues.amber));
+const SEGMENT_NOMINAL = rgbToHexString(oklchToRgb(tokenValues.green));
+const SEGMENT_DATA = rgbToHexString(oklchToRgb(tokenValues.cyan));
 const DEFAULT_BODY_RADIUS_KM = 1000;
 
 /** Mean radius (km) for a catalog body: explicit Globe radii, else a known body, else a default. */
@@ -362,7 +371,7 @@ export async function buildCatalogMissionScene(
     const scStart = positionAt(table, scName(spacecraft), et0);
     directionVectors.push({
       anchorBody: scName(spacecraft),
-      specs: [{ label: 'to-Sun', dirKm: [-scStart[0], -scStart[1], -scStart[2]], color: 0xffd27f }],
+      specs: [{ label: 'to-Sun', dirKm: [-scStart[0], -scStart[1], -scStart[2]], color: ACCENT_AMBER }],
       lengthKm: 200000,
     });
   }
@@ -595,7 +604,7 @@ function timeSwitchedFromGeometry(
       g.segments.map(async (seg, i) => {
         const start = await safeEt(spice, seg.timeRange.start, et0);
         const stop = await safeEt(spice, seg.timeRange.stop, et1);
-        const color = i % 2 === 0 ? '#7cfc00' : '#33ccff';
+        const color = i % 2 === 0 ? SEGMENT_NOMINAL : SEGMENT_DATA;
         return { start, end: stop, color, radiusKm: radius * 0.4 };
       }),
     );

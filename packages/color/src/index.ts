@@ -7,6 +7,9 @@ export interface Rgb {
   readonly b: number;
 }
 
+// oklch -> sRGB conversion, for turning oklch design tokens into WebGL/hex colors.
+export { oklchToRgb, rgbToHexNumber, rgbToHexString } from './oklch.ts';
+
 /** Maps a scalar (distance, phase angle, parameter value) to a color. */
 export interface ColorStrategy {
   readonly name: string;
