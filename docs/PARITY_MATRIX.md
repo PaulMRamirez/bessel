@@ -17,7 +17,7 @@ Date: 2026-06-19
 > capability. The status rows below are updated; honest residuals (content not
 > bundled, capabilities not yet surfaced in the shell) are called out per row and
 > summarized in Section 15. As of 2026-06-19 all program gates are green
-> (typecheck, lint, 667 unit/contract tests, build:web, build:desktop, cap:sync,
+> (typecheck, lint, 711 unit/contract tests, build:web, build:desktop, cap:sync,
 > 31 e2e incl. the Electron DSK render and the axe scan, size, audit:prod, lhci,
 > release:dry).
 
@@ -57,8 +57,8 @@ Counts after the closure pass (Draft v1.0 values in parentheses where changed):
 | 2. Catalog and data model        | 3 (2)   | 1 (2)   | 0       | 0         |
 | 3. SPICE and geometry engine     | 11      | 0       | 0       | 0         |
 | 4. Geometry taxonomy (7 types)   | 7 (4)   | 0 (3)   | 0       | 0         |
-| 5. Rendering fidelity            | 8 (7)   | 3 (2)   | 0 (2)   | 0         |
-| 6. Camera and navigation         | 4 (3)   | 2       | 0 (1)   | 0         |
+| 5. Rendering fidelity            | 10 (7)  | 1 (2)   | 0 (2)   | 0         |
+| 6. Camera and navigation         | 6 (3)   | 0       | 0 (1)   | 0         |
 | 7. Timeline and playback         | 5 (4)   | 0 (1)   | 0       | 0         |
 | 8. Analysis and measurement      | 4 (2)   | 0 (1)   | 0 (1)   | 0         |
 | 9. Modern UI/UX                  | 7       | 0       | 0       | 0         |
@@ -66,17 +66,15 @@ Counts after the closure pass (Draft v1.0 values in parentheses where changed):
 | 11. Sharing and ops integration  | 6 (4)   | 0       | 0 (2)   | 1         |
 | 12. Scripting and extensibility  | 3 (1)   | 0       | 1       | 0         |
 
-Headline reading: the SPICE engine, geometry taxonomy (including ring image
-textures now), timeline, measurement, and modern UI/UX are at or beyond parity, and
-the scripting console, plugin loader, and telemetry overlay are now wired into the
-shell UI. What remains is mostly content and a few narrow capabilities: real hi-res
-NASA basemaps are not bundled (the full material loader, generated textures, and
-procedural fallback are in place), CK-binary attitude needs the CSPICE-WASM `ck*`
-exports linked (bundled-demo attitude is already real via UniformRotation), camera
-frame-selection and crane/dolly verbs are narrower than Cosmographia, the full
-five-type catalog taxonomy is an 80 percent target (ADR-0006), the model format is
-glTF not 3DS/CMOD (by design), and TLE auto-update (niche) is unbuilt. See
-Section 15.
+Headline reading: core Cosmographia visualizer parity is effectively closed. The
+SPICE engine, geometry taxonomy (including ring image textures), rendering (real
+runtime-downloaded planetary imagery, CK-driven attitude), camera (arbitrary
+SPICE-frame lock, dolly/crane), timeline, measurement, and modern UI/UX are at or
+beyond parity, and the scripting console, plugin loader, and telemetry overlay are
+wired into the shell. The handful of remaining items are narrow or by-design: the
+full five-type catalog taxonomy is an 80 percent target (ADR-0006), model reflections
+are not rendered (shadows are), the model format is glTF not 3DS/CMOD (by design),
+and TLE auto-update (niche) is unbuilt. See Section 15.
 
 ---
 
@@ -125,7 +123,7 @@ in-process C++ calls.
 
 | Capability | Cosmographia | Bessel status | Evidence | Gap / note |
 | --- | --- | --- | --- | --- |
-| High-resolution image textures (multithread auto-download) | Yes | Partial | `packages/scene/src/body-material.ts` (`buildBodyMaterial`), `apps/web/scripts/gen-textures.mjs` | Base-map, normal-map, night (emissive), specular (metalness/roughness), and a cloud-shell map all load from the catalog (Cosmographia field parity), with explicit wrap modes and a procedural fallback; a generator writes small textures into `public/textures/`. Residual: real hi-res NASA basemaps are not bundled and there is no multithreaded auto-download manager yet. |
+| High-resolution image textures (multithread auto-download) | Yes | Done | `packages/scene/src/texture-manager.ts`, `apps/web/src/texture-imagery.ts`, `packages/pal-web/src/opfs-cache.ts` | A texture manager fetches real equirectangular planetary basemaps (Solar System Scope / NASA) at runtime behind a toggle, decodes off the first-paint shell, and caches them in OPFS via the PAL (mirroring kernel caching); base/normal/night/specular/cloud maps load from the catalog with Cosmographia field parity; the procedural texture is the loud-fail fallback. Bessel advantage: imagery is fetched on demand, not bundled. |
 | Realistic atmospheres | Yes | Done | `packages/scene/src/atmosphere.ts`, `shaders/` | Rayleigh scattering shell. |
 | Shadows and reflections on models | Yes | Partial | `packages/scene/src/shadows.ts` | Sun-light shadow mapping present; reflections not. |
 | Realistic star field from a catalog | Yes | Done | `packages/scene/src/star-field.ts`, `star-catalog.ts`, `apps/web/src/assets/bright-stars.json` |
@@ -134,7 +132,7 @@ in-process C++ calls.
 | Direction vectors (to Sun, Earth, velocity) | Yes (showDirectionVector) | Done | `packages/scene/src/direction-vectors.ts` |
 | FOV sensor cones | Yes | Done | scene plus `apps/web/src/instruments.ts` (`fovRim`); FOV e2e green |
 | Observation footprints (swath and discrete) | Yes (obsRate swath) | Done | `apps/web/src/instruments.ts` (`footprint`); footprint e2e green |
-| Spacecraft attitude from CK | Yes | Partial | `packages/scene/src/orientation.ts` (`applyAttitude`, `applyQuaternion`, `uniformRotationQuaternion`), `engine.ts` (pxform sampling) | The model orients each frame from `pxform(scFrame, J2000)` for a CK frame, or from a Fixed/UniformRotation orientation. The bundled demo now shows real, visible, data-driven attitude via a UniformRotation orientation (no CK binary needed). Residual: CK-binary read still needs the `ck*`/`sce2c` CSPICE-WASM exports linked plus a CK fixture. |
+| Spacecraft attitude from CK | Yes | Done | `packages/spice/src` (`ckw03`/`ckgp`/`sce2c` bindings), `packages/scene/src/orientation.ts` (`applyAttitude`), `kernels/fixtures/cassini-demo.bc` | CSPICE-WASM now exports the CK entry points (relinked via `pnpm cspice:build`); the engine writes and reads C-kernels, and the bundled Cassini demo furnishes a real CK + SCLK + FK and orients the model each frame from `pxform(scFrame, J2000)`. Validated by a write/`ckgp`/`pxform` round-trip against `q2m`. |
 | Camera-relative (floating origin) at solar-system scale | Yes | Done | `packages/scene/src/three-scene.ts`, `camera-modes.ts` | Mandatory per SPEC 5.1. |
 
 ## 6. Camera and navigation
@@ -144,8 +142,8 @@ in-process C++ calls.
 | Select an object (click to pick) | Yes | Done | `packages/scene/src/picking.ts`; `picking.test.ts` |
 | Set an object as center | Yes | Done | `packages/scene/src/camera-modes.ts` (center mode) |
 | Orbit and track the camera | Yes | Done | `camera-modes.ts` (orbit, track) | Track mode is a Bessel convenience. |
-| Select a rendering frame | Yes | Partial | `camera-modes.ts`, `apps/web/src/store/app-state.ts` | Orbit/center/track around a target body; explicit arbitrary SPICE-frame selection for the camera is narrower than Cosmographia. |
-| Move the camera (pan, dolly, crane) | Yes | Partial | `camera-modes.ts` | Standard orbit controls; not the full crane/dolly verb set. |
+| Select a rendering frame | Yes | Done | `packages/scene/src/camera-modes.ts`, `packages/ui/src/CameraFrameControls.tsx` | Orbit/center/track plus an arbitrary SPICE-frame lock: the camera orbit basis is oriented via `pxform(frame, J2000)` for any furnished frame (e.g. IAU_EARTH or a mission frame), camera-relative. |
+| Move the camera (pan, dolly, crane) | Yes | Done | `packages/scene/src/camera-modes.ts`, `camera-controller.ts` | Orbit controls plus dolly (translate along the view axis) and crane (vertical translation) verbs, wired into the controls and keymap. |
 | Set the view from a vector | Yes (Using a Vector to Set the Camera View) | Done | `packages/scene/src/camera-modes.ts` (`azimuthElevationFromDirection`), `engine.ts` (`viewAlong`, `viewFromSun`, `viewAlongVelocity`), `ui/ViewControls.tsx` | A vector sets the camera azimuth/elevation via the tested inverse of the orbit-camera math; "Sun view" and "Velocity view" buttons drive it. Tested by `camera-modes.test.ts`. |
 
 ## 7. Timeline and playback
@@ -337,6 +335,25 @@ program gates green, 667 unit and 31 e2e including the axe scan):
   OpenMCT/Yamcs conventions. Section 11 to Done.
 - Attitude: bundled-demo attitude is now real via a UniformRotation orientation; the
   CK-binary read still needs the `ck*`/`sce2c` CSPICE-WASM exports linked.
+
+Final parity push DONE (2026-06-19, three parallel tracks, all gates green, 711 unit
+and 31 e2e): the last visible viewer-parity gaps closed.
+- CK-binary attitude: CSPICE-WASM was relinked (`pnpm cspice:build`) to export
+  `ckw03`/`ckopn`/`ckcls`/`ckgp`/`sce2c`/`sct2e`; the engine writes and reads
+  C-kernels and the Cassini demo furnishes a real CK + SCLK + FK, validated by a
+  write/`ckgp`/`pxform` round-trip against `q2m`. Section 5 CK attitude to Done.
+- Real planetary imagery: a runtime texture manager fetches real equirectangular
+  basemaps (Solar System Scope / NASA) behind a toggle and OPFS-caches them via the
+  PAL, decoded off the first-paint shell. Section 5 hi-res textures to Done.
+- Camera: an arbitrary SPICE-frame lock (orient the orbit basis via `pxform`) and
+  dolly/crane motion verbs. Section 6 both rows to Done.
+- (Analysis, separate track but same batch: a Jacchia-1971 density model, an SQP MCS
+  optimizer, and OD Bennett refraction + state-noise compensation; see
+  docs/STK_PARITY_SPEC.md Section 9.)
+
+What is still genuinely not present: model reflections (shadows are rendered), the
+full five-type Cosmographia catalog taxonomy (ADR-0006 80 percent target), 3DS/CMOD
+mesh formats (glTF by design), and TLE auto-update (niche).
 
 ---
 

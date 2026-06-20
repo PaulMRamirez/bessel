@@ -69,6 +69,19 @@ maintained alongside them, not hand-edited per package.
   order; SPICE-derived timeline event annotations; a predicted-versus-actual telemetry
   overlay (OpenMCT/Yamcs idioms); and real bundled-demo spacecraft attitude via a
   UniformRotation orientation.
+- CK (C-kernel) attitude read/write: CSPICE-WASM relinked to export
+  `ckw03`/`ckopn`/`ckcls`/`ckgp`/`sce2c`/`sct2e`; the engine writes and reads
+  C-kernels and the bundled Cassini demo shows real CK-driven attitude (validated by
+  a write/`ckgp`/`pxform` round-trip against `q2m`).
+- Runtime planetary imagery: a texture manager fetches real equirectangular
+  basemaps behind a toggle and OPFS-caches them via the PAL, decoded off the
+  first-paint shell; plus an arbitrary SPICE-frame camera lock and dolly/crane verbs.
+- Higher-fidelity analysis: an F10.7/Ap-driven Jacchia-1971 thermospheric density
+  model (behind the `DensityModel` seam), an SQP optimizer for MCS targeting, and OD
+  Bennett tropospheric refraction plus state-noise-compensation in the EKF.
+- Web first-paint code-split: the analysis engines and workbench panels load on
+  demand (the shell dropped from ~328 to ~293 kB gzip), and the size budget is now
+  per-chunk (first-paint shell, lazy analysis, worker, WASM) instead of one sum.
 - F3 foundation in `@bessel/spice`: an EvalSpec time-series interpreter, a
   cancellable-job protocol, a multi-worker SPICE pool, and `recgeo`/`et2lst`
   bindings; the `SpiceWindow` interval algebra and a shared geometry finder in
