@@ -16,6 +16,7 @@ import {
   OpsPanel,
   PanelContainer,
   ReadoutPanel,
+  ScriptConsole,
   SearchBox,
   SettingsPanel,
   ThemeToggle,
@@ -47,6 +48,16 @@ export function BesselViewer(): JSX.Element {
   const store = storeRef.current;
   const engine = useBesselEngine(canvasRef, store);
   const [query, setQuery] = useState('');
+  const [scriptSource, setScriptSource] = useState('gotoObject Earth\nsetTimeRate 3600');
+  const [scriptLog, setScriptLog] = useState<readonly string[]>([]);
+
+  const runScript = useCallback((): void => {
+    if (!engine) return;
+    const result = engine.runScript(scriptSource);
+    const lines = [...result.echoLines];
+    if (result.error) lines.push(`error on line ${result.error.line}: ${result.error.message}`);
+    setScriptLog(lines.length ? lines : ['(no verbs to run)']);
+  }, [engine, scriptSource]);
 
   const status = useStore(store, (s) => s.status);
   const ready = useStore(store, (s) => s.ready);
@@ -142,6 +153,14 @@ export function BesselViewer(): JSX.Element {
           recording={recording}
           onCaptureStill={() => engine?.captureStill()}
           onToggleRecording={() => engine?.toggleRecording()}
+        />
+      </Popover>
+      <Popover label="Script" title="Scripting console" align="right" testId="script-menu">
+        <ScriptConsole
+          source={scriptSource}
+          onChange={setScriptSource}
+          onRun={runScript}
+          log={scriptLog}
         />
       </Popover>
       <Popover label="Propagate" title="Orbit propagation" align="right" testId="propagate-menu">

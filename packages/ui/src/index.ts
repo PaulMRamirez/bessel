@@ -51,3 +51,4 @@ export {
   type BookmarksPanelProps,
   type BookmarkItem,
 } from './BookmarksPanel.tsx';
+export { ScriptConsole, type ScriptConsoleProps } from './ScriptConsole.tsx';

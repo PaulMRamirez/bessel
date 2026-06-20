@@ -55,6 +55,7 @@ import { toggleSelection } from '../selection.ts';
 import { parseAnyCatalog, nativeEntries, formatLoadError } from '../catalog-load.ts';
 import { buildCatalogMissionScene } from '../generic-mission.ts';
 import { createScript } from '../scripting.ts';
+import { runScript, type ScriptResult } from '../script-runner.ts';
 import { MockTelemetrySocket } from '../telemetry-mock.ts';
 import {
   loadBookmarks,
@@ -1566,10 +1567,20 @@ export class BesselEngine {
     }
   }
 
+  // The canned guided tour, expressed in the same cosmoscripting line grammar the
+  // console interprets, so the tour and the console share one execution path.
+  private static readonly TOUR_SCRIPT = ['setTimeRate 3600', 'unpause', 'viewFromSun'].join('\n');
+
   // Run a short scripted tour over the viewer (surfaces the scripting API).
   runTour(): void {
-    const script = createScript(this, this.store);
-    script.setTimeRate(3600).unpause().viewFromSun();
+    this.runScript(BesselEngine.TOUR_SCRIPT);
+  }
+
+  // Interpret a cosmoscripting-style program (one verb per line) against the live
+  // viewer and return the per-line echo plus any first-failing-line error, which
+  // the scripting console renders.
+  runScript(source: string): ScriptResult {
+    return runScript(source, createScript(this, this.store));
   }
 
   // Start a mock predicted-versus-actual telemetry feed for the active spacecraft
