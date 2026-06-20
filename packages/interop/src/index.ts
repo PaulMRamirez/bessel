@@ -23,3 +23,4 @@ export {
 } from './czml.ts';
 export { parseCdm, CdmError, type Cdm, type CdmObject } from './cdm.ts';
 export { parseAem, AemError, type Aem, type AemMetadata, type AemRecord } from './aem.ts';
+export { writeAem } from './aem-write.ts';

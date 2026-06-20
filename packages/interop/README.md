@@ -23,6 +23,12 @@ AEM (CCSDS Attitude Ephemeris Message, KVN):
 - `parseAem(text): Aem` reads the metadata and quaternion attitude records,
   normalizing each quaternion to scalar-first `[w, x, y, z]` (the QUATERNION
   attitude type; closes the MONTE attitude-interchange seam, ADR-0012)
+- `writeAem(aem): string` serializes a quaternion attitude history back to KVN,
+  scalar-first (`QUATERNION_TYPE = FIRST`), so `parseAem(writeAem(aem))` round-trips
+  the metadata and quaternions. This is the portable attitude read/write path used in
+  place of native CK-binary IO (deferred until the `ck*` CSPICE-WASM exports land);
+  pair it with the `@bessel/attitude` `attitudeHistory` sampler for a pxform-style
+  body-orientation query.
 - `AemError`, types `Aem`, `AemMetadata`, `AemRecord`
 
 CSV export (RFC 4180, with formula-injection neutralization):
@@ -54,7 +60,9 @@ imports a concrete PAL implementation.
 
 ## Tests
 
-Tests live in `packages/interop/src/*.test.ts` (oem, oem-write, cdm, csv, czml).
+Tests live in `packages/interop/src/*.test.ts` (oem, oem-write, aem, aem-write, cdm,
+csv, czml). `aem-write.test.ts` round-trips a constructed attitude profile through
+`parseAem`/`writeAem`, recovering the scalar-first quaternions within tolerance.
 The real-data fixture `oem-fixture.test.ts` parses and round-trips the canonical
 CCSDS 502.0-B OEM example (Mars Global Surveyor) from
 `packages/interop/test-fixtures/mgs.oem`, asserting metadata and state vectors

@@ -10,6 +10,17 @@ Functions:
 
 - `closestApproachLinear(relPos, relVel)`: closest approach for rectilinear relative motion (target minus chaser), where the range rate is zero. Returns the `ClosestApproach`.
 - `collisionProbability2D(input, samples?)`: probability of collision in the 2D encounter plane via Foster's method. Integrates an axis-aligned bivariate Gaussian over the combined hard-body disk by polar (midpoint) quadrature.
+- `screenAllVsAll(objects, opts)`: all-vs-all close-approach screening. Given N objects as `SampledEphemeris` (id, shared epoch grid, interleaved positions/velocities, optional radius/sigma), it flags every pair that closes below `opts.thresholdKm` and reports each pair's `ConjunctionEvent` (TCA, miss, relative speed, and Pc when both objects carry a radius and sigma). A two-stage smart sieve (a per-object apogee/perigee radial-shell band, then a coarse conjunction-box per-axis overlap) rejects non-conjuncting pairs before any fine refinement, so the full O(N^2) distance evaluation is avoided for distant pairs. The refinement reuses `closestApproachLinear` (TCA) and `collisionProbability2D` (Pc) in this package. Types: `SampledEphemeris`, `ConjunctionEvent`, `ScreenOptions`; loud `ScreenError` on malformed input.
+
+```ts
+import { screenAllVsAll } from '@bessel/conjunction';
+
+const events = screenAllVsAll(
+  [primary, ...catalog], // each a SampledEphemeris over the screening grid
+  { thresholdKm: 5, sieveMarginKm: 50 },
+);
+// events: every flagged pair, sorted by TCA, with miss and (when covariance is present) Pc.
+```
 
 ```ts
 import { closestApproachLinear, collisionProbability2D } from '@bessel/conjunction';

@@ -142,3 +142,11 @@ export {
   keepOutWindow,
   type KeepOutRequest,
 } from './keep-out.ts';
+
+export {
+  attitudeHistory,
+  quaternionToMatrix,
+  AttitudeHistoryError,
+  type AttitudeRecord,
+  type AttitudeHistory,
+} from './ck.ts';

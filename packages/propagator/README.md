@@ -34,7 +34,10 @@ Numerical (Cowell) propagation:
   `fixedRotation`, `RotationAt`, `SphericalHarmonicsBody`,
   `SphericalHarmonicsOptions`, `SphericalHarmonicsError`), `drag` (atmospheric drag
   with `exponentialAtmosphere`, the `DensityModel` seam, `ExponentialBand`,
-  `ExponentialAtmosphereOptions`, `DragOptions`, `DragError`), `srp` (cannonball
+  `ExponentialAtmosphereOptions`, `DragOptions`, `DragError`), the higher-fidelity
+  `harrisPriesterAtmosphere` (a diurnal-bulge `DensityModel`: day/night density
+  profiles weighted by a cos^n bulge term, `HarrisPriesterOptions`,
+  `HarrisPriesterRow`, `HARRIS_PRIESTER_MEAN`), `srp` (cannonball
   solar radiation pressure with `cylindricalShadow`, `SunPositionAt`, `SrpOptions`,
   `SrpError`), `thirdBody`, `sampledPosition` (`PositionAt`), plus the `ForceModel`,
   `ForceTerm`, `ForceContext`, `Vector3`, `Mat3`, `AccelPartials` types (the
@@ -123,6 +126,11 @@ Tests live in `packages/propagator/src/*.test.ts`. Numeric oracles:
   subtracts the co-rotating atmosphere; the exponential model reproduces the
   documented band density and its e-folding; a low orbit loses energy monotonically;
   the analytic da/dv and the effective da/dr match central differences.
+- `harris-priester.test.ts`: the day-side (apex) and night-side (antapex) densities
+  equal the published Montenbruck & Gill Table 3.8 values (mean solar activity), the
+  exponential model's density falls between the HP day/night bracket at 400 km, the
+  profile is C0-continuous across band boundaries and as the diurnal bulge sweeps, and
+  it fails loudly outside the tabulated altitude span.
 - `srp.test.ts`: the cannonball acceleration points anti-sunward with the analytic
   magnitude, is exactly zero in the cylindrical umbra and nonzero just outside it,
   and its effective da/dr matches a central difference.
@@ -157,9 +165,12 @@ See REFERENCES.md (repo root) and docs/STK_PARITY_SPEC.md for full provenance.
 
 Force terms implemented: point-mass, zonal harmonics (J2/J4), full NxN spherical
 harmonics (sectoral and tesseral, body-fixed evaluation rotated to inertial),
-atmospheric drag (cannonball with a co-rotating atmosphere and a pluggable
-exponential-atmosphere density model, NRLMSISE-00 ready behind the `DensityModel`
-seam), cannonball solar radiation pressure (cylindrical umbra shadow), and
+atmospheric drag (cannonball with a co-rotating atmosphere and a pluggable density
+model behind the `DensityModel` seam: a piecewise-exponential USSA76 atmosphere and a
+higher-fidelity Harris-Priester model with a diurnal density bulge; a faithful full
+NRLMSISE-00 port, with F10.7/Ap space-weather drivers and a species-resolved
+thermosphere, is still pending, but Harris-Priester drops in behind the same seam),
+cannonball solar radiation pressure (cylindrical umbra shadow), and
 third-body. Mean-element propagation covers J2/J4 secular rates only (no periodic
 terms). The MCS corrector supports nested (multi-level) targeting and finite
 (continuous-thrust) burns with mass depletion; gradient optimizers are still
