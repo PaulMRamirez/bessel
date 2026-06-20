@@ -33,7 +33,7 @@ export class CatalogError extends Error {
   }
 }
 
-export { parseCosmographiaCatalog } from './cosmographia.ts';
+export { parseCosmographiaCatalog, cosmographiaGeometryToNative } from './cosmographia.ts';
 export type { CosmographiaCatalog, CosmographiaItem } from './cosmographia.ts';
 
 export {

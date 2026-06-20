@@ -16,6 +16,16 @@ export interface PlanetDef {
   readonly texture?: string;
   /** Optional normal-map image URL for surface relief shading. */
   readonly normalMap?: string;
+  /** Optional night-lights image URL; drives the emissive map (city lights). */
+  readonly nightTexture?: string;
+  /** Optional cloud-layer image URL; rendered as a separate translucent shell. */
+  readonly cloudMap?: string;
+  /** Cloud-shell altitude above the surface in km (defaults to 6.0 per Cosmographia). */
+  readonly cloudAltitudeKm?: number;
+  /** Optional specular color (0..1 RGB) for ocean glint; applied with specularPower. */
+  readonly specularColor?: readonly [number, number, number];
+  /** Optional specular sharpness; higher is glossier (lower roughness). */
+  readonly specularPower?: number;
 }
 
 export const SOLAR_SYSTEM: readonly PlanetDef[] = [

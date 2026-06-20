@@ -28,7 +28,7 @@ import {
   WebGLRenderer,
 } from 'three';
 import type { PlanetDef } from './planets.ts';
-import { buildBodyMaterial, proceduralBodyTexture } from './body-material.ts';
+import { buildBodyMaterial, cloudShellDescriptor, proceduralBodyTexture } from './body-material.ts';
 import { pickObjectId } from './picking.ts';
 import { LabelLayer } from './labels.ts';
 import { buildParticleSystem, type ParticleSystemParams } from './particle-system.ts';
@@ -116,6 +116,7 @@ export class SolarSystemScene {
   private readonly world = new Group();
   private readonly textureLoader = new TextureLoader();
   private readonly bodies = new Map<string, BodyNode>();
+  private hasCloudShell = false;
   private readonly positions = new Map<string, Km3>();
   private readonly raycaster = new Raycaster();
   private readonly labelLayer = new LabelLayer();
@@ -176,6 +177,7 @@ export class SolarSystemScene {
   }
 
   setBodies(defs: readonly PlanetDef[]): void {
+    this.hasCloudShell = false;
     for (const def of defs) {
       const material = buildBodyMaterial(def, {
         loadImageTexture: (url) => this.textureLoader.load(url),
@@ -184,9 +186,32 @@ export class SolarSystemScene {
       const radius = def.radiusKm * SCALE;
       const mesh = new Mesh(new SphereGeometry(radius, 32, 16), material);
       mesh.userData['objectId'] = def.name;
+      // Cloud layer: a separate translucent shell above the surface, so clouds
+      // alpha-blend over the globe rather than baking into the base material.
+      const cloud = cloudShellDescriptor(def);
+      if (cloud) {
+        const cloudMap = this.textureLoader.load(cloud.cloudMap);
+        const shell = new Mesh(
+          new SphereGeometry(radius + cloud.altitudeKm * SCALE, 32, 16),
+          new MeshBasicMaterial({
+            map: cloudMap,
+            transparent: true,
+            depthWrite: false,
+            opacity: 1.0,
+          }),
+        );
+        shell.userData['cloudShell'] = true;
+        mesh.add(shell);
+        this.hasCloudShell = true;
+      }
       this.bodies.set(def.name, { def, mesh, radius });
       this.world.add(mesh);
     }
+  }
+
+  /** True when the last setBodies built at least one cloud shell (read for the HUD flag). */
+  cloudShellPresent(): boolean {
+    return this.hasCloudShell;
   }
 
   setSpacecraft(name: string, radiusKm = 200): void {

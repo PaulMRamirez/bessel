@@ -59,6 +59,8 @@ export function BesselViewer(): JSX.Element {
   const instruments = useStore(store, (s) => s.instruments);
   const footprintPoints = useStore(store, (s) => s.footprintPoints);
   const fovOk = useStore(store, (s) => s.fovOk);
+  const ringTextured = useStore(store, (s) => s.ringTextured);
+  const cloudShell = useStore(store, (s) => s.cloudShell);
   const selection = useStore(store, (s) => s.selection);
   const track = useStore(store, (s) => s.track);
   const cameraMode = useStore(store, (s) => s.cameraMode);
@@ -208,6 +210,8 @@ export function BesselViewer(): JSX.Element {
         data-ready={ready}
         data-footprint-points={footprintPoints}
         data-fov={fovOk ? '1' : '0'}
+        data-ring-textured={ringTextured ? 'true' : 'false'}
+        {...(cloudShell ? { 'data-cloud-shell': 'true' } : {})}
         data-cam-target={focus}
         data-cam-mode={track ? 'track' : 'orbit'}
         data-selection={selection.join(',')}

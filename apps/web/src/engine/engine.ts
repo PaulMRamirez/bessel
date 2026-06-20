@@ -1545,6 +1545,10 @@ export class BesselEngine {
       e.scene.reset();
       buildScene(e.scene, mission.spec);
       if (mission.spacecraftModel) e.scene.setSpacecraftModel(mission.spacecraftModel);
+      // Texture-fidelity flags surfaced to the viewport for e2e/HUD: whether any
+      // ring drew an image texture, and whether a cloud shell was built.
+      const ringTextured = (mission.spec.rings ?? []).some((r) => !!r.texture);
+      const cloudShell = e.scene.cloudShellPresent();
       // Swap the live mission state the frame loop reads each tick.
       e.table = mission.table;
       e.identity = mission.identity;
@@ -1559,6 +1563,8 @@ export class BesselEngine {
         selection: [mission.identity.centerBody],
         footprintPoints: 0,
         fovOk: !!e.instrument,
+        ringTextured,
+        cloudShell,
         status: 'Ready',
       });
     } catch (err) {
