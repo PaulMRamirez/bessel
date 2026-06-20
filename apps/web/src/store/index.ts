@@ -6,6 +6,9 @@ export {
   type AppState,
   type AppStore,
   type Measurement,
+  type McsResult,
+  type McsGoalReport,
+  type OdResult,
   type Series,
 } from './app-state.ts';
 export { useStore } from './use-store.ts';

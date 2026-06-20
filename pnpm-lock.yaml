@@ -154,6 +154,9 @@ importers:
       '@bessel/mission':
         specifier: workspace:*
         version: link:../../packages/mission
+      '@bessel/od':
+        specifier: workspace:*
+        version: link:../../packages/od
       '@bessel/pal':
         specifier: workspace:*
         version: link:../../packages/pal

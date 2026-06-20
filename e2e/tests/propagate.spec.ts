@@ -27,8 +27,19 @@ test('propagate sample TLE renders altitude series and ground track', async ({ p
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toContain('.csv');
 
-  // Numerical propagation: the native Cowell HPOP (DOPRI5 + J2) integrates the same
-  // TLE state and plots its altitude (the analytic-vs-numerical companion).
+  // Numerical propagation: the native Cowell HPOP integrates the same TLE state under a
+  // selectable force model and plots its altitude (the analytic-vs-numerical companion).
+  // The frame note (TEME -> J2000) is always shown next to the force-model picker.
+  await expect(page.getByTestId('hpop-frame-note')).toContainText('TEME');
+  await page.getByTestId('hpop-force-model').selectOption('point-mass');
+  await page.getByTestId('propagate-hpop').click();
+  await expect(page.getByTestId('hpop-altitude-chart').locator('polyline')).toHaveCount(1, {
+    timeout: 20_000,
+  });
+
+  // Switching to a higher-fidelity model (NxN gravity + drag) re-runs the integrator and
+  // re-renders the altitude, proving the force-model selection threads through.
+  await page.getByTestId('hpop-force-model').selectOption('drag');
   await page.getByTestId('propagate-hpop').click();
   await expect(page.getByTestId('hpop-altitude-chart').locator('polyline')).toHaveCount(1, {
     timeout: 20_000,

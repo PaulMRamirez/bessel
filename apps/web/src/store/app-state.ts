@@ -53,6 +53,10 @@ export interface AppState {
   stationAccess: StationAccess | null;
   /** Altitude (km) from a numerical (HPOP, 2-body + J2) propagation of the TLE state. */
   hpopAltitude: Series | null;
+  /** Result of the last Mission Control Sequence (MCS) design run, or null. */
+  mcsResult: McsResult | null;
+  /** Result of the last batch-least-squares orbit-determination run, or null. */
+  odResult: OdResult | null;
   /** The last data-provider workbench report (table + raw series for CSV export). */
   report: ReportResult | null;
   // Instruments.
@@ -158,6 +162,50 @@ export interface TleOrbit {
   readonly label: string;
 }
 
+export interface McsGoalReport {
+  /** Goal type label (e.g. "Radius", "Altitude"). */
+  readonly type: string;
+  readonly achieved: number;
+  readonly desired: number;
+  readonly residual: number;
+  readonly satisfied: boolean;
+}
+
+export interface McsResult {
+  /** Final position (km) and speed (km/s) of the propagated sequence. */
+  readonly finalRadiusKm: number;
+  readonly finalSpeedKmS: number;
+  /** Final epoch (ET seconds). */
+  readonly finalEpoch: number;
+  /** Altitude (km) along the propagated arc, for a chart. */
+  readonly altitude: Series;
+  /** Whether the differential corrector converged (null when no target segment ran). */
+  readonly converged: boolean | null;
+  /** Iterations the differential corrector took (0 when none ran). */
+  readonly iterations: number;
+  /** Per-goal residual reports from the differential corrector. */
+  readonly goals: readonly McsGoalReport[];
+  readonly label: string;
+}
+
+export interface OdResult {
+  /** Estimated 6-state [x, y, z, vx, vy, vz] (km, km/s) at the solve epoch. */
+  readonly estimate: readonly number[];
+  /** Position error (km) of the estimate against the synthetic truth. */
+  readonly positionErrorKm: number;
+  /** Velocity error (km/s) of the estimate against the synthetic truth. */
+  readonly velocityErrorKmS: number;
+  /** Post-fit residual RMS (sigma-normalized, dimensionless). */
+  readonly residualRms: number;
+  /** Gauss-Newton iterations performed. */
+  readonly iterations: number;
+  /** Scalar measurement components fitted. */
+  readonly observationCount: number;
+  /** One-sigma position uncertainties (km) from the covariance diagonal. */
+  readonly sigmaPositionKm: readonly [number, number, number];
+  readonly label: string;
+}
+
 export interface Measurement {
   readonly from: string;
   readonly to: string;
@@ -198,6 +246,8 @@ export const initialAppState: AppState = {
   tleOrbit: null,
   stationAccess: null,
   hpopAltitude: null,
+  mcsResult: null,
+  odResult: null,
   report: null,
   instruments: false,
   footprintPoints: 0,

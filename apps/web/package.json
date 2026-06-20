@@ -19,6 +19,7 @@
     "@bessel/interop": "workspace:*",
     "@bessel/map-projection": "workspace:*",
     "@bessel/mission": "workspace:*",
+    "@bessel/od": "workspace:*",
     "@bessel/pal": "workspace:*",
     "@bessel/pal-web": "workspace:*",
     "@bessel/propagator": "workspace:*",

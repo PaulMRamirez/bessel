@@ -40,9 +40,6 @@ import {
   publishEphemeris,
   emptyTable,
   propagateCowell,
-  createForceModel,
-  pointMass,
-  zonalHarmonics,
 } from '@bessel/propagator';
 import { SAMPLE_TLE } from '../sample-tle.ts';
 
@@ -68,6 +65,9 @@ import {
 import type { AppStore } from '../store/index.ts';
 import { bootScene, loadInstrument, type EngineCore } from './bootstrap.ts';
 import { applyViewModel } from './apply-view.ts';
+import { buildHpopForceModel, HPOP_FORCE_MODEL_LABELS, type HpopForceModel } from './hpop-model.ts';
+import { runMcsDesign, type McsDesign } from './mcs.ts';
+import { runOdDemo } from './od.ts';
 
 // True when two optional angles are equal or both absent (within tolerance).
 function anglesClose(a: number | null, b: number | null): boolean {
@@ -1105,7 +1105,7 @@ export class BesselEngine {
    * integrator end-to-end. (Frame note: the TLE state is TEME, integrated as J2000, an
    * arcminute-scale approximation near the epoch; the J2 axis assumption holds.)
    */
-  async propagateHpop(): Promise<void> {
+  async propagateHpop(model: HpopForceModel = 'j2'): Promise<void> {
     const e = this.core;
     if (!e) return;
     try {
@@ -1117,10 +1117,7 @@ export class BesselEngine {
       const n = Math.floor(86400 / step) + 1;
       const et = new Float64Array(n);
       for (let i = 0; i < n; i++) et[i] = epoch + i * step;
-      const forceModel = createForceModel([
-        pointMass(EARTH_GM),
-        zonalHarmonics({ gm: EARTH_GM, re: EARTH_RE }, { j2: EARTH_J2 }),
-      ]);
+      const forceModel = buildHpopForceModel(model, { gm: EARTH_GM, re: EARTH_RE, j2: EARTH_J2 });
       const table = propagateCowell({
         state: {
           position: { x: s0.position[0], y: s0.position[1], z: s0.position[2] },
@@ -1140,12 +1137,60 @@ export class BesselEngine {
       for (let i = 0; i < n; i++) altitude[i] = series.columns[0]![i]! - EARTH_RE;
       if (!this.disposed) {
         this.store.setState({
-          hpopAltitude: { et, value: altitude, label: `${SAMPLE_TLE.name} HPOP altitude (km, 2-body + J2)` },
+          hpopAltitude: {
+            et,
+            value: altitude,
+            label: `${SAMPLE_TLE.name} HPOP altitude (km, ${HPOP_FORCE_MODEL_LABELS[model]})`,
+          },
         });
       }
     } catch (err) {
       if (!this.disposed) this.store.setState({ hpopAltitude: null });
       console.error('HPOP propagation failed', err);
+    }
+  }
+
+  /**
+   * Mission-design workbench: assemble a small Mission Control Sequence (initial state,
+   * a coast, an impulsive maneuver, then a Target whose differential corrector tunes the
+   * burn to reach a desired radius) and run it SPICE-free via @bessel/propagator. The
+   * resulting Earth-centered arc is drawn as an orbit polyline (camera-relative, km
+   * scaled in the scene), and the final state plus the differential-corrector report are
+   * written to the store. (STK_PARITY_SPEC §4.3.)
+   */
+  async runMcsDesign(design: McsDesign): Promise<void> {
+    const e = this.core;
+    if (!e) return;
+    try {
+      const { result, arc } = await runMcsDesign(design);
+      if (this.disposed) return;
+      // Render the propagated arc as an Earth-anchored orbit polyline. The points are km
+      // (Earth-centered J2000); the scene applies the camera-relative scale, so no raw
+      // solar-system coordinates reach the GPU float32 buffers.
+      if (arc.length >= 2) {
+        e.scene.setOrbits([{ id: 'mcs-arc', anchorBody: 'Earth', points: arc, color: 0xffaa33 }]);
+      }
+      this.store.setState({ mcsResult: result });
+    } catch (err) {
+      if (!this.disposed) this.store.setState({ mcsResult: null });
+      console.error('MCS design run failed', err);
+    }
+  }
+
+  /**
+   * Orbit-determination workbench: synthesize a small range / range-rate / angles
+   * measurement set from a known truth orbit, perturb the initial guess, and recover the
+   * state with @bessel/od batch least squares. SPICE-free and synchronous; writes the
+   * estimate, residual RMS, and covariance summary to the store. (Tapley-Schutz-Born
+   * §4.3; Vallado §10.2.)
+   */
+  runOd(noiseScale: number): void {
+    try {
+      const result = runOdDemo(noiseScale);
+      if (!this.disposed) this.store.setState({ odResult: result });
+    } catch (err) {
+      if (!this.disposed) this.store.setState({ odResult: null });
+      console.error('Orbit determination failed', err);
     }
   }
 
