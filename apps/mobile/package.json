@@ -1,5 +1,6 @@
 {
   "name": "@bessel/mobile",
+  "description": "Bessel mobile shell: the Capacitor host that wraps the built web app for iOS and Android",
   "version": "0.0.0",
   "private": true,
   "type": "module",

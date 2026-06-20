@@ -1,5 +1,6 @@
 {
   "name": "@bessel/desktop",
+  "description": "Bessel desktop shell: the Electron host that injects the Electron PAL into the viewer",
   "version": "0.0.0",
   "private": true,
   "type": "module",

@@ -1,5 +1,6 @@
 {
   "name": "@bessel/web",
+  "description": "Bessel web shell: the Progressive Web App host that injects the Web PAL into the viewer",
   "version": "0.0.0",
   "private": true,
   "type": "module",
