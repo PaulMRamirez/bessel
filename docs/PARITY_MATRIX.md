@@ -17,7 +17,7 @@ Date: 2026-06-19
 > capability. The status rows below are updated; honest residuals (content not
 > bundled, capabilities not yet surfaced in the shell) are called out per row and
 > summarized in Section 15. As of 2026-06-19 all program gates are green
-> (typecheck, lint, 509 unit/contract tests, build:web, build:desktop, cap:sync,
+> (typecheck, lint, 588 unit/contract tests, build:web, build:desktop, cap:sync,
 > 23 e2e incl. the Electron DSK render and the axe scan, size, audit:prod, lhci,
 > release:dry).
 
@@ -223,12 +223,13 @@ clone:
 - Modern UI affordances: search, theming, dockable panels, inspector, richer
   illumination readouts (Sections 8 and 9).
 - A numerical mission-analysis backend that Cosmographia, a pure viewer, has no
-  equivalent of: special-perturbations propagation (adaptive DOPRI5 Cowell) with
-  dense output, switching-function event detection, and a co-integrated State
-  Transition Matrix; an Astrogator-class Mission Control Sequence executor with a
-  single-level differential corrector; the EOP-aware TEME to J2000 transform; and
-  the headless automation SDK and `bessel` batch runner (Section 11). See
-  docs/STK_PARITY_SPEC.md for the analysis-layer requirements.
+  equivalent of: special-perturbations propagation (adaptive DOPRI5 Cowell with NxN
+  gravity, drag, and SRP) with dense output, switching-function event detection, and
+  a co-integrated State Transition Matrix; an Astrogator-class Mission Control
+  Sequence executor with a differential corrector, nested targeting, and finite
+  burns; orbit determination (batch least-squares and an EKF); the EOP-aware TEME to
+  J2000 transform; and the headless automation SDK and `bessel` batch runner
+  (Section 11). See docs/STK_PARITY_SPEC.md for the analysis-layer requirements.
 
 ## 14. Known divergences (by design, not gaps)
 

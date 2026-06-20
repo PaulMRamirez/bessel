@@ -86,11 +86,11 @@ loads a fixture and checks for a non-empty WebGL frame, never by judgement.
   imports a concrete PAL implementation. Order is plugins, core, PAL interface,
   UI, shells. Core (@bessel/spice, catalog, scene, timeline, state, color, the
   analysis-engine packages: propagator, access, events, rf, coverage, conjunction,
-  attitude, sensors, mission, map-projection, interop, analysis, terrain, and the
-  headless automation package sdk) depends only on other core packages and the
+  attitude, sensors, mission, map-projection, interop, analysis, terrain, od, and
+  the headless automation package sdk) depends only on other core packages and the
   @bessel/pal interface. The UI depends on core and the PAL interface. Shells inject
   one PAL implementation at startup (pal-web, pal-electron, pal-capacitor for the
-  GUI shells; pal-node for the headless CLI). The workspace has 26 packages in all
+  GUI shells; pal-node for the headless CLI). The workspace has 27 packages in all
   (see docs/architecture.md for the map). If a task tempts you to break this rule,
   the scope is wrong; stop and flag it.
 - The SPICE engine never reads kernel bytes directly. Kernels arrive through the

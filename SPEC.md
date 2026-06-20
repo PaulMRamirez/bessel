@@ -136,7 +136,7 @@ bessel/
     pal/          # @bessel/pal      interface + pal-web, pal-capacitor, pal-electron, pal-node
     ui/           # @bessel/ui       React components, panels, controls
                   # the workspace also contains the analysis-engine packages
-                  #   (propagator, access, events, rf, coverage, conjunction,
+                  #   (propagator, od, access, events, rf, coverage, conjunction,
                   #   attitude, sensors, mission, map-projection, interop, analysis,
                   #   terrain) and the headless automation package sdk,
                   #   specified in docs/STK_PARITY_SPEC.md Section 10

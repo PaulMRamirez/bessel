@@ -23,22 +23,32 @@ maintained alongside them, not hand-edited per package.
     HPOP (adaptive DOPRI5 with a point-mass + J2 force model).
   - Report workbench: a unit-tagged data-provider registry driving cancellable
     `evalSeries` jobs into report tables and CSV.
-- New core analysis packages: `@bessel/propagator`, `access`, `events`, `rf`,
+- New core analysis packages: `@bessel/propagator`, `od`, `access`, `events`, `rf`,
   `coverage`, `conjunction`, `attitude`, `sensors`, `mission`, `map-projection`,
   `interop`, `analysis`, and `terrain`.
 - Numerical substrate in `@bessel/propagator`: dense (continuous Hermite) output,
   switching-function event detection with terminal stops, and the co-integrated
   42-state variational State Transition Matrix (`propagateCowellEx`).
+- Higher-fidelity Cowell force models in `@bessel/propagator`: full NxN spherical
+  harmonics (sectoral and tesseral), atmospheric drag (co-rotating, pluggable
+  exponential density), and cannonball solar radiation pressure with a cylindrical
+  shadow, alongside the existing point-mass, zonal, and third-body terms.
 - Astrogator-class Mission Control Sequence in `@bessel/propagator` (`mcs/`): a pure
-  JSON mission IR, an immutable executor, and a single-level differential corrector
-  with an STM-analytic (else finite-difference) Jacobian and damped Newton solve.
+  JSON mission IR, an immutable executor, and a differential corrector with an
+  STM-analytic (else finite-difference) Jacobian and damped Newton solve, including
+  nested multi-level targeting and finite (continuous-thrust) burns with mass
+  depletion.
+- Orbit determination in the new `@bessel/od`: a Gauss-Newton batch least-squares
+  estimator and a sequential extended Kalman filter, with range, range-rate, and
+  angle measurement models, seeded by the propagator State Transition Matrix.
 - EOP-aware TEME to J2000 (EME2000/GCRF) transform in `@bessel/propagator`
   (`frames/`): IAU-1976 precession, the full IAU-1980 nutation, and celestial-pole
   offsets, validated to sub-meter against the Vallado worked example.
-- Headless automation: `@bessel/sdk` (a JSON batch-job IR, a `defineJob` builder,
-  and a deterministic `runJob` runner with CI-grade exit codes), `@bessel/pal-node`
-  (Node kernel source plus a confined writer), and `apps/cli` (the `bessel` batch
-  runner).
+- Headless automation: `@bessel/sdk` (a JSON batch-job IR, a `defineJob` builder, a
+  deterministic `runJob` runner with CI-grade exit codes and a provenance manifest,
+  ops for furnish/loadCatalog/propagate/runMcs/analyze[range, eclipse, access,
+  linkBudget]/report/export, and a shipped JSON Schema), `@bessel/pal-node` (Node
+  kernel source plus a confined writer), and `apps/cli` (the `bessel` batch runner).
 - F3 foundation in `@bessel/spice`: an EvalSpec time-series interpreter, a
   cancellable-job protocol, a multi-worker SPICE pool, and `recgeo`/`et2lst`
   bindings; the `SpiceWindow` interval algebra and a shared geometry finder in

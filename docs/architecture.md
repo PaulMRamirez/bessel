@@ -1,6 +1,6 @@
 # Architecture Overview and Package Map
 
-This is the navigable map of the monorepo: the binding layering, the 26 core
+This is the navigable map of the monorepo: the binding layering, the 27 core
 packages with one-line purposes, the data flow, and the cross-cutting mandates.
 The binding decisions behind it are in docs/adr/; the requirements are in SPEC.md
 (visualizer) and docs/STK_PARITY_SPEC.md (analysis engines).
@@ -60,11 +60,16 @@ SPICE engine. Algorithm provenance is in REFERENCES.md.
 
 - `@bessel/propagator`: SGP4 with TLE/OMM ingest, two-body and J2/J4 mean-element
   theory, SPK Type-13 publish, and the native Cowell HPOP (adaptive DOPRI5 with a
-  pluggable force model). Plus the numerical substrate built on it: dense
-  (continuous) output, switching-function event detection with terminal stops, the
-  co-integrated State Transition Matrix, an Astrogator-class Mission Control
-  Sequence executor with a single-level differential corrector, and the EOP-aware
-  TEME to J2000 (IAU-76/80) transform for SGP4 output.
+  pluggable force model: point-mass, NxN spherical harmonics, third-body,
+  atmospheric drag, and solar radiation pressure). Plus the numerical substrate
+  built on it: dense (continuous) output, switching-function event detection with
+  terminal stops, the co-integrated State Transition Matrix, an Astrogator-class
+  Mission Control Sequence executor with a differential corrector (nested targeting
+  and finite burns), and the EOP-aware TEME to J2000 (IAU-76/80) transform for SGP4
+  output.
+- `@bessel/od`: orbit determination. A Gauss-Newton batch least-squares estimator
+  and a sequential extended Kalman filter, with range, range-rate, and angle
+  measurement models, seeded by the propagator's State Transition Matrix.
 - `@bessel/access`: visibility/access windows (line-of-sight, range, facility
   elevation) and chained access.
 - `@bessel/events`: eclipse and lighting intervals.
@@ -90,9 +95,11 @@ SPICE engine. Algorithm provenance is in REFERENCES.md.
 - `@bessel/sdk`: the programmatic automation facade plus a serializable JSON
   batch-job IR (the `defineJob` builder lowers to the same IR a hand-written job
   parses into) and a headless `runJob` runner that composes the compute core
-  (furnish kernels, propagate, run an MCS, analyze, export OEM/CSV) deterministically
-  with CI-grade exit codes. Depends only on core packages and the `@bessel/pal`
-  interface; a shell injects the concrete Node IO.
+  (furnish kernels, load a catalog, propagate, run an MCS, analyze range/eclipse/
+  access/link-budget, report, export OEM/CSV) deterministically with CI-grade exit
+  codes and a provenance manifest (kernel and output content hashes). A shipped JSON
+  Schema mirrors the hand-written validator. Depends only on core packages and the
+  `@bessel/pal` interface; a shell injects the concrete Node IO.
 
 ## PAL and shells
 

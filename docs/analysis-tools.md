@@ -180,18 +180,23 @@ The same engines run without the app. `@bessel/sdk` exposes a JSON batch-job IR 
 a `defineJob` builder) and a deterministic `runJob` runner; `apps/cli` wraps it as the
 `bessel` command, injecting the Node PAL (`@bessel/pal-node`).
 
-A job declares its satellites and a list of operations (furnish kernels, propagate
-with SGP4 or two-body, run a Mission Control Sequence, analyze range, export OEM/CSV),
-plus an output directory. Kernels resolve from the job file's directory; artifacts are
-written under the output directory. Exit codes are CI-grade: 0 ok, 1 stopped on a
-failure, 2 an invalid job, 3 completed with per-op failures, 4 a usage error.
+A job declares its satellites and a list of operations (furnish kernels, load a
+catalog, propagate with SGP4 or two-body, run a Mission Control Sequence, analyze
+range/eclipse/access/link-budget, reduce a report, and export OEM/CSV), plus an output
+directory. Kernels resolve from the job file's directory; artifacts are written under
+the output directory. Exit codes are CI-grade: 0 ok, 1 stopped on a failure, 2 an
+invalid job, 3 completed with per-op failures, 4 a usage error.
 
 ```sh
 bessel validate mission.job.json     # structural check only, exit 0 or 2
 bessel run mission.job.json --out ./artifacts
 ```
 
-The same job is byte-for-byte reproducible across runs. The MCS path (an Astrogator-
-class mission sequence with a differential corrector), the numerical substrate (dense
-output, event detection, the State Transition Matrix), and the TEME to J2000 transform
-all live in `@bessel/propagator`; see its README and docs/STK_PARITY_SPEC.md Section 9.
+The same job is byte-for-byte reproducible across runs, and `runJob` returns a
+provenance manifest digesting every kernel and output (sha256). The MCS path (an
+Astrogator-class mission sequence with a differential corrector, nested targeting,
+and finite burns), the numerical substrate (dense output, event detection, the State
+Transition Matrix), the NxN-gravity/drag/SRP force models, and the TEME to J2000
+transform all live in `@bessel/propagator`; orbit determination (batch least-squares
+and an EKF) lives in `@bessel/od`. See their READMEs and docs/STK_PARITY_SPEC.md
+Section 9.
