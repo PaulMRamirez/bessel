@@ -5,12 +5,13 @@
 // per-goal tolerance, else throws DcNotConvergedError carrying the best-so-far state. Fails
 // loudly on a singular Jacobian. (STK_PARITY_SPEC §4.3.)
 
-import type { DcSettings, GoalType, Segment } from '../segments.ts';
+import type { DcSettings, GoalType, Objective, Segment } from '../segments.ts';
 import { DcNotConvergedError, SingularJacobianError } from '../errors.ts';
 import type { ControlBinding, GoalBinding } from './refs.ts';
 import { evaluateResidual, type DcEvalContext } from './residual.ts';
 import { assembleJacobian } from './jacobian.ts';
 import { conditionEstimate, solveLeastSquares, solveMinNorm, solveSquare } from './linalg.ts';
+import { runOptimizer, type OptimizerReport } from './optimize.ts';
 
 export interface PerGoalReport {
   readonly type: GoalType;
@@ -134,4 +135,58 @@ export function runDifferentialCorrector(
       extraRuns,
     };
   }
+}
+
+/**
+ * Run an OPTIMIZER-mode Target: satisfy the goals AND minimize `objective` over the controls.
+ * It reuses the corrector's Newton step as the feasibility-restoration operator, then runs the
+ * projected-gradient optimizer (optimize.ts). Returns the optimizer report (with the optimal
+ * controls) and the solved child tree, so the executor can replay it exactly like the corrector.
+ */
+export function runTargetOptimizer(
+  objective: Objective,
+  controls: readonly ControlBinding[],
+  goals: readonly GoalBinding[],
+  ctx: DcEvalContext,
+  settings: DcSettings,
+  segmentPath: readonly string[],
+): { report: OptimizerReport; solvedChildren: readonly Segment[] } {
+  const n = controls.length;
+  const m = goals.length;
+
+  // Feasibility restoration: a bounded damped-Newton loop (min-norm when underdetermined) that
+  // takes any control vector to one meeting every goal tolerance. Same machinery as the DC.
+  const restore = (start: Float64Array): { c: Float64Array; raw: Float64Array; extraRuns: number } => {
+    const c = Float64Array.from(start);
+    let extra = 0;
+    let raw = new Float64Array(m);
+    for (let iter = 0; iter < settings.maxIterations; iter++) {
+      const base = evaluateResidual(c, controls, ctx, settings.useStm);
+      raw = Float64Array.from(base.residualRaw);
+      if (converged(goals, raw)) return { c, raw, extraRuns: extra };
+      const jac = assembleJacobian(c, base, controls, goals, ctx, settings);
+      extra += jac.extraRuns;
+      // The condition proxy uses the normal equations A^T A (n x n), which is rank-deficient for
+      // an UNDERDETERMINED system (m < n) and would always flag singular. The min-norm solve uses
+      // A A^T (m x m) instead, so guard the condition check to the square/overdetermined cases and
+      // let solveMinNorm throw if A A^T is genuinely singular.
+      if (m >= n) {
+        const cond = conditionEstimate(jac.J, m, n);
+        if (!Number.isFinite(cond) || cond > settings.conditionLimit) throw new SingularJacobianError(segmentPath, cond);
+      }
+      const negF = Float64Array.from(base.residualScaled, (x) => -x);
+      const dNondim = newtonStep(jac.J, negF, m, n);
+      for (let j = 0; j < n; j++) {
+        let step = dNondim[j]! * controls[j]!.scale;
+        if (settings.trustRegion) step = Math.max(-controls[j]!.maxStep, Math.min(controls[j]!.maxStep, step));
+        c[j]! += step;
+      }
+    }
+    return { c, raw, extraRuns: extra };
+  };
+
+  const opt = runOptimizer(objective, controls, goals, ctx, settings, segmentPath, restore);
+  let tree: readonly Segment[] = ctx.children;
+  for (let j = 0; j < n; j++) tree = controls[j]!.write(tree, opt.controls[j]!);
+  return { report: opt.report, solvedChildren: tree };
 }

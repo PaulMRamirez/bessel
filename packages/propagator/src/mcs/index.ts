@@ -18,6 +18,8 @@ export type {
   Goal,
   GoalType,
   DcSettings,
+  Objective,
+  ObjectiveType,
 } from './segments.ts';
 export { DEFAULT_DC_SETTINGS } from './segments.ts';
 
@@ -29,12 +31,14 @@ export { coe2rv, rv2coe, trueAnomalyOf, type OrbitElements, type RvPair } from '
 export { vnbBasis, dvToInertial, type VnbBasis } from './frames.ts';
 export { runFiniteBurn, G0_KM_S2, type FiniteBurnResult } from './finite-burn.ts';
 
-export { runDifferentialCorrector, type DcReport, type PerGoalReport } from './corrector/solve.ts';
+export { runDifferentialCorrector, runTargetOptimizer, type DcReport, type PerGoalReport } from './corrector/solve.ts';
+export { type OptimizerReport } from './corrector/optimize.ts';
 export type { DcEvalContext, ResidualEval } from './corrector/residual.ts';
 
 export {
   McsError,
   DcNotConvergedError,
+  OptimizerNotConvergedError,
   SingularJacobianError,
   PropagationDivergedError,
   StopConditionNeverTriggeredError,

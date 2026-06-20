@@ -88,6 +88,12 @@ export interface TargetSegment {
   readonly controls: readonly ControlVar[];
   readonly goals: readonly Goal[];
   readonly settings?: Partial<DcSettings>;
+  /**
+   * Optional optimization objective. When set, the Target runs in OPTIMIZER mode: it satisfies
+   * the goals AND minimizes the scalar objective over the (redundant) control variables, instead
+   * of merely root-finding the goals. Omit for plain differential-correction behavior.
+   */
+  readonly objective?: Objective;
 }
 
 export interface SequenceSegment {
@@ -166,6 +172,17 @@ export interface Goal {
   readonly bodyRadius?: number;
 }
 
+/**
+ * A scalar objective an OPTIMIZER-mode Target minimizes subject to its goals.
+ *   - 'minimizeDeltaV' minimizes the total impulsive delta-v magnitude summed over the burns the
+ *     control variables drive (the sum of the per-Maneuver |dv|). Fuel-optimal targeting.
+ */
+export type ObjectiveType = 'minimizeDeltaV';
+
+export interface Objective {
+  readonly type: ObjectiveType;
+}
+
 export interface DcSettings {
   readonly maxIterations: number;
   readonly useCentralDifference: boolean;
@@ -174,6 +191,13 @@ export interface DcSettings {
   readonly damping: 'none' | 'armijo';
   readonly conditionLimit: number;
   readonly useStm: boolean;
+  /**
+   * Optimizer-only knobs (ignored in plain DC mode). `optimizerMaxIterations` caps the outer
+   * projected-gradient sweeps; `optimizerTolerance` is the convergence threshold on the
+   * projected (reduced) cost-gradient norm. Defaults applied in DEFAULT_DC_SETTINGS.
+   */
+  readonly optimizerMaxIterations: number;
+  readonly optimizerTolerance: number;
 }
 
 export const DEFAULT_DC_SETTINGS: DcSettings = {
@@ -184,4 +208,6 @@ export const DEFAULT_DC_SETTINGS: DcSettings = {
   damping: 'armijo',
   conditionLimit: 1e12,
   useStm: true,
+  optimizerMaxIterations: 60,
+  optimizerTolerance: 1e-8,
 };

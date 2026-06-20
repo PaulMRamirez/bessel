@@ -18,7 +18,20 @@ export {
 
 export { predict, residual, noiseVariances, wrapPi, type Prediction } from './measurements.ts';
 
-export { batchLeastSquares, type BatchOptions, type BatchResult } from './batch-ls.ts';
+export {
+  predictLightTime,
+  SPEED_OF_LIGHT_KM_S,
+  type LightTimeOptions,
+  type LightTimePrediction,
+} from './light-time.ts';
+
+export {
+  considerCovariance,
+  type ConsiderBlocks,
+  type ConsiderSensitivity,
+} from './consider.ts';
+
+export { batchLeastSquares, type BatchOptions, type BatchResult, type ConsiderConfig } from './batch-ls.ts';
 
 export { ExtendedKalmanFilter, type EkfOptions, type EkfStep } from './ekf.ts';
 

@@ -47,6 +47,18 @@ export class DcNotConvergedError extends McsError {
   }
 }
 
+/** The OPTIMIZER-mode Target could not reach a feasible optimum within its sweep budget. */
+export class OptimizerNotConvergedError extends McsError {
+  readonly iterations: number;
+  readonly controls: Float64Array;
+  constructor(segmentPath: readonly string[], iterations: number, controls: Float64Array, detail: string) {
+    super(`optimizer did not converge in ${iterations} sweeps: ${detail}`, segmentPath);
+    this.name = 'OptimizerNotConvergedError';
+    this.iterations = iterations;
+    this.controls = controls;
+  }
+}
+
 /** The Jacobian was rank-deficient or ill-conditioned past the limit. */
 export class SingularJacobianError extends McsError {
   readonly cond: number;

@@ -5,6 +5,7 @@
 
 import type { CartesianState, Vec3 } from '@bessel/spice';
 import type { DcReport } from './corrector/solve.ts';
+import type { OptimizerReport } from './corrector/optimize.ts';
 
 export type TdbSeconds = number;
 export type SegmentId = string;
@@ -44,6 +45,8 @@ export interface SegmentResult {
   readonly stmEpoch?: number;
   /** Differential-corrector reports produced within this segment (Target subtrees). */
   readonly targetReports?: readonly DcReport[];
+  /** Optimizer reports produced within this segment (OPTIMIZER-mode Target subtrees). */
+  readonly optimizerReports?: readonly OptimizerReport[];
 }
 
 /** View a MissionState as a SPICE CartesianState (for propagateCowellEx). */
