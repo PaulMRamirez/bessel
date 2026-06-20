@@ -33,6 +33,8 @@ import { Popover } from './overlays/Popover.tsx';
 import { AnalysisPanel } from './panels/AnalysisPanel.tsx';
 import { PropagatePanel } from './panels/PropagatePanel.tsx';
 import { ReportPanel } from './panels/ReportPanel.tsx';
+import { MissionPanel } from './panels/MissionPanel.tsx';
+import { OdPanel } from './panels/OdPanel.tsx';
 
 const SPICE_IDS: Readonly<Record<string, string>> = Object.fromEntries(
   SOLAR_SYSTEM.map((p) => [p.name, p.spiceId]),
@@ -144,6 +146,12 @@ export function BesselViewer(): JSX.Element {
       </Popover>
       <Popover label="Propagate" title="Orbit propagation" align="right" testId="propagate-menu">
         <PropagatePanel engine={engine} store={store} />
+      </Popover>
+      <Popover label="Mission Design" title="Mission design (MCS)" align="right" testId="mission-design-menu">
+        <MissionPanel engine={engine} store={store} />
+      </Popover>
+      <Popover label="OD" title="Orbit determination" align="right" testId="od-menu">
+        <OdPanel engine={engine} store={store} />
       </Popover>
       <Popover label="Report" title="Data-provider workbench" align="right" testId="report-menu">
         <ReportPanel engine={engine} store={store} />
