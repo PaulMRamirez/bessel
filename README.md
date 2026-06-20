@@ -1,5 +1,10 @@
 # Bessel
 
+[![CI](https://github.com/PaulMRamirez/bessel/actions/workflows/ci.yml/badge.svg)](https://github.com/PaulMRamirez/bessel/actions/workflows/ci.yml)
+[![Deploy](https://github.com/PaulMRamirez/bessel/actions/workflows/deploy.yml/badge.svg)](https://github.com/PaulMRamirez/bessel/actions/workflows/deploy.yml)
+
+Live demo: https://paulmramirez.github.io/bessel/
+
 An open-source, SPICE-aware 3D mission visualization application, delivered from a
 single codebase as a Progressive Web App, as native mobile apps (via Capacitor),
 and as a desktop app (via Electron). It reads Cosmographia-compatible catalogs,
@@ -66,7 +71,12 @@ node apps/cli/dist/main.js run mission.job.json --out ./artifacts
 
 `pnpm verify` runs the gate (typecheck, lint, test, build:web, size). The full
 verifiable command catalog is in CLAUDE.md and SPEC.md Section 8; CI runs the
-same vocabulary (`.github/workflows/ci.yml`).
+same vocabulary (`.github/workflows/ci.yml`) on every push and pull request.
+
+The PWA is deployed to GitHub Pages on every push to `main`
+(`.github/workflows/deploy.yml`): `pnpm build:pages` builds it under the `/bessel/`
+project-page base (local dev, the gate, and the Electron/Capacitor shells keep the
+`/` base), and the result is published at https://paulmramirez.github.io/bessel/.
 
 ## Sample missions
 
