@@ -30,6 +30,7 @@
     "@bessel/sensors": "workspace:*",
     "@bessel/rf": "workspace:*",
     "@bessel/scene": "workspace:*",
+    "@bessel/selene-design": "workspace:*",
     "@bessel/spice": "workspace:*",
     "@bessel/state": "workspace:*",
     "@bessel/timeline": "workspace:*",

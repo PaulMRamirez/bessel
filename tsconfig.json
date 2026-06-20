@@ -21,6 +21,7 @@
       "@bessel/terrain": ["./packages/terrain/src/index.ts"],
       "@bessel/catalog": ["./packages/catalog/src/index.ts"],
       "@bessel/sdk": ["./packages/sdk/src/index.ts"],
+      "@bessel/selene-design": ["./design-system/selene-design/src/index.ts"],
       "@bessel/scene": ["./packages/scene/src/index.ts"],
       "@bessel/timeline": ["./packages/timeline/src/index.ts"],
       "@bessel/state": ["./packages/state/src/index.ts"],
@@ -35,6 +36,7 @@
   },
   "include": [
     "packages/*/src",
+    "design-system/*/src",
     "apps/*/src",
     "apps/*/electron",
     "apps/web/vite.config.ts",

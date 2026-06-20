@@ -24,7 +24,7 @@ export default defineConfig({
         // Precache the app shell and the CSPICE wasm (code). Kernels (data) are
         // not precached: they flow through the OPFS cache in pal-web so the PWA
         // operates offline against cached kernels (SPEC Phase 2).
-        globPatterns: ['**/*.{js,css,html,svg,wasm}'],
+        globPatterns: ['**/*.{js,css,html,svg,wasm,woff2}'],
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
       },
       manifest: {
