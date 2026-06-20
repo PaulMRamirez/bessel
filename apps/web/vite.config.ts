@@ -40,5 +40,32 @@ export default defineConfig({
   build: {
     target: 'es2022',
     sourcemap: false,
+    rollupOptions: {
+      output: {
+        // Stable, greppable chunk file names so the size-limit globs target the
+        // first-paint shell (the entry app chunk + vendor) and the lazy chunks
+        // separately. The entry is named app-*.js (distinct from any auto-named
+        // shared "index-*" lazy chunk, so the shell glob is unambiguous). The lazy
+        // panel chunks keep their source-module names (e.g. AnalysisPanel-*.js), and
+        // the split analysis code lands in analysis-ops-*.js / mcs-*.js.
+        entryFileNames: 'assets/app-[hash].js',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        // Pin the always-loaded third-party code (the renderer and React) into one
+        // vendor chunk. These are needed for first paint, so they stay eager; naming
+        // them keeps the first-paint budget globs (index + vendor) stable as the app
+        // grows, separate from the on-demand analysis and panel chunks.
+        manualChunks(id: string): string | undefined {
+          if (id.includes('node_modules')) {
+            if (id.includes('/three/') || id.includes('/three-')) return 'vendor';
+            if (
+              /\/node_modules\/(react|react-dom|scheduler|react-resizable-panels)\//.test(id)
+            ) {
+              return 'vendor';
+            }
+          }
+          return undefined;
+        },
+      },
+    },
   },
 });
