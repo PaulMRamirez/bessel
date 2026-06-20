@@ -17,8 +17,8 @@ Date: 2026-06-19
 > capability. The status rows below are updated; honest residuals (content not
 > bundled, capabilities not yet surfaced in the shell) are called out per row and
 > summarized in Section 15. As of 2026-06-19 all program gates are green
-> (typecheck, lint, 627 unit/contract tests, build:web, build:desktop, cap:sync,
-> 25 e2e incl. the Electron DSK render and the axe scan, size, audit:prod, lhci,
+> (typecheck, lint, 667 unit/contract tests, build:web, build:desktop, cap:sync,
+> 31 e2e incl. the Electron DSK render and the axe scan, size, audit:prod, lhci,
 > release:dry).
 
 This is the auditable, feature-by-feature parity check promised in ADR-0006 and
@@ -56,22 +56,27 @@ Counts after the closure pass (Draft v1.0 values in parentheses where changed):
 | -------------------------------- | ------- | ------- | ------- | --------- |
 | 2. Catalog and data model        | 3 (2)   | 1 (2)   | 0       | 0         |
 | 3. SPICE and geometry engine     | 11      | 0       | 0       | 0         |
-| 4. Geometry taxonomy (7 types)   | 6 (4)   | 1 (3)   | 0       | 0         |
+| 4. Geometry taxonomy (7 types)   | 7 (4)   | 0 (3)   | 0       | 0         |
 | 5. Rendering fidelity            | 8 (7)   | 3 (2)   | 0 (2)   | 0         |
 | 6. Camera and navigation         | 4 (3)   | 2       | 0 (1)   | 0         |
-| 7. Timeline and playback         | 4       | 1       | 0       | 0         |
+| 7. Timeline and playback         | 5 (4)   | 0 (1)   | 0       | 0         |
 | 8. Analysis and measurement      | 4 (2)   | 0 (1)   | 0 (1)   | 0         |
 | 9. Modern UI/UX                  | 7       | 0       | 0       | 0         |
 | 10. Platform reach               | 4       | 0       | 0       | 0         |
-| 11. Sharing and ops integration  | 5 (4)   | 1 (0)   | 0 (2)   | 1         |
-| 12. Scripting and extensibility  | 1       | 3 (1)   | 0 (2)   | 0         |
+| 11. Sharing and ops integration  | 6 (4)   | 0       | 0 (2)   | 1         |
+| 12. Scripting and extensibility  | 3 (1)   | 0       | 1       | 0         |
 
-Headline reading after closure: the SPICE engine, geometry taxonomy, rendering,
-camera, measurement, and modern UI/UX are at or beyond parity. What remains is
-content and surfacing, not missing capability: real hi-res textures are not
-bundled (the loader and procedural fallback are in place), CK attitude needs a
-CK kernel to be loaded, and the scripting/plugin/telemetry surfaces are tested
-core capability not yet wired into the shell UI. See Section 15.
+Headline reading: the SPICE engine, geometry taxonomy (including ring image
+textures now), timeline, measurement, and modern UI/UX are at or beyond parity, and
+the scripting console, plugin loader, and telemetry overlay are now wired into the
+shell UI. What remains is mostly content and a few narrow capabilities: real hi-res
+NASA basemaps are not bundled (the full material loader, generated textures, and
+procedural fallback are in place), CK-binary attitude needs the CSPICE-WASM `ck*`
+exports linked (bundled-demo attitude is already real via UniformRotation), camera
+frame-selection and crane/dolly verbs are narrower than Cosmographia, the full
+five-type catalog taxonomy is an 80 percent target (ADR-0006), the model format is
+glTF not 3DS/CMOD (by design), and TLE auto-update (niche) is unbuilt. See
+Section 15.
 
 ---
 
@@ -111,7 +116,7 @@ in-process C++ calls.
 | Mesh (spacecraft, small bodies) | 3DS and CMOD models | Partial | `packages/scene/src/spacecraft-model.ts`, `apps/web/src/assets/cassini.gltf` | Bessel uses glTF, not 3DS/CMOD. Functionally equivalent; format compatibility differs. |
 | SPICE DSK (Type 2 triangular plate) | Yes (4.1+) | Done | `packages/scene/src/dsk-mesh.ts`; `packages/spice/src/dsk.test.ts`; `e2e/tests/electron-dsk.spec.ts` | DSK read (the type-2 wasm exports are linked: `dasopr`, `dascls`, `dskz02`, `dskv02`, `dskp02`), mesh build, and the end-to-end Electron render are all green (the Electron e2e asserts >100 real plates and a non-empty frame). |
 | Globe (sphere or ellipsoid) | baseMap, normalMap, cloudMap, atmosphere textures | Done | `packages/scene/src/body-material.ts`, `planets.ts`, `atmosphere.ts` | Globes now use an image base-map (and normal map) when the catalog declares one, falling back to the procedural texture otherwise; Rayleigh atmosphere shell present. Cloud-map not yet. Tested by `body-material.test.ts`. Residual: real hi-res image assets are not bundled (content task). |
-| Rings | Textured annulus | Partial | `packages/scene/src/rings.ts`, `generic-mission.ts` (`ringSpecFromGeometry`) | Procedural banded annuli; catalog `texture` is parsed and plumbed but the ring mesh still ignores the image. |
+| Rings | Textured annulus | Done | `packages/scene/src/rings.ts`, `generic-mission.ts` (`ringSpecFromGeometry`), `rings.test.ts` | The ring mesh now samples a catalog image texture mapped as Cosmographia does it (the v=0 radial strip: inner UV (0,0), outer UV (1,0), clamp wrap, PNG alpha driving gaps); the procedural banded fallback (with a real Cassini-Division gap) remains when no image is supplied. |
 | ParticleSystem (plumes, jets, exhaust) | Yes | Done | `packages/scene/src/particle-system.ts`; `particle-system.test.ts` | Deterministic emission. |
 | KeplerianSwarm (belts, debris) | Yes (astorb data) | Done | `packages/scene/src/keplerian-swarm.ts`; `keplerian-swarm.test.ts` |
 | TimeSwitched (geometry varying over time) | Yes | Done | `packages/scene/src/time-switched.ts`; `time-switched.test.ts` |
@@ -120,7 +125,7 @@ in-process C++ calls.
 
 | Capability | Cosmographia | Bessel status | Evidence | Gap / note |
 | --- | --- | --- | --- | --- |
-| High-resolution image textures (multithread auto-download) | Yes | Partial | `packages/scene/src/body-material.ts` (`buildBodyMaterial`, TextureLoader path) | The image base-map and normal-map loading path is in place (catalog -> PlanetDef -> material), with a procedural fallback. Residual: hi-res NASA textures are not bundled and there is no auto-download manager yet. |
+| High-resolution image textures (multithread auto-download) | Yes | Partial | `packages/scene/src/body-material.ts` (`buildBodyMaterial`), `apps/web/scripts/gen-textures.mjs` | Base-map, normal-map, night (emissive), specular (metalness/roughness), and a cloud-shell map all load from the catalog (Cosmographia field parity), with explicit wrap modes and a procedural fallback; a generator writes small textures into `public/textures/`. Residual: real hi-res NASA basemaps are not bundled and there is no multithreaded auto-download manager yet. |
 | Realistic atmospheres | Yes | Done | `packages/scene/src/atmosphere.ts`, `shaders/` | Rayleigh scattering shell. |
 | Shadows and reflections on models | Yes | Partial | `packages/scene/src/shadows.ts` | Sun-light shadow mapping present; reflections not. |
 | Realistic star field from a catalog | Yes | Done | `packages/scene/src/star-field.ts`, `star-catalog.ts`, `apps/web/src/assets/bright-stars.json` |
@@ -129,7 +134,7 @@ in-process C++ calls.
 | Direction vectors (to Sun, Earth, velocity) | Yes (showDirectionVector) | Done | `packages/scene/src/direction-vectors.ts` |
 | FOV sensor cones | Yes | Done | scene plus `apps/web/src/instruments.ts` (`fovRim`); FOV e2e green |
 | Observation footprints (swath and discrete) | Yes (obsRate swath) | Done | `apps/web/src/instruments.ts` (`footprint`); footprint e2e green |
-| Spacecraft attitude from CK | Yes | Partial | `packages/scene/src/orientation.ts` (`applyAttitude`), `three-scene.ts` (`setSpacecraftAttitude`), `engine.ts` (pxform sampling) | The model is oriented each frame from `pxform(scFrame, J2000)` when the catalog declares a spacecraft orientation frame; tested by `orientation.test.ts`. Residual: needs a CK kernel covering the epoch to be loaded (none in the bundled fixtures), so it is real only when a CK is present. |
+| Spacecraft attitude from CK | Yes | Partial | `packages/scene/src/orientation.ts` (`applyAttitude`, `applyQuaternion`, `uniformRotationQuaternion`), `engine.ts` (pxform sampling) | The model orients each frame from `pxform(scFrame, J2000)` for a CK frame, or from a Fixed/UniformRotation orientation. The bundled demo now shows real, visible, data-driven attitude via a UniformRotation orientation (no CK binary needed). Residual: CK-binary read still needs the `ck*`/`sce2c` CSPICE-WASM exports linked plus a CK fixture. |
 | Camera-relative (floating origin) at solar-system scale | Yes | Done | `packages/scene/src/three-scene.ts`, `camera-modes.ts` | Mandatory per SPEC 5.1. |
 
 ## 6. Camera and navigation
@@ -151,7 +156,7 @@ in-process C++ calls.
 | Adjust time rate | Yes | Done | `TimelineControls.tsx` (1x to 604800x) |
 | Pause and unpause | Yes | Done | `apps/web/src/engine/engine.ts` (togglePlay) |
 | Scrub timeline | Implicit | Done | `TimelineControls.tsx` scrub slider | Bessel convenience. |
-| Event annotations on the timeline | Limited | Partial | `packages/timeline/src/` (event annotations), `TimelineControls.tsx` | Marker rendering exists; the build report lists annotations as deferred, so treat as not fully wired. |
+| Event annotations on the timeline | Limited | Done | `packages/timeline/src/annotations.ts` (`arcBoundaryAnnotations`), `apps/web/src/engine/mission-annotations.ts`, `TimelineControls.tsx` | Annotations are computed in the engine/mission layer from trajectory arc boundaries plus a SPICE-found closest approach, rendered as clickable timeline markers that scrub the clock; the hard-coded SOI marker is removed. Bessel advantage: the markers are derived, not hand-placed. |
 
 ## 8. Analysis and measurement
 
@@ -192,15 +197,15 @@ in-process C++ calls.
 | CZML export (CesiumJS) | No | Done | `packages/state/src/czml.ts` | Bessel advantage. |
 | Movie and screenshot export | Yes | Done | see Section 9 | Parity. |
 | Command-line / batch usage | Yes (Command Line Usage) | Done | `packages/sdk` (`runJob`, `defineJob`, the JSON batch-job IR), `packages/pal-node`, `apps/cli` (the `bessel` bin) | Bessel advantage: a headless, deterministic batch runner executes a schema-validated JSON job (furnish kernels, propagate, run an MCS, analyze, export OEM/CSV) against a Node PAL with CI-grade exit codes, plus a programmatic `defineJob` builder. Tested end to end with the real SPICE engine and an in-memory PAL. |
-| Live telemetry overlays (Yamcs, OpenMCT) | No | Partial | `packages/state/src/telemetry.ts` (`TelemetryAdapter`); `telemetry.test.ts` | A transport-neutral adapter ingests state vectors from a WebSocket-like source and produces a predicted-versus-actual overlay with residuals; tested with a mock socket. Residual: not wired to a live Yamcs/OpenMCT server or an on-screen overlay yet. |
+| Live telemetry overlays (Yamcs, OpenMCT) | No | Done | `packages/state/src/telemetry.ts` (`TelemetryAdapter`), `packages/ui/src/TelemetryOverlay.tsx` | Bessel advantage: an on-screen predicted-versus-actual overlay (two series, a residual line, a clock-tied now-line, and a Yamcs-severity-colored threshold line, with a fault banner) backed by the transport-neutral adapter, grounded in OpenMCT/Yamcs conventions. Residual: the demo transport is a mock socket, swappable for a live Yamcs/OpenMCT WebSocket. |
 | Surface GIS context | Built in | By-design | `mmgis.ts` | Deferred to MMGIS by deep link rather than embedded (ADR rationale). |
 
 ## 12. Scripting and extensibility
 
 | Capability | Cosmographia | Bessel status | Evidence | Gap / note |
 | --- | --- | --- | --- | --- |
-| Scripting of the running app | Yes (cosmoscripting `Cosmo()`: gotoObject, setTime, setTimeRate, pause, show*) | Partial | `apps/web/src/scripting.ts` (`BesselScript`, `createScript`); `scripting.test.ts` | A chainable scripting facade mirrors the cosmoscripting verbs (gotoObject, setTimeRate, play/pause, setTime, viewFromSun/viewAlongVelocity, select) over the engine and store; tested against a recording host. It is TypeScript, not a Python bridge, and not yet exposed as a user console. The desktop `runBatchGeometry` Python bridge also remains. |
-| Mission plugin modules (JUICE-style) | Yes (plugin precedent) | Partial | `packages/catalog/src/plugins.ts` (`PluginRegistry`); `plugins.test.ts` | A typed registry registers plugins (kernels, frames, panels) and lazily loads each catalog at most once; tested. Residual: not yet wired into the shell as a GA plugin-loading surface. |
+| Scripting of the running app | Yes (cosmoscripting `Cosmo()`: gotoObject, setTime, setTimeRate, pause, show*) | Done | `apps/web/src/scripting.ts` (`BesselScript`), `apps/web/src/script-runner.ts`, `packages/ui/src/ScriptConsole.tsx` | A `Script` menu surfaces an in-app console that runs a BesselScript program (a no-eval line grammar with a verb allowlist and per-line loud errors) against the live engine, with the cosmoscripting-parity verb set (gotoObject, setTimeRate, track, setFrame, show/hide, screenshot, record, note, loadCatalog, etc.). The desktop `runBatchGeometry` Python bridge also remains. |
+| Mission plugin modules (JUICE-style) | Yes (plugin precedent) | Done | `packages/catalog/src/plugins.ts` (`PluginRegistry`), `apps/web/src/panels/PluginsPanel.tsx`, `apps/web/src/engine/load-mission.ts` | A `Plugins` menu lists registered plugins and loads one, furnishing its declared kernels in Cosmographia add-on order (SPICE data before objects) via the PAL KernelSource, verifying frames, rendering the catalog, and offering Unload. A real Cassini fixture plugin ships bundled. |
 | OSS governance, contribution path | Source published, not a living project | Done | repository, Apache-2.0 | Bessel advantage. |
 | Two-line element auto-update | Yes | Missing | not found | Niche; low priority. |
 
@@ -306,6 +311,32 @@ What is still genuinely not present (by nature, not capability): real
 photographic textures and a real CK kernel/SCLK fixture (the sample uses a
 procedural spin), and a live Yamcs/OpenMCT server (the telemetry feed is an
 in-app mock).
+
+Cosmographia-parity push DONE (2026-06-19, four parallel tracks, grounded by a
+research workflow against cosmoguide.org and the claurel/cosmographia source; all
+program gates green, 667 unit and 31 e2e including the axe scan):
+- Ring image textures: the ring mesh now samples a catalog image as Cosmographia
+  does (v=0 radial strip, clamp wrap, PNG-alpha gaps), with the procedural banded
+  fallback retained. Section 4 Rings to Done.
+- Body materials: night (emissive), specular (metalness/roughness), and a cloud
+  shell join the base/normal maps, all from the catalog with Cosmographia field
+  parity, and a generator writes small textures into `public/textures/`. Section 5
+  hi-res textures stays Partial only for the unbundled real NASA basemaps and the
+  auto-download manager.
+- Scripting console: a `Script` menu runs a BesselScript program (no-eval line
+  grammar, verb allowlist, per-line loud errors) against the live engine with the
+  cosmoscripting-parity verb set. Section 12 Scripting to Done.
+- Plugin loader: a `Plugins` menu loads a registered plugin, furnishing kernels in
+  Cosmographia add-on order (SPICE data before objects) and rendering it. Section 12
+  plugin modules to Done.
+- Timeline annotations: derived in the engine from arc boundaries plus a SPICE-found
+  closest approach, rendered as clickable markers (SOI hardcode removed). Section 7
+  to Done.
+- Telemetry overlay: an on-screen predicted-versus-actual overlay (two series,
+  residual, clock-tied now-line, Yamcs-severity threshold, fault banner), grounded in
+  OpenMCT/Yamcs conventions. Section 11 to Done.
+- Attitude: bundled-demo attitude is now real via a UniformRotation orientation; the
+  CK-binary read still needs the `ck*`/`sce2c` CSPICE-WASM exports linked.
 
 ---
 

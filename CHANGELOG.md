@@ -61,6 +61,14 @@ maintained alongside them, not hand-edited per package.
   (estimate a state with residual RMS and covariance), and an HPOP force-model
   selector in the Propagate panel. Each is proven by a Playwright e2e and passes the
   axe accessibility scan.
+- Cosmographia visual and interaction parity (grounded by research against
+  cosmoguide.org and the claurel/cosmographia source): ring image textures (the v=0
+  radial-strip mapping) plus night/specular/cloud body materials; an in-app scripting
+  console over `BesselScript` (a no-eval line grammar with the cosmoscripting verb
+  set); a plugin-loader menu over `PluginRegistry` that furnishes kernels in add-on
+  order; SPICE-derived timeline event annotations; a predicted-versus-actual telemetry
+  overlay (OpenMCT/Yamcs idioms); and real bundled-demo spacecraft attitude via a
+  UniformRotation orientation.
 - F3 foundation in `@bessel/spice`: an EvalSpec time-series interpreter, a
   cancellable-job protocol, a multi-worker SPICE pool, and `recgeo`/`et2lst`
   bindings; the `SpiceWindow` interval algebra and a shared geometry finder in

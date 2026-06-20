@@ -119,6 +119,11 @@ illustrative conjunction covariance) to exercise each engine end to end; the
 Report workbench is the parameterized path. Every engine is validated against an
 independent reference (docs/STK_PARITY_SPEC.md, REFERENCES.md).
 
+The shell also carries Cosmographia-style interaction menus: a Script console (run a
+BesselScript program against the live viewer), a Plugins loader (load a registered
+mission add-on, furnishing its kernels in dependency order), and a Telemetry overlay
+(predicted-versus-actual residuals in OpenMCT/Yamcs idioms).
+
 ## Where to start
 
 1. docs/getting-started.md: load a mission, explore, run an analysis, export.

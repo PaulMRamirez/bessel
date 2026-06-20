@@ -685,7 +685,7 @@ validated headless core packages, and every Phase B/C analysis domain is now
 **surfaced into the app UI and proven by an end-to-end test**. Every quantity is
 asserted against an independent numeric reference (NAIF SPK/`occult`, Vallado
 SGP4-VER and Lambert, EPSG:3857, analytic Pc/eclipse/footprint forms, ITU/textbook
-RF anchors). 627 unit/contract tests and 25 Playwright e2e; `pnpm verify` and
+RF anchors). 667 unit/contract tests and 31 Playwright e2e; `pnpm verify` and
 `pnpm e2e` green; initial JS and WASM within budget.
 
 The numerical substrate, the higher-fidelity force models (NxN gravity, drag, SRP),
