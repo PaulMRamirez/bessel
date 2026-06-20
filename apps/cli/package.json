@@ -4,9 +4,16 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "bin": { "bessel": "./src/main.ts" },
+  "bin": { "bessel": "./dist/main.js" },
+  "files": ["dist"],
+  "scripts": {
+    "build": "node scripts/build.mjs"
+  },
   "dependencies": {
     "@bessel/sdk": "workspace:*",
     "@bessel/pal-node": "workspace:*"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
   }
 }

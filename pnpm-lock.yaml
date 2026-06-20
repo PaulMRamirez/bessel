@@ -59,6 +59,10 @@ importers:
       '@bessel/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
+    devDependencies:
+      esbuild:
+        specifier: ^0.25.0
+        version: 0.25.12
 
   apps/desktop:
     dependencies:
