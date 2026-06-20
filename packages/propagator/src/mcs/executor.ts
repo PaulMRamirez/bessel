@@ -21,7 +21,8 @@ import {
   PropagationDivergedError,
 } from './errors.ts';
 import { bindControls, bindGoals } from './corrector/refs.ts';
-import { runDifferentialCorrector, type DcReport } from './corrector/solve.ts';
+import { runDifferentialCorrector, runTargetOptimizer, type DcReport } from './corrector/solve.ts';
+import type { OptimizerReport } from './corrector/optimize.ts';
 
 export interface RunOpts {
   /** Co-integrate the STM on Propagate segments (used by the corrector's Jacobian). */
@@ -32,6 +33,8 @@ export interface McsRun {
   readonly final: MissionState;
   readonly samples: readonly StateSample[];
   readonly targetReports: readonly DcReport[];
+  /** Optimizer reports from any OPTIMIZER-mode Targets in the sequence. */
+  readonly optimizerReports: readonly OptimizerReport[];
 }
 
 const finite = (s: MissionState): boolean =>
@@ -104,6 +107,7 @@ function runSequence(children: readonly Segment[], input: MissionState | null, e
   let state = input;
   const samples: StateSample[] = [];
   const reports: DcReport[] = [];
+  const optReports: OptimizerReport[] = [];
   let status: SegmentStatus = { kind: 'ok' };
   let stmAt: ((et: number) => Float64Array) | undefined;
   let stmEpoch: number | undefined;
@@ -112,15 +116,16 @@ function runSequence(children: readonly Segment[], input: MissionState | null, e
     state = r.out;
     appendSamples(samples, r.samples);
     if (r.targetReports) reports.push(...r.targetReports);
+    if (r.optimizerReports) optReports.push(...r.optimizerReports);
     if (r.stmAt) {
       stmAt = r.stmAt; // the last STM-bearing segment owns the arc to the eval state
       stmEpoch = r.stmEpoch;
     }
     status = r.status;
-    if (r.halt) return { out: state, samples, status, halt: true, targetReports: reports, stmAt, stmEpoch };
+    if (r.halt) return { out: state, samples, status, halt: true, targetReports: reports, optimizerReports: optReports, stmAt, stmEpoch };
   }
   if (!state) throw new MissingInitialStateError([]);
-  return { out: state, samples, status, halt: false, targetReports: reports, stmAt, stmEpoch };
+  return { out: state, samples, status, halt: false, targetReports: reports, optimizerReports: optReports, stmAt, stmEpoch };
 }
 
 function runTarget(seg: TargetSegment, input: MissionState, env: MissionEnv): SegmentResult {
@@ -131,12 +136,27 @@ function runTarget(seg: TargetSegment, input: MissionState, env: MissionEnv): Se
   const goals = bindGoals(seg.goals);
   const execOne = (s: Segment, state: MissionState, wantStm: boolean): SegmentResult =>
     runSegment(s, state, env, { stm: wantStm });
+  const ctx = { children: seg.children, goals, input, env, mu, execOne };
 
-  const { report, solvedChildren } = runDifferentialCorrector(controls, goals, { children: seg.children, goals, input, env, mu, execOne }, settings, path);
+  if (seg.objective) {
+    // OPTIMIZER mode: satisfy the goals AND minimize the objective.
+    const { report, solvedChildren } = runTargetOptimizer(seg.objective, controls, goals, ctx, settings, path);
+    const replay = runSequence(solvedChildren, input, env, {});
+    return {
+      out: replay.out,
+      samples: replay.samples,
+      status: replay.status,
+      halt: replay.halt,
+      targetReports: replay.targetReports ?? [],
+      optimizerReports: [report, ...(replay.optimizerReports ?? [])],
+    };
+  }
+
+  const { report, solvedChildren } = runDifferentialCorrector(controls, goals, ctx, settings, path);
 
   // Replay the converged branch once (no STM) to publish its samples and final state.
   const replay = runSequence(solvedChildren, input, env, {});
-  return { out: replay.out, samples: replay.samples, status: replay.status, halt: replay.halt, targetReports: [report, ...(replay.targetReports ?? [])] };
+  return { out: replay.out, samples: replay.samples, status: replay.status, halt: replay.halt, targetReports: [report, ...(replay.targetReports ?? [])], optimizerReports: replay.optimizerReports ?? [] };
 }
 
 export function runSegment(seg: Segment, input: MissionState | null, env: MissionEnv, opts: RunOpts = {}): SegmentResult {
@@ -180,7 +200,7 @@ export function runSegment(seg: Segment, input: MissionState | null, env: Missio
 
 export function runMcs(mcs: Mcs, env: MissionEnv): McsRun {
   const result = runSegment(mcs.root, null, env);
-  return { final: result.out, samples: result.samples, targetReports: result.targetReports ?? [] };
+  return { final: result.out, samples: result.samples, targetReports: result.targetReports ?? [], optimizerReports: result.optimizerReports ?? [] };
 }
 
 /** Async public entry (the math is synchronous; async mirrors the rest of the engine API). */

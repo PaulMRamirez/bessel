@@ -11,10 +11,11 @@
 // (Tapley-Schutz-Born §4.3; Vallado §10.2.)
 
 import type { ForceModel } from '@bessel/propagator';
+import { considerCovariance, type ConsiderSensitivity } from './consider.ts';
 import { ConvergenceError } from './errors.ts';
 import { gaussSolve, mat, symInverse, symmetrize, type Mat } from './linalg.ts';
 import { noiseVariances, predict, residual } from './measurements.ts';
-import { propagateArc } from './propagate.ts';
+import { propagateArc, type Arc } from './propagate.ts';
 import { measurementSize, type Measurement, type OdState } from './types.ts';
 
 export interface BatchOptions {
@@ -29,6 +30,29 @@ export interface BatchOptions {
   readonly tolerance?: number;
   /** Inertial frame label passed to the propagator (default 'J2000'). */
   readonly frame?: string;
+  /**
+   * Optional consider-parameter analysis. When present, the estimator accumulates the cross
+   * information Lambda_xc = sum Hx^T W Hc alongside the normal equations and, at convergence,
+   * reports the consider covariance Pc = Pxx + Sxc Pcc Sxc^T (see consider.ts). The estimated
+   * state is unchanged: consider parameters inflate the reported covariance, they are not solved.
+   */
+  readonly consider?: ConsiderConfig;
+}
+
+/** Consider-parameter configuration: how many, their a-priori covariance, and their sensitivity. */
+export interface ConsiderConfig {
+  /** Number of consider parameters nc (>= 1). */
+  readonly count: number;
+  /** A-priori consider covariance Pcc, row-major (nc x nc), symmetric positive semidefinite. */
+  readonly covariance: Float64Array;
+  /**
+   * The consider sensitivity for measurement `m` at its mapped solve-epoch partial: the (size x
+   * nc) matrix dh/dp, row-major, where rows are the measurement's scalar components in the order
+   * `predict` returns them and columns are the consider parameters. `stateAt` and `stmAt` give the
+   * propagated state and STM Phi(t_i, t0) at the measurement epoch so a dynamic consider parameter
+   * (e.g. drag) can be STM-mapped; a pure measurement bias ignores them.
+   */
+  sensitivity(m: Measurement, stateAt: Float64Array, stmAt: Float64Array): ConsiderSensitivity;
 }
 
 export interface BatchResult {
@@ -42,6 +66,11 @@ export interface BatchResult {
   readonly iterations: number;
   /** Number of scalar measurement components fitted. */
   readonly observationCount: number;
+  /**
+   * The consider covariance Pc = Pxx + Sxc Pcc Sxc^T (6x6 row-major), present only when
+   * `options.consider` was supplied. Always Pc >= Pxx (positive-semidefinite inflation).
+   */
+  readonly considerCovariance?: Float64Array;
 }
 
 /** Multiply a (size x 6) row-major Jacobian by the 6x6 STM (row-major) into a (size x 6). */
@@ -160,11 +189,57 @@ export function batchLeastSquares(
   }
 
   const covariance = symInverse(bestLambda).data; // Lambda^-1 (throws if not SPD)
+  const consider = options.consider
+    ? considerCovariance(bestLambda.data, {
+        crossInformation: accumulateCrossInformation(bestState, t0, measurements, options),
+        considerCovariance: options.consider.covariance,
+        count: options.consider.count,
+      })
+    : undefined;
   return {
     state: { x: bestState, epoch: t0 },
     covariance,
     residualRms: lastResidualRms,
     iterations: Math.min(iter, maxIter),
     observationCount,
+    considerCovariance: consider,
   };
+}
+
+/**
+ * Accumulate the cross information Lambda_xc = sum Hx^T W Hc at the converged state, where Hx is
+ * the STM-mapped measurement partial (size x 6) and Hc the STM-mapped consider partial (size x
+ * nc). One extra propagation of the converged arc; cheap relative to the Gauss-Newton iteration.
+ */
+function accumulateCrossInformation(
+  state0: Float64Array,
+  t0: number,
+  measurements: readonly Measurement[],
+  options: BatchOptions,
+): Float64Array {
+  const cfg = options.consider!;
+  const nc = cfg.count;
+  const epochs = measurements.map((m) => m.epoch);
+  const arc: Arc = propagateArc(state0, t0, epochs, options.forceModel, options.frame);
+  const lambdaXc = new Float64Array(6 * nc);
+  for (const m of measurements) {
+    const size = measurementSize(m);
+    const stateAt = arc.stateAt(m.epoch);
+    const phi = arc.stmAt(m.epoch);
+    const pred = predict(m, stateAt);
+    const H = jacTimesStm(pred.jac, size, phi); // size x 6, mapped to t0
+    const varns = noiseVariances(m); // size sigma^2
+    const hc = cfg.sensitivity(m, stateAt, phi).partials; // size x nc
+    for (let i = 0; i < size; i++) {
+      const w = 1 / varns[i]!;
+      for (let a = 0; a < 6; a++) {
+        const Ha = H.data[i * 6 + a]!;
+        if (Ha === 0) continue;
+        for (let cidx = 0; cidx < nc; cidx++) {
+          lambdaXc[a * nc + cidx]! += Ha * w * hc[i * nc + cidx]!;
+        }
+      }
+    }
+  }
+  return lambdaXc;
 }

@@ -62,6 +62,15 @@ Mission Control Sequence (`mcs/`, Astrogator-class):
   Target child inside another Target solves its own corrector to convergence as part of
   evaluating the outer residual (an inner loop per outer iteration), and both `DcReport`s
   surface on the run.
+- `runTargetOptimizer`, `OptimizerReport`, and the `Objective` IR. A Target with an
+  `objective` (e.g. `{ type: 'minimizeDeltaV' }`) runs in OPTIMIZER mode: it both satisfies
+  the goals AND minimizes the scalar objective over the (redundant, `n > m`) controls, using
+  a projected-gradient method with constraint restoration. The corrector's Newton step is the
+  feasibility-restoration operator; the cost gradient is projected onto the null space of the
+  constraint Jacobian `(I - J^T (J J^T)^-1 J)`, line-searched, and re-restored each sweep until
+  the projected gradient is stationary. The optimizer reports surface on `McsRun.optimizerReports`.
+  `DcSettings` gains `optimizerMaxIterations` and `optimizerTolerance` (defaulted) for the outer
+  sweep budget and the stationarity threshold.
 - Finite (continuous-thrust) burns: a `Maneuver` with `mode: 'Finite'` carries `isp` (s),
   `thrustN` (N), and `duration` (s); its `dv` gives only the thrust DIRECTION (in the
   `attitude` frame, frozen at ignition). `runFiniteBurn` integrates a 7-state arc
