@@ -6,6 +6,15 @@
 import { windowCard, windowComplement, windowMeasure, type EphemerisTime, type Window } from '@bessel/timeline';
 import type { ClassicalElements } from '@bessel/propagator';
 
+export {
+  sweepCoverageGrid,
+  GridSweepError,
+  type GridSpec,
+  type GridSweepRequest,
+  type CoverageCell,
+  type CoverageGrid,
+} from './grid-sweep.ts';
+
 const TWO_PI = Math.PI * 2;
 
 /** Coverage statistics for one ground point over an analysis span. */

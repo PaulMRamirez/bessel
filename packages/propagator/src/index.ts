@@ -45,6 +45,12 @@ export {
   type ExponentialAtmosphereOptions,
 } from './force/drag.ts';
 export {
+  harrisPriesterAtmosphere,
+  HARRIS_PRIESTER_MEAN,
+  type HarrisPriesterOptions,
+  type HarrisPriesterRow,
+} from './force/harris-priester.ts';
+export {
   srp,
   cylindricalShadow,
   SrpError,

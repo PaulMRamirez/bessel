@@ -51,6 +51,14 @@ export interface PcInput {
  * bivariate Gaussian (axis-aligned covariance, mean at the miss vector) over the
  * combined hard-body disk of radius `radiusKm`, via polar quadrature.
  */
+export {
+  screenAllVsAll,
+  ScreenError,
+  type SampledEphemeris,
+  type ConjunctionEvent,
+  type ScreenOptions,
+} from './screen.ts';
+
 export function collisionProbability2D(input: PcInput, samples = 240): number {
   const { radiusKm: R, sigmaXKm: sx, sigmaYKm: sy, missXKm: mx, missYKm: my } = input;
   if (R <= 0 || sx <= 0 || sy <= 0) return 0;

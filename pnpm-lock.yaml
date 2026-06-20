@@ -270,9 +270,15 @@ importers:
 
   packages/coverage:
     dependencies:
+      '@bessel/access':
+        specifier: workspace:*
+        version: link:../access
       '@bessel/propagator':
         specifier: workspace:*
         version: link:../propagator
+      '@bessel/spice':
+        specifier: workspace:*
+        version: link:../spice
       '@bessel/timeline':
         specifier: workspace:*
         version: link:../timeline

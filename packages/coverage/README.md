@@ -21,9 +21,27 @@ const fom = figureOfMerit([[10, 20], [40, 70]], [0, 100]); // percentCoverage 0.
 const sats = walkerConstellation({ a: 7000, e: 0, i: 0.925, argp: 0, totalSats: 24, planes: 3, phasing: 1 });
 ```
 
+Grid sweep over access:
+
+- `GridSpec` (interface): central `body` and `bodyFrame`, latitude/longitude bounds and counts (uniform lat/lon grid), optional `altKm`.
+- `GridSweepRequest` (interface): `grid`, `assets` (SPK ids/names), `span`, `step`, `minElevationRad`, optional `abcorr` and `onProgress`.
+- `CoverageCell` / `CoverageGrid`: per-cell FOM of the any-asset (1-fold) union window plus `nFoldCoverage` (fraction of the span covered by at least k assets simultaneously, k = 1..N), in row-major order.
+- `sweepCoverageGrid(spice, req)`: builds the lat/lon grid and, per cell, reuses `@bessel/access` `computeElevationAccess` for each asset (it does NOT duplicate the access engine), unions the assets for 1-fold coverage, reduces to a `FigureOfMerit`, and accumulates the N-fold coverage. Loud `GridSweepError` on a bad grid or empty asset list.
+
+```ts
+import { sweepCoverageGrid } from '@bessel/coverage';
+
+const result = await sweepCoverageGrid(spice, {
+  grid: { body: 'EARTH', bodyFrame: 'IAU_EARTH', latMin: -1, latMax: 1, latCount: 9, lonMin: -3.1, lonMax: 3.1, lonCount: 18 },
+  assets: ['-99'], // a propagated satellite (or several, for a constellation)
+  span: [t0, t1], step: 60, minElevationRad: 10 * Math.PI / 180,
+});
+// result.cells[k].fom and .nFoldCoverage form the Figure-of-Merit grid.
+```
+
 ## Dependency rule
 
-Depends on: `@bessel/timeline` (Window measures and complement), `@bessel/propagator` (`ClassicalElements`). Part of the core layer; imports no PAL implementation or UI.
+Depends on: `@bessel/timeline` (Window measures and algebra), `@bessel/propagator` (`ClassicalElements`), `@bessel/access` (`computeElevationAccess`, single-(point,asset) access), and `@bessel/spice` (the engine the sweep drives). Part of the core layer; imports no PAL implementation or UI.
 
 ## Algorithm and references
 
