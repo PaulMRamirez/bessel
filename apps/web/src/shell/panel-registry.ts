@@ -4,14 +4,20 @@
 // way the engine resolves an instrument id to its loaded FOV. This keeps the
 // dependency rule intact: the catalog layer never imports UI.
 
-import type { ComponentType } from 'react';
-import { PluginsPanel, type PluginsPanelProps } from '../panels/PluginsPanel.tsx';
+import { lazy, type ComponentType } from 'react';
+import type { PluginsPanelProps } from '../panels/PluginsPanel.tsx';
 
 /** Props every shell-resolved plugin panel receives. */
 export type PluginPanelProps = PluginsPanelProps;
 
+// The plugins panel is code-split: it loads on demand the first time the Plugins menu
+// opens, not at first paint. The viewer renders the resolved component inside a Suspense
+// boundary (PanelSuspense). React.lazy needs a default export, so the dynamic import maps
+// the named PluginsPanel export to `default`.
 const PANEL_COMPONENTS: Readonly<Record<string, ComponentType<PluginPanelProps>>> = {
-  plugins: PluginsPanel,
+  plugins: lazy(() =>
+    import('../panels/PluginsPanel.tsx').then((m) => ({ default: m.PluginsPanel })),
+  ),
 };
 
 /** Resolve a plugin-declared panel id to its component, or null when unknown. */

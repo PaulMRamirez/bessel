@@ -16,10 +16,8 @@ import {
   OpsPanel,
   PanelContainer,
   ReadoutPanel,
-  ScriptConsole,
   SearchBox,
   SettingsPanel,
-  TelemetryOverlay,
   ThemeToggle,
   TimelineControls,
   Tooltip,
@@ -32,11 +30,20 @@ import { useBesselEngine } from './engine/index.ts';
 import { createMissionRegistry } from './missions.ts';
 import { AppShell, resolvePanel, pluginPanelIds } from './shell/index.ts';
 import { Popover } from './overlays/Popover.tsx';
-import { AnalysisPanel } from './panels/AnalysisPanel.tsx';
-import { PropagatePanel } from './panels/PropagatePanel.tsx';
-import { ReportPanel } from './panels/ReportPanel.tsx';
-import { MissionPanel } from './panels/MissionPanel.tsx';
-import { OdPanel } from './panels/OdPanel.tsx';
+// Heavy workbench and menu panels are code-split: each loads on demand the first time
+// its menu opens (the Popover mounts its children only while open), keeping the analysis
+// engines and charting out of the first-paint chunk. PanelSuspense supplies the
+// accessible loading fallback while a panel's chunk loads.
+import {
+  AnalysisPanel,
+  MissionPanel,
+  OdPanel,
+  PanelSuspense,
+  PropagatePanel,
+  ReportPanel,
+  ScriptConsole,
+  TelemetryOverlay,
+} from './panels/lazy.tsx';
 
 const SPICE_IDS: Readonly<Record<string, string>> = Object.fromEntries(
   SOLAR_SYSTEM.map((p) => [p.name, p.spiceId]),
@@ -161,7 +168,9 @@ export function BesselViewer(): JSX.Element {
       </Popover>
       {PluginPanel ? (
         <Popover label="Plugins" title="Mission plugins" align="right" testId="plugins-menu">
-          <PluginPanel engine={engine} store={store} registry={registryRef.current} />
+          <PanelSuspense>
+            <PluginPanel engine={engine} store={store} registry={registryRef.current} />
+          </PanelSuspense>
         </Popover>
       ) : null}
       <Popover label="Capture" title="Capture" align="right" testId="capture-menu">
@@ -172,24 +181,34 @@ export function BesselViewer(): JSX.Element {
         />
       </Popover>
       <Popover label="Script" title="Scripting console" align="right" testId="script-menu">
-        <ScriptConsole
-          source={scriptSource}
-          onChange={setScriptSource}
-          onRun={runScript}
-          log={scriptLog}
-        />
+        <PanelSuspense>
+          <ScriptConsole
+            source={scriptSource}
+            onChange={setScriptSource}
+            onRun={runScript}
+            log={scriptLog}
+          />
+        </PanelSuspense>
       </Popover>
       <Popover label="Propagate" title="Orbit propagation" align="right" testId="propagate-menu">
-        <PropagatePanel engine={engine} store={store} />
+        <PanelSuspense>
+          <PropagatePanel engine={engine} store={store} />
+        </PanelSuspense>
       </Popover>
       <Popover label="Mission Design" title="Mission design (MCS)" align="right" testId="mission-design-menu">
-        <MissionPanel engine={engine} store={store} />
+        <PanelSuspense>
+          <MissionPanel engine={engine} store={store} />
+        </PanelSuspense>
       </Popover>
       <Popover label="OD" title="Orbit determination" align="right" testId="od-menu">
-        <OdPanel engine={engine} store={store} />
+        <PanelSuspense>
+          <OdPanel engine={engine} store={store} />
+        </PanelSuspense>
       </Popover>
       <Popover label="Report" title="Data-provider workbench" align="right" testId="report-menu">
-        <ReportPanel engine={engine} store={store} />
+        <PanelSuspense>
+          <ReportPanel engine={engine} store={store} />
+        </PanelSuspense>
       </Popover>
       <Popover label="Views" title="Saved views" align="right" testId="views-menu">
         <BookmarksPanel
@@ -201,16 +220,16 @@ export function BesselViewer(): JSX.Element {
       </Popover>
       {hasSpacecraft ? (
         <Popover label="Analysis" title="Analysis" align="right" testId="analysis-menu">
-          <AnalysisPanel engine={engine} store={store} />
+          <PanelSuspense>
+            <AnalysisPanel engine={engine} store={store} />
+          </PanelSuspense>
         </Popover>
       ) : null}
       {hasSpacecraft ? (
         <Popover label="Telemetry" title="Predicted versus actual" align="right" testId="telemetry-menu">
-          <TelemetryOverlay
-            series={telemetryOverlay}
-            nowEt={et}
-            fault={telemetryFault}
-          />
+          <PanelSuspense>
+            <TelemetryOverlay series={telemetryOverlay} nowEt={et} fault={telemetryFault} />
+          </PanelSuspense>
         </Popover>
       ) : null}
       <Tooltip label="Toggle light / dark theme">

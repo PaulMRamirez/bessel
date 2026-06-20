@@ -1,8 +1,25 @@
 [
   {
-    "name": "web app shell (initial JS, gzip, excludes lazy WASM)",
-    "path": "apps/web/dist/assets/*.js",
-    "limit": "350 KB",
+    "name": "web app shell (first-paint JS, gzip)",
+    "path": ["apps/web/dist/assets/app-*.js", "apps/web/dist/assets/vendor-*.js"],
+    "limit": "310 KB",
+    "gzip": true
+  },
+  {
+    "name": "lazy analysis bundle (gzip)",
+    "path": [
+      "apps/web/dist/assets/*.js",
+      "!apps/web/dist/assets/app-*.js",
+      "!apps/web/dist/assets/vendor-*.js",
+      "!apps/web/dist/assets/spice.worker-*.js"
+    ],
+    "limit": "46 KB",
+    "gzip": true
+  },
+  {
+    "name": "spice worker (gzip)",
+    "path": "apps/web/dist/assets/spice.worker-*.js",
+    "limit": "23 KB",
     "gzip": true
   },
   {
