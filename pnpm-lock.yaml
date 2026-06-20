@@ -499,6 +499,9 @@ importers:
       '@bessel/scene':
         specifier: workspace:*
         version: link:../scene
+      '@bessel/selene-design':
+        specifier: workspace:*
+        version: link:../../design-system/selene-design
       '@bessel/spice':
         specifier: workspace:*
         version: link:../spice

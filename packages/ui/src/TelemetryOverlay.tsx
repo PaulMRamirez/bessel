@@ -5,8 +5,13 @@
 // and a horizontal residual-threshold line that recolors by the Yamcs severity
 // ladder (watch, warning, distress, critical, severe). A loud fault banner shows
 // when the transport adapter reports an error. No charting library: scaled SVG.
+// Colors are derived from the selene design tokens (see telemetry-colors.ts,
+// ADR-0013), and a selene StatusDot + TeleCell/Gauge/Metric strip provides the
+// readout chrome so the overlay matches the rest of the reskinned app.
 
+import { StatusDot, TeleCell, Gauge, Metric } from '@bessel/selene-design';
 import type { PredictedVsActual } from '@bessel/state';
+import { SEVERITY_HEX, STROKE, toneFor } from './telemetry-colors.ts';
 
 /** Yamcs XTCE alarm severities, ascending. The threshold line takes the highest tripped. */
 export type TelemetrySeverity = 'nominal' | 'watch' | 'warning' | 'distress' | 'critical' | 'severe';
@@ -26,15 +31,6 @@ export const DEFAULT_LADDER: SeverityLadder = {
   distress: 3,
   critical: 4,
   severe: 5,
-};
-
-const SEVERITY_COLOR: Record<TelemetrySeverity, string> = {
-  nominal: '#3fb950',
-  watch: '#9e6a03',
-  warning: '#d29922',
-  distress: '#db6d28',
-  critical: '#f85149',
-  severe: '#da3633',
 };
 
 /** The highest severity tripped by a residual against the ladder. */
@@ -127,7 +123,7 @@ export function TelemetryOverlay(props: TelemetryOverlayProps): JSX.Element {
             <polyline
               className="bessel-telemetry-predicted"
               fill="none"
-              stroke="#6e7681"
+              stroke={STROKE.predicted}
               strokeDasharray="3 2"
               points={predictedPts.join(' ')}
               data-testid="telemetry-predicted-line"
@@ -135,7 +131,7 @@ export function TelemetryOverlay(props: TelemetryOverlayProps): JSX.Element {
             <polyline
               className="bessel-telemetry-actual"
               fill="none"
-              stroke="#58a6ff"
+              stroke={STROKE.actual}
               points={actualPts.join(' ')}
               data-testid="telemetry-residual-line"
             />
@@ -147,7 +143,7 @@ export function TelemetryOverlay(props: TelemetryOverlayProps): JSX.Element {
           x2={w - PAD}
           y1={thresholdY}
           y2={thresholdY}
-          stroke={SEVERITY_COLOR[severity]}
+          stroke={SEVERITY_HEX[severity]}
           strokeWidth={1.5}
           data-testid="telemetry-threshold-line"
           data-severity={severity}
@@ -158,14 +154,31 @@ export function TelemetryOverlay(props: TelemetryOverlayProps): JSX.Element {
           x2={nowX}
           y1={PAD}
           y2={h - PAD}
-          stroke="#f0f0f0"
+          stroke={STROKE.now}
           strokeWidth={1}
           data-testid="telemetry-now-line"
         />
       </svg>
+      {/* Additive selene readout chrome. Carries no test contract: the asserted
+          severity text stays the sole text content of the readout paragraph, and
+          the StatusDot glyph is decorative (aria-hidden, childless). Tile values use
+          the AA text tokens, not a severity accent (accents fail text contrast on the
+          light theme surface); severity reads from the dot, threshold line, and word. */}
       <p className="bessel-telemetry-readout" data-testid="telemetry-severity" data-severity={severity}>
+        <span aria-hidden="true" style={{ display: 'inline-flex', marginRight: 6, verticalAlign: 'middle' }}>
+          <StatusDot tone={toneFor(severity)} halo={severity === 'critical' || severity === 'severe'} />
+        </span>
         Residual {latest.toFixed(2)} km ({severity})
       </p>
+      <div
+        className="bessel-telemetry-tiles"
+        style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 6 }}
+      >
+        <TeleCell label="RESIDUAL" value={latest.toFixed(2)} unit="km" />
+        <TeleCell label="THRESHOLD" value={threshold.toFixed(2)} unit="km" />
+        <Gauge label="MARGIN" value={latest / (threshold * 2 || 1)} color="var(--ink-0)" />
+        <Metric label="SEVERITY" value={severity} />
+      </div>
     </section>
   );
 }

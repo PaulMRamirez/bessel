@@ -5,6 +5,7 @@
 // presentational; all imperative work lives in the engine.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SOLAR_SYSTEM } from '@bessel/scene';
+import { StatusDot, type StatusTone } from '@bessel/selene-design';
 import {
   BookmarksPanel,
   CameraFrameControls,
@@ -49,6 +50,21 @@ import {
 const SPICE_IDS: Readonly<Record<string, string>> = Object.fromEntries(
   SOLAR_SYSTEM.map((p) => [p.name, p.spiceId]),
 );
+
+// The residual (km) at which the HUD glyph escalates to a hard fault. Mirrors the
+// telemetry overlay's DEFAULT_LADDER.critical; inlined so this eager shell module
+// does not pull the lazy overlay code into the first-paint chunk.
+const HUD_FAULT_RESIDUAL_KM = 4;
+
+/** A selene StatusDot tone for the status HUD, derived purely from existing app
+ *  state. The visible status text is unchanged; the dot only adds a color cue. */
+function hudTone(status: string, fault: string | null, residualKm: number | null): StatusTone {
+  if (status.startsWith('Error')) return 'fault';
+  if (fault != null) return 'critical';
+  if (residualKm != null && residualKm >= HUD_FAULT_RESIDUAL_KM) return 'critical';
+  if (status === 'Ready') return 'nominal';
+  return 'caution';
+}
 
 export function BesselViewer(): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -95,6 +111,7 @@ export function BesselViewer(): JSX.Element {
   const telemetryResidualKm = useStore(store, (s) => s.telemetryResidualKm);
   const telemetryOverlay = useStore(store, (s) => s.telemetryOverlay);
   const telemetryFault = useStore(store, (s) => s.telemetryFault);
+  const statusTone = hudTone(status, telemetryFault, telemetryResidualKm);
   const missionAnnotations = useStore(store, (s) => s.annotations);
   const spacecraftQuat = useStore(store, (s) => s.spacecraftQuat);
   const objects = useStore(store, (s) => s.objects);
@@ -292,6 +309,9 @@ export function BesselViewer(): JSX.Element {
         data-testid="viewport"
       />
       <div className="bessel-hud" data-testid="status">
+        <span aria-hidden="true" style={{ display: 'inline-flex', marginRight: 6, verticalAlign: 'middle' }}>
+          <StatusDot tone={statusTone} halo={statusTone === 'critical'} />
+        </span>
         {status}
       </div>
       <div className="bessel-viewcontrols" role="group" aria-label="Instruments and sharing">

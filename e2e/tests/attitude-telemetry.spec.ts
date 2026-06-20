@@ -72,4 +72,24 @@ test('attitude is data-driven, annotations scrub, and the telemetry overlay rend
     seriousOrCritical,
     JSON.stringify(seriousOrCritical.map((v) => ({ id: v.id, impact: v.impact })), null, 2),
   ).toEqual([]);
+
+  // The overlay must stay AA-clean in the light theme too: the selene tile value
+  // colors are theme-reactive tokens (not baked dark hex), so they remain legible on
+  // the light surface. Scoped to the overlay so unrelated app chrome is out of scope.
+  await page.getByTestId('theme-toggle').click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  // The toggle lives outside the Telemetry popover, so clicking it closes the popover
+  // and unmounts the overlay; reopen it for the scoped scan.
+  await page.getByTestId('telemetry-menu').click();
+  await expect(page.getByTestId('telemetry-overlay')).toBeVisible({ timeout: 10_000 });
+  const lightResults = await new AxeBuilder({ page })
+    .include('[data-testid="telemetry-overlay"]')
+    .analyze();
+  const lightSeriousOrCritical = lightResults.violations.filter(
+    (v) => v.impact === 'serious' || v.impact === 'critical',
+  );
+  expect(
+    lightSeriousOrCritical,
+    JSON.stringify(lightSeriousOrCritical.map((v) => ({ id: v.id, impact: v.impact })), null, 2),
+  ).toEqual([]);
 });

@@ -11,6 +11,7 @@
     "@bessel/spice": "workspace:*",
     "@bessel/catalog": "workspace:*",
     "@bessel/scene": "workspace:*",
+    "@bessel/selene-design": "workspace:*",
     "@bessel/timeline": "workspace:*",
     "@bessel/state": "workspace:*",
     "@bessel/color": "workspace:*",

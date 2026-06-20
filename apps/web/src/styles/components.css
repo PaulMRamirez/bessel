@@ -924,6 +924,15 @@ button[aria-pressed='true'] {
   color: var(--text-1);
 }
 
+/* The adopted selene TeleCell/Gauge/Metric tiles set their micro-labels to
+   var(--ink-3) (the muted ink) inline, which falls below WCAG AA at 9px on the
+   tile's --bg-0 surface. Raise the muted ink to --ink-1 within this container only,
+   so the inline var(--ink-3) resolves to a legible value without restyling the
+   design system or shifting the global palette. */
+.bessel-telemetry-tiles {
+  --ink-3: var(--ink-1);
+}
+
 /* Shared parameter controls at the top of the Analysis workbench. */
 .bessel-analysis-params {
   display: flex;
