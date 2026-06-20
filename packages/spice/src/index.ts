@@ -206,6 +206,35 @@ export interface SpiceEngine {
     states: Float64Array,
   ): Promise<void>;
 
+  /** Ephemeris seconds past J2000 (ET) to continuous encoded SCLK ticks (sce2c). */
+  sce2c(sc: number, et: number): Promise<number>;
+  /** Continuous encoded SCLK ticks to ephemeris seconds past J2000 (ET) (sct2e). */
+  sct2e(sc: number, sclkdp: number): Promise<number>;
+  /**
+   * CK pointing query (ckgp): C-matrix (frame -> base) for `inst` at encoded SCLK
+   * `sclkdp` within `tol` ticks, in reference frame `ref`. `found` is false (not an
+   * error) when no record lies within tolerance.
+   */
+  ckgp(inst: number, sclkdp: number, tol: number, ref: string): Promise<CkPointing>;
+  /**
+   * Write a CK Type 3 segment (discrete quaternions + optional angular rate, linear
+   * interpolation) for `inst` and furnsh it, so the attitude history renders through
+   * the existing pxform/ckgp pipeline. `sclkdp` is n encoded-SCLK tags (ascending);
+   * `quats` is n*4 scalar-first quaternions (frame -> base, the SPICE m2q convention);
+   * `avvs`, when present, is n*3 angular rates and sets the av flag; `starts` are the
+   * interpolation-interval start tags (default the first tag). (STK_PARITY_SPEC ATT-6.)
+   */
+  writeCk03(
+    name: string,
+    inst: number,
+    ref: string,
+    segid: string,
+    sclkdp: Float64Array,
+    quats: Float64Array,
+    avvs: Float64Array | null,
+    starts: Float64Array,
+  ): Promise<void>;
+
   /** Two-vector attitude (twovec): rotation with axis `indexa` along `axdef` and
    * axis `indexp` in the axdef-plndef plane (indices 1..3). Returns a row-major 3x3. */
   twovec(axdef: Vec3, indexa: number, plndef: Vec3, indexp: number): Promise<Mat3>;
@@ -286,6 +315,16 @@ export interface SubPointResult {
   readonly point: Vec3;
   readonly trgepc: number;
   readonly srfvec: Vec3;
+}
+
+/** CK pointing result from ckgp: the C-matrix and the SCLK at which it was found. */
+export interface CkPointing {
+  /** Whether a pointing record was found within tolerance. */
+  readonly found: boolean;
+  /** Row-major 3x3 C-matrix (frame -> base); identity-shaped and meaningless when not found. */
+  readonly cmat: Mat3;
+  /** The encoded SCLK tick value of the returned pointing. */
+  readonly clkout: number;
 }
 
 /** Located, typed SPICE error. Fail loudly (CLAUDE.md). */

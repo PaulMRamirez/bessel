@@ -62,6 +62,8 @@ export function createSpiceWorkerPool(workers: Worker[]): SpiceWorkerPool {
     kclear: () => all((c) => c.kclear()),
     writeSpkType13: (name, body, center, frame, segid, degree, et, states) =>
       all((c) => c.writeSpkType13(name, body, center, frame, segid, degree, et, states)),
+    writeCk03: (name, inst, ref, segid, sclkdp, quats, avvs, starts) =>
+      all((c) => c.writeCk03(name, inst, ref, segid, sclkdp, quats, avvs, starts)),
     readDsk: (name, bytes) => all((c) => c.readDsk(name, bytes)),
 
     // Stateless reads: round-robin.
@@ -87,6 +89,9 @@ export function createSpiceWorkerPool(workers: Worker[]): SpiceWorkerPool {
     bodvcd: (bodyId, item) => next().bodvcd(bodyId, item),
     pxform: (from, to, et) => next().pxform(from, to, et),
     sxform: (from, to, et) => next().sxform(from, to, et),
+    sce2c: (sc, et) => next().sce2c(sc, et),
+    sct2e: (sc, sclkdp) => next().sct2e(sc, sclkdp),
+    ckgp: (inst, sclkdp, tol, ref) => next().ckgp(inst, sclkdp, tol, ref),
     sincpt: (method, target, et, fixref, abcorr, observer, dref, dvec) =>
       next().sincpt(method, target, et, fixref, abcorr, observer, dref, dvec),
     subpnt: (method, target, et, fixref, abcorr, observer) =>
