@@ -13,6 +13,9 @@ test-results/
 .env.*
 .DS_Store
 kernels/data/
+# Generated procedural textures (apps/web/scripts/gen-textures.mjs); served as
+# separate static assets, regenerated on prebuild, never committed.
+apps/web/public/textures/
 apps/desktop/out/
 apps/mobile/ios/
 apps/mobile/android/

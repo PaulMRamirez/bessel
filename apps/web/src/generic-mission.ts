@@ -35,6 +35,7 @@ import type {
   CatalogBody,
   CatalogInstrument,
   CatalogSpacecraft,
+  CssColor,
   Geometry,
 } from '@bessel/catalog';
 import type { SpiceEngine } from '@bessel/spice';
@@ -117,16 +118,32 @@ export function catalogBodyToPlanetDef(body: CatalogBody): PlanetDef {
   const name = body.name ?? body.id;
   const known = INNER_BY_NAME.get(name.toLowerCase());
   const g = body.geometry;
-  const texture = g && g.type === 'Globe' ? g.texture : undefined;
-  const normalMap = g && g.type === 'Globe' ? g.normalMap : undefined;
+  const globe = g && g.type === 'Globe' ? g : undefined;
+  const specularColor = cssColorToRgb(globe?.specularColor);
   return {
     name,
     spiceId: body.id,
     radiusKm: bodyRadiusKm(body),
     color: known?.color ?? DEFAULT_BODY_COLOR,
-    ...(texture ? { texture } : {}),
-    ...(normalMap ? { normalMap } : {}),
+    ...(globe?.texture ? { texture: globe.texture } : {}),
+    ...(globe?.normalMap ? { normalMap: globe.normalMap } : {}),
+    ...(globe?.nightTexture ? { nightTexture: globe.nightTexture } : {}),
+    ...(globe?.cloudMap ? { cloudMap: globe.cloudMap } : {}),
+    ...(globe?.cloudAltitudeKm !== undefined ? { cloudAltitudeKm: globe.cloudAltitudeKm } : {}),
+    ...(specularColor ? { specularColor } : {}),
+    ...(globe?.specularPower !== undefined ? { specularPower: globe.specularPower } : {}),
   };
+}
+
+/** Convert a catalog CssColor (string or {r,g,b}) to a 0..1 RGB tuple, or undefined. */
+function cssColorToRgb(c: CssColor | undefined): readonly [number, number, number] | undefined {
+  if (c === undefined) return undefined;
+  if (typeof c === 'object') return [c.r, c.g, c.b];
+  const hex = c.trim().replace(/^#/, '');
+  if (hex.length !== 6) return undefined;
+  const n = Number.parseInt(hex, 16);
+  if (Number.isNaN(n)) return undefined;
+  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
 }
 
 /** A Rings geometry (or a Globe carrying a rings sub-spec) maps to a RingSpec. */

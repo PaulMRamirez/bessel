@@ -45,9 +45,20 @@ export type Geometry =
   | {
       readonly type: 'Globe';
       readonly radii?: readonly [number, number, number];
+      /** Diffuse base map (Cosmographia baseMap; "texture" is the native field). */
       readonly texture?: string;
       readonly nightTexture?: string;
       readonly normalMap?: string;
+      /** Cloud-layer image; rendered as a separate translucent shell. */
+      readonly cloudMap?: string;
+      /** Cloud-shell altitude above the surface (km); defaults to 6.0. */
+      readonly cloudAltitudeKm?: number;
+      /** Specular tint for ocean glint; only applied with specularPower. */
+      readonly specularColor?: CssColor;
+      /** Specular sharpness (higher is glossier). */
+      readonly specularPower?: number;
+      /** Self-lit body (the Sun); skips lighting. */
+      readonly emissive?: boolean;
       readonly atmosphere?: GlobeAtmosphere;
       readonly rings?: GeometryRings;
     }

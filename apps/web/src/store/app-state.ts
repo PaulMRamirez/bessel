@@ -65,6 +65,10 @@ export interface AppState {
   instruments: boolean;
   footprintPoints: number;
   fovOk: boolean;
+  /** True when the rendered scene drew at least one image-textured ring. */
+  ringTextured: boolean;
+  /** True when the rendered scene built at least one translucent cloud shell. */
+  cloudShell: boolean;
   // Layers and per-object visibility.
   settings: VisualizationSettings;
   visibility: Readonly<Record<string, boolean>>;
@@ -262,6 +266,8 @@ export const initialAppState: AppState = {
   instruments: false,
   footprintPoints: 0,
   fovOk: false,
+  ringTextured: false,
+  cloudShell: false,
   settings: {
     trajectory: true,
     orbits: true,

@@ -4,6 +4,7 @@
 
 import {
   BufferGeometry,
+  ClampToEdgeWrapping,
   Color,
   DataTexture,
   DoubleSide,
@@ -13,6 +14,7 @@ import {
   RGBAFormat,
   type Texture,
 } from 'three';
+import { linearRamp } from '@bessel/color';
 import { SCALE } from './geometry-builders.ts';
 
 export interface RingVertices {
@@ -38,8 +40,11 @@ export function buildRingVertices(
     const cos = Math.cos(a);
     const sin = Math.sin(a);
     positions.push(inner * cos, inner * sin, 0, outer * cos, outer * sin, 0);
-    // U spans the radius (0 inner, 1 outer) so a banded texture reads radially.
-    uvs.push(0, i / segments, 1, i / segments);
+    // Cosmographia/VESTA rings sample a 1-D radial strip: the inner-edge vertex
+    // is UV (0,0), the outer-edge vertex is UV (1,0). U is the radial direction
+    // (inner -> outer) and only v=0 is sampled, so V does not vary around the
+    // ring. See PlanetaryRings.cpp (thirdparty/vesta).
+    uvs.push(0, 0, 1, 0);
     if (i < segments) {
       const b = i * 2;
       indices.push(b, b + 1, b + 2, b + 1, b + 3, b + 2);
@@ -52,18 +57,40 @@ export function buildRingVertices(
   };
 }
 
-function bandedRingTexture(color: readonly [number, number, number]): DataTexture {
+/** Radial fraction (inner..outer) of the Cassini Division for Saturn's rings. */
+const CASSINI_FRACTION = 0.62;
+const CASSINI_HALF_WIDTH = 0.03;
+
+/**
+ * Procedural ring strip: a width=N, height=1 horizontal texture where U is the
+ * radial direction (inner -> outer), matching the v=0 strip the ring geometry
+ * samples. Alpha carves a real Cassini-Division gap so rings read without an
+ * image asset. Returns the same axis orientation as a Cosmographia ring PNG.
+ */
+export function bandedRingTexture(color: readonly [number, number, number]): DataTexture {
   const w = 64;
   const data = new Uint8Array(w * 4);
+  // A two-stop palette across the radius via @bessel/color (shared band ramp).
+  const ramp = linearRamp(
+    'ring',
+    { r: color[0] * 0.6, g: color[1] * 0.6, b: color[2] * 0.6 },
+    { r: color[0], g: color[1], b: color[2] },
+  );
   for (let x = 0; x < w; x++) {
-    const band = 0.5 + 0.5 * Math.sin(x * 0.7) * Math.cos(x * 0.21);
+    const frac = x / (w - 1);
+    const rgb = ramp.color(frac, [0, 1]);
+    // Fine ringlet structure modulates brightness; the Cassini gap drops alpha.
+    const ringlet = 0.7 + 0.3 * Math.sin(frac * 48);
+    const inGap = Math.abs(frac - CASSINI_FRACTION) < CASSINI_HALF_WIDTH;
     const i = x * 4;
-    data[i] = color[0] * 255 * (0.6 + 0.4 * band);
-    data[i + 1] = color[1] * 255 * (0.6 + 0.4 * band);
-    data[i + 2] = color[2] * 255 * (0.6 + 0.4 * band);
-    data[i + 3] = 200 * (0.4 + 0.6 * band);
+    data[i] = Math.min(255, rgb.r * 255 * ringlet);
+    data[i + 1] = Math.min(255, rgb.g * 255 * ringlet);
+    data[i + 2] = Math.min(255, rgb.b * 255 * ringlet);
+    data[i + 3] = inGap ? 0 : Math.round(210 * (0.5 + 0.5 * ringlet));
   }
   const tex = new DataTexture(data, w, 1, RGBAFormat);
+  tex.wrapS = ClampToEdgeWrapping;
+  tex.wrapT = ClampToEdgeWrapping;
   tex.needsUpdate = true;
   return tex;
 }
@@ -85,11 +112,20 @@ export function buildRingMesh(
   geometry.setAttribute('uv', new Float32BufferAttribute(v.uvs, 2));
   geometry.setIndex(v.indices);
   geometry.computeVertexNormals();
+  const map = texture ?? bandedRingTexture(color);
+  // The strip's horizontal axis is the radial direction; clamp both axes so the
+  // single v=0 row is not tiled (Cosmographia wraps T, but the geometry samples
+  // only v=0 so clamping T is equivalent and avoids edge bleed).
+  map.wrapS = ClampToEdgeWrapping;
+  map.wrapT = ClampToEdgeWrapping;
   const material = new MeshBasicMaterial({
-    map: texture ?? bandedRingTexture(color),
+    // Opacity 0.99 with the PNG/strip alpha driving the gaps (matches VESTA's
+    // RingParticles material); a hard low opacity would double-attenuate a real
+    // image.
+    map,
     color: new Color(1, 1, 1),
     transparent: true,
-    opacity: 0.85,
+    opacity: 0.99,
     side: DoubleSide,
     depthWrite: false,
   });
