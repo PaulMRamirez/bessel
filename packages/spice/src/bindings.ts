@@ -461,6 +461,125 @@ export class SpiceBindings {
     this.checkFailed();
   }
 
+  /** Ephemeris seconds past J2000 (ET) to continuous encoded SCLK ticks (sce2c). */
+  sce2c(sc: number, et: number): number {
+    const out = this.mod._malloc(8);
+    this.call('sce2c_c', sc, et, out);
+    this.checkFailed();
+    const ticks = this.readDouble(out);
+    this.mod._free(out);
+    return ticks;
+  }
+
+  /** Continuous encoded SCLK ticks to ephemeris seconds past J2000 (ET) (sct2e). */
+  sct2e(sc: number, sclkdp: number): number {
+    const out = this.mod._malloc(8);
+    this.call('sct2e_c', sc, sclkdp, out);
+    this.checkFailed();
+    const et = this.readDouble(out);
+    this.mod._free(out);
+    return et;
+  }
+
+  /**
+   * CK pointing query (ckgp): the C-matrix (frame -> base) for instrument/structure
+   * `inst` at encoded SCLK `sclkdp`, within tolerance `tol` ticks, in reference frame
+   * `ref`. Returns the row-major 3x3 plus the actual SCLK and whether a record was
+   * found (no record within tolerance is `found: false`, not an error).
+   */
+  ckgp(inst: number, sclkdp: number, tol: number, ref: string): {
+    found: boolean;
+    cmat: number[];
+    clkout: number;
+  } {
+    const cmat = this.mod._malloc(72);
+    const clkout = this.mod._malloc(8);
+    const found = this.mod._malloc(4);
+    this.call('ckgp_c', inst, sclkdp, tol, this.str(ref), cmat, clkout, found);
+    this.checkFailed();
+    const result = {
+      found: this.readInt(found) !== 0,
+      cmat: this.readMat3(cmat),
+      clkout: this.readDouble(clkout),
+    };
+    [cmat, clkout, found].forEach((p) => this.mod._free(p));
+    return result;
+  }
+
+  /**
+   * Write a CK Type 3 (discrete quaternions + angular rate, linear interpolation
+   * within each interpolation interval) segment for `inst` into the in-memory FS and
+   * furnsh it, so the attitude history is queryable through the identical pxform/ckgp
+   * path. `sclkdp` is n encoded-SCLK tags (strictly increasing); `quats` is n*4
+   * scalar-first quaternions (frame -> base, the SPICE m2q convention); `avvs`, if
+   * present, is n*3 angular-rate vectors and sets the av flag; `starts` are the
+   * interpolation-interval start tags (a subset of `sclkdp`, default the first tag so
+   * the whole segment is one interpolation interval). (STK_PARITY_SPEC ATT-6/ATT-7.)
+   */
+  writeCk03(
+    name: string,
+    inst: number,
+    ref: string,
+    segid: string,
+    sclkdp: Float64Array,
+    quats: Float64Array,
+    avvs: Float64Array | null,
+    starts: Float64Array,
+  ): void {
+    const path = `${KERNEL_DIR}/${name}`;
+    if (this.mod.FS.analyzePath(path).exists) this.mod.FS.unlink(path);
+    const n = sclkdp.length;
+    if (n < 1 || quats.length !== n * 4) {
+      throw new SpiceError(`writeCk03: need >=1 record and quats of length 4n (n=${n})`);
+    }
+    const avflag = avvs !== null;
+    if (avflag && avvs.length !== n * 3) {
+      throw new SpiceError(`writeCk03: avvs must be length 3n when present (n=${n})`);
+    }
+    const nints = starts.length;
+    if (nints < 1) throw new SpiceError('writeCk03: need at least one interpolation interval start');
+
+    const handlePtr = this.mod._malloc(4);
+    // ckopn reserves comment space (ncomch); 0 is fine for a generated segment.
+    this.call('ckopn_c', this.str(path), this.str(segid.slice(0, 60) || 'BESSEL_CK'), 0, handlePtr);
+    this.checkFailed();
+    const handle = this.readInt(handlePtr);
+
+    const sclkPtr = this.mod._malloc(n * 8);
+    for (let k = 0; k < n; k++) this.mod.setValue(sclkPtr + k * 8, sclkdp[k]!, 'double');
+    const quatPtr = this.mod._malloc(n * 4 * 8);
+    for (let i = 0; i < n * 4; i++) this.mod.setValue(quatPtr + i * 8, quats[i]!, 'double');
+    // ckw03 always reads the avvs argument; pass a zero buffer when avflag is false.
+    const avPtr = this.mod._malloc(n * 3 * 8);
+    for (let i = 0; i < n * 3; i++) this.mod.setValue(avPtr + i * 8, avflag ? avvs[i]! : 0, 'double');
+    const startPtr = this.mod._malloc(nints * 8);
+    for (let k = 0; k < nints; k++) this.mod.setValue(startPtr + k * 8, starts[k]!, 'double');
+
+    this.call(
+      'ckw03_c',
+      handle,
+      sclkdp[0]!,
+      sclkdp[n - 1]!,
+      inst,
+      this.str(ref),
+      avflag ? 1 : 0,
+      this.str(segid),
+      n,
+      sclkPtr,
+      quatPtr,
+      avPtr,
+      nints,
+      startPtr,
+    );
+    this.checkFailed();
+    this.call('ckcls_c', handle);
+    this.checkFailed();
+    [handlePtr, sclkPtr, quatPtr, avPtr, startPtr].forEach((p) => this.mod._free(p));
+
+    this.call('furnsh_c', this.str(path));
+    this.checkFailed();
+  }
+
   // --- SpiceCell windows (geometry-finder confinement and result cells) ---------
   // A SpiceCell double window is a 9-field struct (36 bytes in wasm32) pointing at
   // a (CTRLSZ + size) double array; the first CTRLSZ=6 doubles are the control

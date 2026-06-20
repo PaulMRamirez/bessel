@@ -144,6 +144,23 @@ export async function dispatchSpice(engine: SpiceEngine, req: SpiceWorkerRequest
         req.et,
         req.states,
       );
+    case 'sce2c':
+      return engine.sce2c(req.sc, req.et);
+    case 'sct2e':
+      return engine.sct2e(req.sc, req.sclkdp);
+    case 'ckgp':
+      return engine.ckgp(req.inst, req.sclkdp, req.tol, req.ref);
+    case 'writeCk03':
+      return engine.writeCk03(
+        req.name,
+        req.inst,
+        req.ref,
+        req.segid,
+        req.sclkdp,
+        req.quats,
+        req.avvs,
+        req.starts,
+      );
     case 'twovec':
       return engine.twovec(req.axdef, req.indexa, req.plndef, req.indexp);
     case 'm2q':

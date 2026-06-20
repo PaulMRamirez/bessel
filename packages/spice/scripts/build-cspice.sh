@@ -45,6 +45,7 @@ EXPORTS='[
   "_dpr_c","_rpd_c","_spd_c","_clight_c","_georec_c","_latrec_c",
   "_dafopr_c","_dafcls_c","_dafbfs_c","_daffna_c","_dafgs_c","_dafgn_c","_dafus_c",
   "_spkopn_c","_spksub_c","_spkcls_c",
+  "_ckopn_c","_ckw03_c","_ckcls_c","_ckgp_c","_ckgpav_c",
   "_dasopr_c","_dascls_c","_dlabfs_c","_dlafns_c",
   "_dskobj_c","_dsksrf_c","_dskgd_c","_dskz02_c","_dskv02_c","_dskp02_c","_dskb02_c",
   "_dskw02_c","_dskmi2_c","_dskrb2_c",

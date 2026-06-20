@@ -4,6 +4,7 @@
 import type {
   AberrationCorrection,
   CartesianState,
+  CkPointing,
   DskShape,
   FovResult,
   GeodeticPoint,
@@ -148,6 +149,21 @@ export type SpiceWorkerRequest =
       et: Float64Array;
       states: Float64Array;
     }
+  | { id: number; method: 'sce2c'; sc: number; et: number }
+  | { id: number; method: 'sct2e'; sc: number; sclkdp: number }
+  | { id: number; method: 'ckgp'; inst: number; sclkdp: number; tol: number; ref: string }
+  | {
+      id: number;
+      method: 'writeCk03';
+      name: string;
+      inst: number;
+      ref: string;
+      segid: string;
+      sclkdp: Float64Array;
+      quats: Float64Array;
+      avvs: Float64Array | null;
+      starts: Float64Array;
+    }
   | { id: number; method: 'twovec'; axdef: Vec3; indexa: number; plndef: Vec3; indexp: number }
   | { id: number; method: 'm2q'; matrix: Mat3 }
   | { id: number; method: 'q2m'; quat: readonly number[] }
@@ -185,6 +201,10 @@ export type SpiceWorkerResultMap = {
   subpnt: SubPointResult;
   ilumin: IluminResult;
   writeSpkType13: void;
+  sce2c: number;
+  sct2e: number;
+  ckgp: CkPointing;
+  writeCk03: void;
   twovec: Mat3;
   m2q: number[];
   q2m: Mat3;

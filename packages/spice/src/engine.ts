@@ -92,6 +92,18 @@ export async function createSpiceEngine(options?: SpiceEngineOptions): Promise<S
     async writeSpkType13(name, body, center, frame, segid, degree, et, states) {
       return bindings.writeSpkType13(name, body, center, frame, segid, degree, et, states);
     },
+    async sce2c(sc, et) {
+      return bindings.sce2c(sc, et);
+    },
+    async sct2e(sc, sclkdp) {
+      return bindings.sct2e(sc, sclkdp);
+    },
+    async ckgp(inst, sclkdp, tol, ref) {
+      return bindings.ckgp(inst, sclkdp, tol, ref);
+    },
+    async writeCk03(name, inst, ref, segid, sclkdp, quats, avvs, starts) {
+      return bindings.writeCk03(name, inst, ref, segid, sclkdp, quats, avvs, starts);
+    },
     async twovec(axdef, indexa, plndef, indexp) {
       return bindings.twovec(axdef, indexa, plndef, indexp);
     },

@@ -16,6 +16,18 @@ declare module '*.ti?url' {
   const src: string;
   export default src;
 }
+declare module '*.bc?url' {
+  const src: string;
+  export default src;
+}
+declare module '*.tsc?url' {
+  const src: string;
+  export default src;
+}
+declare module '*.tf?url' {
+  const src: string;
+  export default src;
+}
 declare module '@bessel/catalog/examples/cassini' {
   const catalog: unknown;
   export default catalog;

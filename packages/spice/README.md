@@ -23,6 +23,7 @@ Engine surface (`SpiceEngine` / `SpiceComputeEngine`):
 - Frames and bodies: `pxform`, `sxform`, `bodvrd`, `bodvcd`, `getfov`.
 - Surface and illumination: `sincpt`, `subpnt`, `ilumin`, `recgeo`, `et2lst`, `readDsk`.
 - Attitude: `twovec`, `m2q`, `q2m`, `raxisa`.
+- Spacecraft clock and CK attitude: `sce2c`/`sct2e` (ET <-> encoded SCLK ticks), `ckgp` (CK pointing query), and `writeCk03`, which writes a CK Type 3 segment (discrete quaternions plus optional angular rate, linear interpolation) and furnshes it so the attitude history is queryable through the same `pxform`/`ckgp` path. A class-3 frame (defined in an FK with `FRAME_<id>_CLASS=3`, `CK_<id>_SCLK`, `CK_<id>_SPK`) drives the scene orientation from a furnished C-kernel. See `ck.test.ts` for the write-then-read round trip and `scripts/make-fixture-ck.mjs` for the demo CK generator.
 - Time series: `evalSeries` plus `runEvalSpec`, `gridEpochs`, `PROVIDER_CATALOG` for one-round-trip, cancellable sweeps over a grid.
 
 Types include `Vec3`, `StateVector`, `PositionResult`, `CartesianState`, `OsculatingElements`, `AberrationCorrection`, `Mat3`, and the located `SpiceError`.
@@ -44,7 +45,10 @@ so the engine never reads kernel files directly.
 ## Tests
 
 Tests live in `packages/spice/src/*.test.ts` (spice, batch, dsk, geometry, geodetic,
-occultation, propagation, eval-series). The acceptance test (`spice.test.ts`) loads
+occultation, propagation, eval-series, ck). The `ck.test.ts` round trip writes a known
+attitude profile to a CK Type 3 segment, furnshes it, and asserts both `ckgp` and
+`pxform(frame, J2000)` against the validated `q2m` quaternion convention. The acceptance
+test (`spice.test.ts`) loads
 `naif0012.tls` plus a de440s SPK and asserts `spkpos` of Saturn barycenter (6) relative
 to the Sun (10) in J2000 at 2004-07-01 against a NAIF reference pinned from de440s,
 agreeing well within 1 metre, and checks that unresolved bodies raise a typed `SpiceError`.

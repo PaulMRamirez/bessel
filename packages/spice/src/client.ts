@@ -5,6 +5,7 @@ import {
   SpiceError,
   type AberrationCorrection,
   type CartesianState,
+  type CkPointing,
   type DskShape,
   type FovResult,
   type GeodeticPoint,
@@ -150,6 +151,11 @@ export function createSpiceWorkerClient(worker: Worker): SpiceComputeEngine {
       }),
     writeSpkType13: (name, body, center, frame, segid, degree, et, states) =>
       send<void>({ method: 'writeSpkType13', name, body, center, frame, segid, degree, et, states }),
+    sce2c: (sc, et) => send<number>({ method: 'sce2c', sc, et }),
+    sct2e: (sc, sclkdp) => send<number>({ method: 'sct2e', sc, sclkdp }),
+    ckgp: (inst, sclkdp, tol, ref) => send<CkPointing>({ method: 'ckgp', inst, sclkdp, tol, ref }),
+    writeCk03: (name, inst, ref, segid, sclkdp, quats, avvs, starts) =>
+      send<void>({ method: 'writeCk03', name, inst, ref, segid, sclkdp, quats, avvs, starts }),
     twovec: (axdef, indexa, plndef, indexp) => send<Mat3>({ method: 'twovec', axdef, indexa, plndef, indexp }),
     m2q: (matrix) => send<number[]>({ method: 'm2q', matrix }),
     q2m: (quat) => send<Mat3>({ method: 'q2m', quat }),

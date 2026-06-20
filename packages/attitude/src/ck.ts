@@ -1,17 +1,16 @@
-// Attitude history read/write and a pxform-style body-orientation query.
+// Attitude history sampler and a pxform-style body-orientation query (the pure-TS
+// CK Type 3 analog).
 //
-// A native CK *binary* write needs CSPICE-WASM exports (ckopn/ckw03/ckcls, and ckgp/
-// ckgpav/sce2c to read) that are not yet bound in @bessel/spice (the build's
-// EXPORTED_FUNCTIONS does not list them and relinking is out of scope here). So the
-// attitude interchange is done through the already-supported CCSDS AEM path in
-// @bessel/interop (parseAem/writeAem): an attitude profile is written as an AEM Type
-// 3-style tabulated quaternion segment and read back, and THIS module provides the
-// CK-equivalent sampler, a `pxform`-style body orientation query that returns the
-// rotation at any epoch by shortest-path SLERP between the bracketing records (the CK
-// Type 3 continuous-quaternion interpolation rule). The orientation matches the source
-// exactly at sample epochs. CK-binary IO is the documented deferral; when the ck*
-// symbols are exported this module gains a native CK backend behind the same query.
-// (STK_PARITY_SPEC section 4.6 ATT-6/ATT-7.)
+// Native CK *binary* read/write now exists at the engine seam: @bessel/spice binds
+// ckopn/ckw03/ckcls (write) and ckgp plus sce2c/sct2e (read), so an attitude profile
+// can be written to a real C-kernel and queried via pxform/ckgp (see
+// packages/spice/src/ck.test.ts and the make-fixture-ck.mjs generator). This module
+// remains the dependency-free, in-process sampler: given tabulated quaternions it
+// answers the orientation at any epoch by shortest-path SLERP between the bracketing
+// records (the CK Type 3 continuous-quaternion interpolation rule), matching the
+// source exactly at sample epochs, without a furnished kernel or a worker round trip.
+// The CCSDS AEM path in @bessel/interop (parseAem/writeAem) remains the text
+// interchange. (STK_PARITY_SPEC section 4.6 ATT-6/ATT-7.)
 
 import type { Mat3 } from '@bessel/spice';
 import { slerp, type Quaternion } from './index.ts';
