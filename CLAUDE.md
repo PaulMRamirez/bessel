@@ -47,7 +47,7 @@ must exist and exit 0 on success.
 | `pnpm build:cli`     | bundle apps/cli to a runnable Node binary (the bessel batch runner) |
 | `pnpm cap:sync`      | cap sync ios against apps/web/dist (Android deferred)       |
 | `pnpm e2e`           | Playwright end-to-end suite, headless, including the a11y scan |
-| `pnpm size`          | size-limit budget check (.size-limit.json)                  |
+| `pnpm size`          | size-limit per-chunk budgets (.size-limit.json): first-paint shell, lazy analysis, worker, WASM |
 | `pnpm audit:prod`    | pnpm audit, production deps, fails on high or critical      |
 | `pnpm lhci`          | Lighthouse CI assertions on the built PWA (Phase 2 on)      |
 | `pnpm bench`         | Vitest bench micro-benchmarks (informational)               |
@@ -55,8 +55,17 @@ must exist and exit 0 on success.
 | `pnpm cspice:build`  | relink CSPICE to WASM (Emscripten); only when changing exports |
 | `pnpm verify`        | typecheck, lint, test, build:web, size in sequence; the gate|
 
-Never edit .size-limit.json or lighthouserc.json to make a budget pass; if a
-budget is genuinely wrong, stop and raise it. CI runs this same vocabulary
+The size budget is split per chunk, not one summed number: the first-paint shell
+(the eager `app-*.js` + `vendor-*.js`, the JS the browser must download before the
+scene renders) is budgeted separately from the lazy analysis bundle (the workbench
+panels and analysis engines, fetched on first use via dynamic import), the SPICE
+worker, and the lazy CSPICE WASM. So the lever for shell headroom is to keep new
+heavy, not-first-paint code behind a dynamic-import boundary (a React.lazy panel and
+an `await import()` in the engine), which moves it into the lazy bundle, not to grow
+the shell. Three.js and React are the irreducible first-paint floor and stay in
+`vendor`. Never edit .size-limit.json or lighthouserc.json to make a budget pass;
+loosen a limit only as a deliberate, raised decision, never silently, and prefer
+splitting code over raising the shell limit. CI runs this same vocabulary
 (.github/workflows/ci.yml), so do not introduce commands that pass locally but
 cannot run in CI.
 
