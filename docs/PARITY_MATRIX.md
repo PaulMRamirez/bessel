@@ -17,8 +17,8 @@ Date: 2026-06-19
 > capability. The status rows below are updated; honest residuals (content not
 > bundled, capabilities not yet surfaced in the shell) are called out per row and
 > summarized in Section 15. As of 2026-06-19 all program gates are green
-> (typecheck, lint, 588 unit/contract tests, build:web, build:desktop, cap:sync,
-> 23 e2e incl. the Electron DSK render and the axe scan, size, audit:prod, lhci,
+> (typecheck, lint, 627 unit/contract tests, build:web, build:desktop, cap:sync,
+> 25 e2e incl. the Electron DSK render and the axe scan, size, audit:prod, lhci,
 > release:dry).
 
 This is the auditable, feature-by-feature parity check promised in ADR-0006 and

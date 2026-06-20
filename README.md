@@ -11,8 +11,9 @@ coverage, maneuver design, and CCSDS interop) surfaced in three interactive
 workbenches. It also runs headless: special-perturbations propagation (NxN gravity,
 drag, SRP) with dense output, event detection, and the State Transition Matrix; an
 Astrogator-class Mission Control Sequence with a differential corrector, nested
-targeting, and finite burns; orbit determination (batch least-squares and an EKF);
-the EOP-aware TEME to J2000 transform; and a deterministic batch runner
+targeting, finite burns, and a fuel-optimal gradient optimizer; orbit determination
+(batch least-squares and an EKF, with light-time and consider parameters); the
+EOP-aware TEME to J2000 transform; and a deterministic batch runner
 (`@bessel/sdk` and the `bessel` CLI) that executes a JSON job with no UI. Every analysis quantity is asserted against an
 independent numeric reference; see docs/analysis-tools.md and
 docs/STK_PARITY_SPEC.md.
@@ -54,6 +55,13 @@ pnpm --filter @bessel/web dev      # web app (Vite dev server)
 pnpm build:web                     # production PWA build
 pnpm build:desktop                 # Electron build
 pnpm cap:sync                      # sync the iOS shell against the web build
+pnpm build:cli                     # bundle the bessel headless batch runner to a Node binary
+```
+
+Run a headless batch job once the CLI is built:
+
+```
+node apps/cli/dist/main.js run mission.job.json --out ./artifacts
 ```
 
 `pnpm verify` runs the gate (typecheck, lint, test, build:web, size). The full
@@ -82,7 +90,7 @@ inner system, Saturn, and Cassini).
 
 ## Mission analysis workbenches
 
-Three menus in the app shell run the analysis engines and render the results as
+Menus in the app shell run the analysis engines and render the results as
 Gantt timelines, time-series charts, ground-track overlays, report tables, and
 file exports. Full reference: docs/analysis-tools.md.
 
@@ -94,7 +102,13 @@ file exports. Full reference: docs/analysis-tools.md.
 - Propagate (always available): propagate a bundled sample TLE with SGP4 into an
   in-memory SPK and read back altitude, ground track, and period; find
   ground-station access; and propagate the same state numerically with the native
-  Cowell HPOP (adaptive DOPRI5 with a point-mass + J2 force model).
+  Cowell HPOP, choosing the force model (point-mass / J2 / NxN gravity / drag / SRP).
+- Mission Design (always available): assemble a Mission Control Sequence (initial
+  state, propagate, impulsive maneuver, target), run the differential corrector, and
+  render the resulting trajectory plus the corrector convergence report.
+- Orbit Determination (always available): run the batch least-squares estimator on
+  synthetic range/range-rate/angle tracking and read back the estimated state, the
+  residual RMS, and the covariance.
 - Report: pick a data provider (range, range rate, speed, position, velocity, sub
   point) for an observer/target pair over a time grid, run one cancellable
   evalSeries job, read the unit-tagged report table, and export CSV.

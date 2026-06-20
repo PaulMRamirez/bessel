@@ -137,14 +137,46 @@ see REFERENCES.md and docs/STK_PARITY_SPEC.md.
 - Validation: elevation access against solar rise/set at a known mask.
 
 ### Propagate numerically (HPOP)
-- Inputs: the same TLE initial state, integrated over one day.
+- Inputs: the same TLE initial state, integrated over one day, plus a force-model
+  selector (point-mass / J2 / NxN gravity / drag / SRP) and a frame note.
 - Computes: a numerical altitude time series, to compare against SGP4.
 - Engine: `@bessel/propagator` Cowell propagator (adaptive Dormand-Prince 5(4))
-  with a point-mass + zonal J2 force model.
+  with the selected force model (point-mass, zonal/NxN spherical harmonics,
+  atmospheric drag, or solar radiation pressure).
 - Validation: the integrator reproduces CSPICE `prop2b` for a pure point-mass to
   sub-meter; point-mass + J2 reproduces the analytic J2 secular drift
-  (`secularRatesJ2`).
-- Limits: J2 only in the UI; the force model also supports J3/J4 and third-body.
+  (`secularRatesJ2`); SGP4 output is placed in J2000 via the TEME to J2000 transform.
+
+---
+
+## Mission Design menu
+
+### Mission Control Sequence
+- Inputs: an initial circular altitude, a coast duration, an impulsive prograde
+  delta-v, and a target radius for the differential corrector.
+- Computes: runs an MCS (initial state, propagate, impulsive maneuver, target/coast)
+  through `@bessel/propagator` `runMission`, renders the resulting trajectory in the
+  3D scene (camera-relative), and shows the final state, an altitude chart, and the
+  corrector convergence (`DcReport`).
+- Engine: the Astrogator-class MCS executor and its differential corrector (with an
+  STM-analytic or finite-difference Jacobian, nested targeting, finite burns, and an
+  optional fuel-optimal gradient optimizer).
+- Limits: the panel exposes a single-burn targeting demo; the underlying executor
+  supports arbitrary nested sequences authored as the `Mcs` IR.
+
+---
+
+## Orbit Determination menu
+
+### Batch least-squares estimate
+- Inputs: a measurement-noise level for a synthetic tracking pass.
+- Computes: synthesizes range/range-rate/angle measurements from a known truth
+  orbit, runs the batch least-squares estimator, and shows the estimated state, the
+  residual RMS, and the solution covariance.
+- Engine: `@bessel/od` (Gauss-Newton batch LS seeded by the propagator STM; also
+  provides an EKF, light-time/aberration, and consider parameters).
+- Limits: the panel runs a synthetic-truth demo; the estimator accepts real
+  measurement sets through its API.
 
 ---
 

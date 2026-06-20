@@ -313,6 +313,7 @@ These scripts are defined at the workspace root and are the vocabulary the
 | `pnpm test`          | Unit and contract tests (Vitest), all passing                  |
 | `pnpm build:web`     | Vite production build of apps/web                              |
 | `pnpm build:desktop` | electron-vite build of apps/desktop                            |
+| `pnpm build:cli`     | bundle apps/cli to a runnable Node binary (the bessel batch runner) |
 | `pnpm cap:sync`      | `cap sync ios` against apps/web/dist (Android deferred)        |
 | `pnpm e2e`           | Playwright end-to-end suite (headless), including the a11y scan|
 | `pnpm size`          | size-limit budget check against .size-limit.json               |

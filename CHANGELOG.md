@@ -30,17 +30,23 @@ maintained alongside them, not hand-edited per package.
   switching-function event detection with terminal stops, and the co-integrated
   42-state variational State Transition Matrix (`propagateCowellEx`).
 - Higher-fidelity Cowell force models in `@bessel/propagator`: full NxN spherical
-  harmonics (sectoral and tesseral), atmospheric drag (co-rotating, pluggable
-  exponential density), and cannonball solar radiation pressure with a cylindrical
-  shadow, alongside the existing point-mass, zonal, and third-body terms.
+  harmonics (sectoral and tesseral), atmospheric drag (co-rotating, with both an
+  exponential and a Harris-Priester density model behind the `DensityModel` seam),
+  and cannonball solar radiation pressure with a cylindrical shadow, alongside the
+  existing point-mass, zonal, and third-body terms.
 - Astrogator-class Mission Control Sequence in `@bessel/propagator` (`mcs/`): a pure
   JSON mission IR, an immutable executor, and a differential corrector with an
   STM-analytic (else finite-difference) Jacobian and damped Newton solve, including
-  nested multi-level targeting and finite (continuous-thrust) burns with mass
-  depletion.
+  nested multi-level targeting, finite (continuous-thrust) burns with mass depletion,
+  and a projected-gradient optimizer mode for fuel-optimal targeting.
 - Orbit determination in the new `@bessel/od`: a Gauss-Newton batch least-squares
   estimator and a sequential extended Kalman filter, with range, range-rate, and
-  angle measurement models, seeded by the propagator State Transition Matrix.
+  angle measurement models seeded by the propagator State Transition Matrix, plus
+  light-time/aberration and consider-parameter covariance.
+- Additional analysis-engine coverage: all-vs-all conjunction screening with a
+  smart sieve (`@bessel/conjunction`), a lat/lon coverage grid-sweep over access
+  (`@bessel/coverage`), and an attitude read/write path (AEM write and an
+  `attitudeHistory`/`pxformAt` sampler in `@bessel/interop`/`@bessel/attitude`).
 - EOP-aware TEME to J2000 (EME2000/GCRF) transform in `@bessel/propagator`
   (`frames/`): IAU-1976 precession, the full IAU-1980 nutation, and celestial-pole
   offsets, validated to sub-meter against the Vallado worked example.
@@ -48,7 +54,13 @@ maintained alongside them, not hand-edited per package.
   deterministic `runJob` runner with CI-grade exit codes and a provenance manifest,
   ops for furnish/loadCatalog/propagate/runMcs/analyze[range, eclipse, access,
   linkBudget]/report/export, and a shipped JSON Schema), `@bessel/pal-node` (Node
-  kernel source plus a confined writer), and `apps/cli` (the `bessel` batch runner).
+  kernel source plus a confined writer), and `apps/cli` (the `bessel` batch runner,
+  bundled to a runnable Node binary via `pnpm build:cli`).
+- App workbenches surfacing the numerical engines: a Mission Design panel (build and
+  run an MCS, render the arc and corrector convergence), an Orbit Determination panel
+  (estimate a state with residual RMS and covariance), and an HPOP force-model
+  selector in the Propagate panel. Each is proven by a Playwright e2e and passes the
+  axe accessibility scan.
 - F3 foundation in `@bessel/spice`: an EvalSpec time-series interpreter, a
   cancellable-job protocol, a multi-worker SPICE pool, and `recgeo`/`et2lst`
   bindings; the `SpiceWindow` interval algebra and a shared geometry finder in
