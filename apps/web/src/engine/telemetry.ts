@@ -42,6 +42,12 @@ export function pushBoundsLabels(
   );
 }
 
+// A monotonic id stamped on each readout request. A computeReadouts for a newer
+// focus/observer/et must not be overwritten by an older request that resolves later
+// (worker round-trips can finish out of order), which would flash the previous
+// focus's numbers. Only the latest-issued request is allowed to write.
+let readoutSeq = 0;
+
 export function pushReadouts(
   spice: SpiceEngine,
   store: AppStore,
@@ -55,8 +61,11 @@ export function pushReadouts(
   // With no spacecraft observer (a neutral scene) there is nothing to measure
   // from, so the readouts stay n/a rather than showing a wrong value.
   if (!observerId) return;
+  const seq = (readoutSeq += 1);
   void computeReadouts(spice, focusName, focusName, et, observerId, bodyFrames).then((r) => {
-    if (!isDisposed()) store.setState({ readouts: r });
+    // Drop a stale in-flight result: a later request has since been issued, so this
+    // older one must not flash the previous focus/observer's readout under the new one.
+    if (!isDisposed() && seq === readoutSeq) store.setState({ readouts: r });
   });
 }
 

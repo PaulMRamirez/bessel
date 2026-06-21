@@ -67,24 +67,45 @@ export class TelemetryError extends Error {
   }
 }
 
+/** How many predicted-versus-actual records the overlay retains (a ring buffer cap).
+ *  Bounds memory and keeps the overlay array a fixed size over a long session. */
+export const OVERLAY_HISTORY_LIMIT = 600;
+
 export class TelemetryAdapter {
-  private readonly samples: TelemetrySample[] = [];
+  // Each frame is paired with its prediction once, at ingest, so overlay() is O(1)
+  // and the per-tick caller does not recompute the whole history (was O(n^2) when
+  // polled every frame). The newest record is appended; the oldest is dropped past
+  // the cap so retained history stays bounded.
+  private readonly pairs: PredictedVsActual[] = [];
   private lastError: string | null = null;
 
   /**
    * @param socket  the live telemetry source.
    * @param predict the predicted position at an epoch (typically a SPICE sample).
+   * @param historyLimit  the ring-buffer cap on retained records.
    */
   constructor(
     private readonly socket: SocketLike,
     private readonly predict: (et: number) => Vec3,
+    private readonly historyLimit: number = OVERLAY_HISTORY_LIMIT,
   ) {
     socket.addEventListener('message', (ev) => this.ingest(ev.data));
   }
 
   private ingest(raw: string): void {
     try {
-      this.samples.push(parseTelemetryMessage(raw));
+      const sample = parseTelemetryMessage(raw);
+      const predicted = this.predict(sample.et);
+      this.pairs.push({
+        et: sample.et,
+        predicted,
+        actual: sample.position,
+        residualKm: residualKm(predicted, sample.position),
+      });
+      // Trim from the front so the retained window is bounded (ring buffer).
+      if (this.pairs.length > this.historyLimit) {
+        this.pairs.splice(0, this.pairs.length - this.historyLimit);
+      }
       this.lastError = null;
     } catch (err) {
       // Keep the stream alive but record the fault loudly for the UI to surface.
@@ -92,29 +113,18 @@ export class TelemetryAdapter {
     }
   }
 
-  /** The full predicted-versus-actual series in arrival order. */
+  /** The full predicted-versus-actual series in arrival order (cached, bounded). */
   overlay(): PredictedVsActual[] {
-    return this.samples.map((s) => {
-      const predicted = this.predict(s.et);
-      return { et: s.et, predicted, actual: s.position, residualKm: residualKm(predicted, s.position) };
-    });
+    return this.pairs.slice();
   }
 
   /** The most recent comparison, or null before any sample arrives. */
   latest(): PredictedVsActual | null {
-    const last = this.samples[this.samples.length - 1];
-    if (!last) return null;
-    const predicted = this.predict(last.et);
-    return {
-      et: last.et,
-      predicted,
-      actual: last.position,
-      residualKm: residualKm(predicted, last.position),
-    };
+    return this.pairs[this.pairs.length - 1] ?? null;
   }
 
   sampleCount(): number {
-    return this.samples.length;
+    return this.pairs.length;
   }
 
   error(): string | null {

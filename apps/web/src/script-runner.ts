@@ -112,7 +112,10 @@ export const SCRIPT_VERBS: readonly { readonly verb: string; readonly arity: num
   VERBS,
 ).map(([verb, spec]) => ({ verb, arity: spec.arity }));
 
-/** Split a line into tokens, honoring double-quoted string literals. */
+/** Split a line into tokens, honoring double-quoted string literals and stopping at
+ *  an unquoted comment. Comments are stripped here, after tokenizing, so a '#' inside
+ *  a quoted string (e.g. displayNote "phase #3") is preserved rather than truncating
+ *  the line; only a bare token that begins a comment ends the line. */
 function tokenize(line: number, text: string): string[] {
   const tokens: string[] = [];
   const re = /"([^"]*)"|(\S+)/g;
@@ -120,6 +123,10 @@ function tokenize(line: number, text: string): string[] {
   while ((match = re.exec(text)) !== null) {
     if (match[1] !== undefined) tokens.push(`"${match[1]}"`);
     else if (match[2] !== undefined) {
+      // A bare token starting with '#' begins a comment: stop, dropping it and the
+      // rest of the line. A quoted token is captured by the first branch, so a '#'
+      // inside quotes never reaches here.
+      if (match[2].startsWith('#')) break;
       if (match[2].includes('"')) throw new ScriptError(line, 'unterminated string literal');
       tokens.push(match[2]);
     }
@@ -148,19 +155,28 @@ export function runScript(source: string, script: BesselScript): ScriptResult {
   const rawLines = source.split('\n');
   for (let i = 0; i < rawLines.length; i += 1) {
     const lineNo = i + 1;
-    const text = (rawLines[i] ?? '').replace(/#.*$/, '').trim();
+    // Comments are stripped inside tokenize (after tokenizing), so a '#' inside a
+    // quoted string is not mistaken for a comment. A blank or comment-only line
+    // tokenizes to nothing and is skipped.
+    const text = (rawLines[i] ?? '').trim();
     if (text === '') continue;
     try {
       const tokens = tokenize(lineNo, text);
+      if (tokens.length === 0) continue;
       const verb = tokens[0] ?? '';
-      const spec = VERBS[verb];
+      // hasOwnProperty, not a bare index: VERBS is a plain object, so VERBS['toString']
+      // (and 'constructor', 'valueOf', ...) would otherwise resolve an inherited
+      // Object.prototype member and bypass the unknown-verb throw.
+      const spec = Object.prototype.hasOwnProperty.call(VERBS, verb) ? VERBS[verb] : undefined;
       if (!spec) throw new ScriptError(lineNo, `unknown verb "${verb}"`);
       const args = tokens.slice(1).map(coerce);
       if (args.length < spec.arity) {
         throw new ScriptError(lineNo, `${verb} expects ${spec.arity} argument(s), got ${args.length}`);
       }
       spec.apply(script, args, lineNo);
-      echoLines.push(`${lineNo}: ${text}`);
+      // Echo the tokenized form (comment stripped, whitespace normalized) so a
+      // trailing comment is not shown back to the user.
+      echoLines.push(`${lineNo}: ${tokens.join(' ')}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return { ok: false, echoLines, error: { line: lineNo, message } };

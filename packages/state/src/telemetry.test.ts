@@ -4,6 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   TelemetryAdapter,
+  OVERLAY_HISTORY_LIMIT,
   parseTelemetryMessage,
   residualKm,
   type SocketLike,
@@ -79,5 +80,46 @@ describe('TelemetryAdapter', () => {
     const socket = new MockSocket();
     new TelemetryAdapter(socket, predict).dispose();
     expect(socket.closed).toBe(true);
+  });
+
+  it('pairs each record once at ingest, so the predictor is not re-run per overlay() call', () => {
+    let predictCalls = 0;
+    const counting = (et: number): Vec3 => {
+      predictCalls += 1;
+      return [et, 0, 0];
+    };
+    const socket = new MockSocket();
+    const adapter = new TelemetryAdapter(socket, counting);
+    socket.emit('{"et":10,"position":[10,0,0]}');
+    socket.emit('{"et":20,"position":[20,3,4]}');
+    expect(predictCalls).toBe(2); // one predict per ingested sample, not per overlay() call
+
+    // overlay() and latest() read the cache: no further predictor work (was O(n^2)).
+    const before = predictCalls;
+    adapter.overlay();
+    adapter.overlay();
+    adapter.latest();
+    expect(predictCalls).toBe(before);
+
+    // Output parity with the prior compute-on-read behavior.
+    const overlay = adapter.overlay();
+    expect(overlay).toHaveLength(2);
+    expect(overlay[0]!.residualKm).toBeCloseTo(0, 6);
+    expect(overlay[1]!.residualKm).toBeCloseTo(5, 6);
+  });
+
+  it('caps retained history at the ring-buffer limit, keeping the newest records', () => {
+    const socket = new MockSocket();
+    const adapter = new TelemetryAdapter(socket, predict, 3);
+    for (let et = 1; et <= 5; et += 1) socket.emit(`{"et":${et},"position":[${et},0,0]}`);
+    const overlay = adapter.overlay();
+    expect(overlay).toHaveLength(3);
+    expect(overlay.map((p) => p.et)).toEqual([3, 4, 5]);
+    expect(adapter.latest()?.et).toBe(5);
+    expect(adapter.sampleCount()).toBe(3);
+  });
+
+  it('exposes a positive default history limit', () => {
+    expect(OVERLAY_HISTORY_LIMIT).toBeGreaterThan(0);
   });
 });

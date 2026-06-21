@@ -48,6 +48,7 @@ export { exportCzml, type CzmlOptions, type CzmlSample } from './czml.ts';
 export {
   TelemetryAdapter,
   TelemetryError,
+  OVERLAY_HISTORY_LIMIT,
   parseTelemetryMessage,
   residualKm,
   type SocketLike,

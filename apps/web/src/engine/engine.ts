@@ -83,6 +83,29 @@ function iauFrameFor(body: string): string {
   return `IAU_${body.toUpperCase()}`;
 }
 
+/**
+ * Reduce a kernel name to a single safe OPFS path segment. The name can come from a
+ * URL's last segment or a plugin manifest, so a value like '../../evil' must never be
+ * interpolated into /kernels/${name} where it could escape the kernels directory.
+ * Drops any directory portion, then strips characters outside a conservative
+ * allowlist; a name that reduces to empty (or a lone dot run) hashes to a stable
+ * fallback so two different escaping names do not collide on the same file.
+ */
+export function safeKernelPathSegment(name: string): string {
+  // Keep only the final path component, so '../a/b.bsp' becomes 'b.bsp'.
+  const base = name.split(/[\\/]/).pop() ?? '';
+  // Allowlist letters, digits, dot, dash, underscore; replace everything else.
+  const cleaned = base.replace(/[^A-Za-z0-9._-]/g, '_');
+  // A name that is empty or only dots ('', '.', '..') has no usable segment; derive a
+  // stable, collision-resistant fallback from the original string.
+  if (cleaned === '' || /^\.+$/.test(cleaned)) {
+    let hash = 5381;
+    for (let i = 0; i < name.length; i += 1) hash = (hash * 33) ^ name.charCodeAt(i);
+    return `kernel-${(hash >>> 0).toString(16)}`;
+  }
+  return cleaned;
+}
+
 const preventDefault = (ev: Event): void => ev.preventDefault();
 
 // The analysis-engine request shapes (AnalysisSpan, AnalysisTargetSpan, ReportConfig)
@@ -140,6 +163,11 @@ export class BesselEngine {
   private lastTs = 0;
   private snapSeq = 0;
   private labelAccum = 0;
+  // Throttles the live et store write during playback to the label cadence so the
+  // unmemoized viewer does not reconcile its whole tree per frame; wasPlaying lets
+  // the loop flush the exact stopped epoch once when playback ends.
+  private etAccum = 0;
+  private wasPlaying = false;
   private instrumentAccum = 0;
   private readoutAccum = 0;
   private attitudeAccum = 0;
@@ -230,11 +258,18 @@ export class BesselEngine {
     e.scene.setPositions(positions);
     e.scene.updateTimeSwitched(now);
 
-    // Camera mode: tracking the spacecraft overrides the user's base mode (orbit,
-    // sync-orbit, or free) while it is on; otherwise the base mode applies.
+    // Camera mode: tracking overrides the user's base mode (orbit, sync-orbit, or
+    // free) while it is on; otherwise the base mode applies. The tracked object is
+    // the current focus (set by centerOn, so trackObject Saturn follows Saturn, not
+    // the spacecraft), as long as it has an ephemeris in the sampled table.
     const scName = e.identity.spacecraftName;
-    if (s.track && scName) {
-      e.scene.setFocusVelocity(velocityAt(e.table, scName, now));
+    const trackName = e.table.byBody.has(e.scene.focusBody)
+      ? e.scene.focusBody
+      : scName && e.table.byBody.has(scName)
+        ? scName
+        : null;
+    if (s.track && trackName) {
+      e.scene.setFocusVelocity(velocityAt(e.table, trackName, now));
       e.scene.setCameraMode('track');
     } else {
       e.scene.setCameraMode(s.cameraMode);
@@ -298,7 +333,23 @@ export class BesselEngine {
 
     e.scene.render(dt);
 
-    if (s.playing) this.store.setState({ et: now });
+    // Advance the timeline value during playback, but throttle the store write to
+    // the ~4Hz label cadence rather than writing every frame. The unmemoized viewer
+    // reads et with useStore, so a 60fps write reconciled the whole menus/dock/
+    // workbench tree per frame; ~4Hz keeps the scrubber moving without that cost.
+    // The scene itself already animates from e.clock every frame, independent of this.
+    // On the frame where playback just stopped, flush once so the scrubber lands on
+    // the exact stopped epoch instead of the last throttled value.
+    if (s.playing) {
+      this.etAccum += dt;
+      if (this.etAccum > 0.25) {
+        this.etAccum = 0;
+        this.store.setState({ et: now });
+      }
+    } else if (this.wasPlaying) {
+      this.store.setState({ et: now });
+    }
+    this.wasPlaying = s.playing;
     this.labelAccum += dt;
     if (this.labelAccum > 0.25) {
       this.labelAccum = 0;
@@ -638,13 +689,18 @@ export class BesselEngine {
   /** Keep the current result of an analysis tool as a named snapshot for comparison.
    *  A no-op when the tool has no result yet or the tray is already full. */
   keepSnapshot(tool: 'access' | 'conjunction' | 'link'): void {
-    const s = this.store.getState();
-    if (s.keptSnapshots.length >= KEPT_SNAPSHOT_LIMIT) return;
-    const metrics = snapshotMetrics(tool, s);
+    const metrics = snapshotMetrics(tool, this.store.getState());
     if (!metrics) return;
     const seq = (this.snapSeq += 1);
     const snapshot = { id: `snap-${seq}`, tool, name: `${tool} ${seq}`, metrics };
-    this.store.setState({ keptSnapshots: [...s.keptSnapshots, snapshot] });
+    // One functional update that re-checks the limit against the freshest state: two
+    // rapid keeps must not both read a stale length and append past the cap. A no-op
+    // (return the same array) when the tray is already full.
+    this.store.setState((s) =>
+      s.keptSnapshots.length >= KEPT_SNAPSHOT_LIMIT
+        ? { keptSnapshots: s.keptSnapshots }
+        : { keptSnapshots: [...s.keptSnapshots, snapshot] },
+    );
   }
 
   /** Remove a kept snapshot by id. */
@@ -1188,6 +1244,12 @@ export class BesselEngine {
     if (next && sc) this.centerOn(sc);
   }
 
+  /** Set tracking on or off without re-centering, so the frame loop follows the
+   *  current focus (used by trackObject to track a named target, not the spacecraft). */
+  setTracking(on: boolean): void {
+    this.store.setState({ track: on });
+  }
+
   toggleInstruments(): void {
     const next = !this.store.getState().instruments;
     this.store.setState({ instruments: next });
@@ -1332,9 +1394,13 @@ export class BesselEngine {
       );
       if (!this.disposed && applied > 0) this.store.setState({ realImageryApplied: true });
     } catch (err) {
-      console.error('real imagery unavailable', err);
-    } finally {
+      // The dynamic import or texture-manager bootstrap failed: clear the guard so a
+      // later toggle can retry. On success the guard stays set so a repeated toggle
+      // does not re-import the manager and re-fetch every texture. A scene rebuild
+      // (renderNativeMission) clears the guard explicitly, since fresh procedural
+      // materials genuinely need re-texturing.
       this.realImageryStarted = false;
+      console.error('real imagery unavailable', err);
     }
   }
 
@@ -1469,12 +1535,19 @@ export class BesselEngine {
       // ring drew an image texture, and whether a cloud shell was built.
       const ringTextured = (mission.spec.rings ?? []).some((r) => !!r.texture);
       const cloudShell = e.scene.cloudShellPresent();
-      // Swap the live mission state the frame loop reads each tick.
+      // Resolve the instrument (a yielding await) BEFORE committing any live mission
+      // state, then swap table/identity/bodyFrames/instruments/instrument in one
+      // synchronous block. Committing the table/identity first and awaiting the
+      // instrument afterward would let a frame in the gap pair the new positions with
+      // the previous instrument's FOV/footprint. The disposed re-check covers a
+      // dispose during this await.
+      const loadedInstrument = await loadInstrument(e.spice, mission.instrument ?? null);
+      if (this.disposed) return;
       e.table = mission.table;
       e.identity = mission.identity;
       e.bodyFrames = mission.bodyFrames;
       e.instruments = mission.instruments;
-      e.instrument = await loadInstrument(e.spice, mission.instrument ?? null);
+      e.instrument = loadedInstrument;
       // A new mission may furnish different GM constants; drop the cached values.
       this.muCache.clear();
       this.startTelemetry();
@@ -1508,8 +1581,11 @@ export class BesselEngine {
         status: 'Ready',
       });
       this.refreshBoundsLabels();
-      // A scene rebuild creates fresh procedural materials, so re-apply real
-      // imagery to the new bodies if the toggle is on (it is otherwise lost).
+      // A scene rebuild creates fresh procedural materials, so re-apply real imagery
+      // to the new bodies if the toggle is on (it is otherwise lost). Clear the
+      // once-only guard first: this rebuild genuinely needs re-texturing, unlike a
+      // repeated toggle on an unchanged scene (which the guard correctly blocks).
+      this.realImageryStarted = false;
       if (this.store.getState().settings.realImagery) void this.applyRealImagery();
     } catch (err) {
       this.store.setState({ status: 'Ready', loadError: formatLoadError(err) });
@@ -1621,7 +1697,10 @@ export class BesselEngine {
     if (this.furnished.has(name)) return;
     await e.spice.furnsh(name, bytes);
     this.furnished.add(name);
-    await e.fs.writeFile(`/kernels/${name}`, bytes).catch((err: unknown) => {
+    // Sanitize the OPFS path segment so a name carrying '../' (from a URL tail or a
+    // plugin manifest) cannot escape the /kernels directory when persisted.
+    const segment = safeKernelPathSegment(name);
+    await e.fs.writeFile(`/kernels/${segment}`, bytes).catch((err: unknown) => {
       // Persistence is best-effort; the kernel is already usable this session.
       console.error('kernel persist failed', err);
     });

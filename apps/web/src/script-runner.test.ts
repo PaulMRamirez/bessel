@@ -99,4 +99,31 @@ describe('runScript', () => {
     expect(result.ok).toBe(false);
     expect(result.error?.message).toContain('expects 1 argument');
   });
+
+  it('rejects an Object.prototype member name as a verb (no prototype pollution)', () => {
+    const { script } = recordingScript();
+    // 'toString', 'constructor', 'valueOf' live on Object.prototype: a bare index of
+    // the verb table would resolve them and bypass the unknown-verb throw.
+    for (const name of ['toString', 'constructor', 'valueOf', 'hasOwnProperty']) {
+      const result = runScript(`${name} Earth`, script);
+      expect(result.ok).toBe(false);
+      expect(result.error).toEqual({ line: 1, message: `unknown verb "${name}"` });
+    }
+  });
+
+  it('keeps a # inside a quoted string instead of treating it as a comment', () => {
+    const { script, calls } = recordingScript();
+    const result = runScript('displayNote "phase #3"', script);
+    expect(result.ok).toBe(true);
+    expect(result.error).toBeNull();
+    expect(calls).toEqual(['note:phase #3']);
+  });
+
+  it('still strips an unquoted trailing comment after the arguments', () => {
+    const { script, calls } = recordingScript();
+    const result = runScript('gotoObject Earth   # go home', script);
+    expect(result.ok).toBe(true);
+    expect(calls).toEqual(['goto:Earth']);
+    expect(result.echoLines).toEqual(['1: gotoObject Earth']);
+  });
 });
