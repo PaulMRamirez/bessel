@@ -126,7 +126,8 @@
   position: absolute;
   top: var(--space-2);
   left: var(--space-2);
-  z-index: 30;
+  /* Above the drawer (z-index 32) so "Close panels" stays tappable while it is open. */
+  z-index: 33;
 }
 
 .bessel-drawer-backdrop {

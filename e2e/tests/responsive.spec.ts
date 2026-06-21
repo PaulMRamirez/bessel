@@ -21,8 +21,9 @@ test('the panel rail collapses into a toggleable drawer on a narrow viewport', a
   await expect(page.getByTestId('panel-drawer')).toHaveAttribute('aria-hidden', 'false');
   await expect(page.getByTestId('panel-drawer').getByTestId('select-Saturn')).toBeVisible();
 
-  // The backdrop dismisses the drawer.
-  await page.getByTestId('drawer-backdrop').click();
+  // The backdrop dismisses the drawer. Click its visible region (right of the
+  // drawer, which covers the left ~343px) so the tap is not intercepted by the rail.
+  await page.getByTestId('drawer-backdrop').click({ position: { x: 380, y: 400 } });
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await expect(page.getByTestId('panel-drawer')).toHaveAttribute('aria-hidden', 'true');
 });
