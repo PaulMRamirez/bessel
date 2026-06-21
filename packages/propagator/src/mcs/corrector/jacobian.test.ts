@@ -8,7 +8,7 @@ import { runSegment } from '../executor.ts';
 import { createMissionEnv } from '../env.ts';
 import { bindControls, bindGoals } from './refs.ts';
 import { evaluateResidual, type DcEvalContext } from './residual.ts';
-import { assembleJacobian, mayRetargetStop } from './jacobian.ts';
+import { assembleJacobian, fdStep, mayRetargetStop } from './jacobian.ts';
 import { DEFAULT_DC_SETTINGS, type Segment } from '../segments.ts';
 import type { MissionState } from '../state.ts';
 
@@ -96,6 +96,48 @@ describe('Jacobian STM column vs finite difference', () => {
     });
     const rel = Math.abs(stmJac.J[0]! - fdJac.J[0]!) / Math.abs(fdJac.J[0]!);
     expect(rel).toBeLessThan(1e-4);
+  });
+});
+
+describe('Radius/Altitude gradient rmag floor', () => {
+  const at0 = (r: { x: number; y: number; z: number }): MissionState => ({
+    epoch: 0,
+    r,
+    v: { x: 0, y: 7.5, z: 0 },
+    mass: 1000,
+    centralBody: 399,
+    segmentPath: ['ini'],
+  });
+
+  it('returns a finite analytic gradient away from the origin', () => {
+    const goal = bindGoals([{ evalAt: 'End', type: 'Radius', desired: 7100, tolerance: 1e-4 }])[0]!;
+    const g = goal.gradWrtState(at0({ x: 7000, y: 0, z: 0 }), MU);
+    expect(g).not.toBeNull();
+    expect(g!.every((x) => Number.isFinite(x))).toBe(true);
+  });
+
+  it('returns null below the rmag floor so a NaN unit vector cannot pass and poison the STM', () => {
+    const goal = bindGoals([{ evalAt: 'End', type: 'Radius', desired: 0, tolerance: 1e-4 }])[0]!;
+    // r ~ 0: r/|r| is numerically NaN; the analytic path must decline (null) and force FD.
+    expect(goal.gradWrtState(at0({ x: 0, y: 0, z: 0 }), MU)).toBeNull();
+    expect(goal.gradWrtState(at0({ x: 1e-12, y: 0, z: 0 }), MU)).toBeNull();
+  });
+});
+
+describe('finite-difference step sizing', () => {
+  it('scales the step by the control magnitude, not by ctrl.scale', () => {
+    // A genuine ~1e-9 trim control with the default 1e-6 relative size: the step must follow the
+    // control's own tiny magnitude (and its explicit perturbation floor), never a scale of 1 which
+    // would give a ~1e-6 step that strides across a nonlinear region.
+    const rel = 1e-6;
+    const tiny = 1e-9;
+    const perturbation = 1e-12;
+    const step = fdStep(rel, tiny, perturbation);
+    // Old behavior (scale=1) would have been rel*1 = 1e-6; the fixed step is far smaller.
+    expect(step).toBeLessThan(1e-6);
+    expect(step).toBe(Math.max(rel * Math.max(tiny, perturbation), perturbation));
+    // The explicit perturbation still floors a zero-valued control.
+    expect(fdStep(rel, 0, perturbation)).toBe(perturbation);
   });
 });
 

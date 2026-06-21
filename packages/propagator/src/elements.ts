@@ -44,19 +44,40 @@ export interface SecularRates {
 }
 
 /**
- * J2 secular rates (Vallado): nodal regression, apsidal rotation, and the J2-
- * corrected mean-motion. With j2 = 0 the rates reduce to (0, 0, n0).
+ * J2/J4 secular rates (Vallado, Fundamentals of Astrodynamics): nodal regression, apsidal
+ * rotation, and the J2-corrected mean-motion, plus the first-order J4 secular corrections to
+ * the node and perigee. With j2 = 0 and j4 = 0 the rates reduce to (0, 0, n0); when body.j4 is
+ * omitted (or zero) only the J2 terms apply, so adding j4 perturbs the node and perigee drift on
+ * top of the classical J2 theory (the J2-only zeros, e.g. critical inclination, stay intact).
  */
 export function secularRatesJ2(a: number, e: number, i: number, body: CentralBody): SecularRates {
   const n0 = Math.sqrt(body.gm / a ** 3);
   const p = a * (1 - e * e);
-  const factor = 1.5 * body.j2 * (body.re / p) ** 2 * n0;
+  const reOverP2 = (body.re / p) ** 2;
+  const factor = 1.5 * body.j2 * reOverP2 * n0; // leading J2 coefficient
   const cosi = Math.cos(i);
   const sin2i = Math.sin(i) ** 2;
+  const eta2 = 1 - e * e;
+
+  // First-order J2 contributions (the classical terms; unchanged so all J2-only zeros hold).
+  const raanJ2 = -factor * cosi;
+  const argpJ2 = factor * (2 - 2.5 * sin2i);
+  const mJ2 = factor * Math.sqrt(eta2) * (1 - 1.5 * sin2i);
+
+  // First-order J4 secular corrections (Vallado 9-39). Proportional to j4 * (re/p)^4 * n0, so they
+  // vanish identically when j4 is unset. They refine the node and perigee drift on a long arc.
+  const j4 = body.j4 ?? 0;
+  const reOverP4 = reOverP2 * reOverP2;
+  const j4Common = j4 * reOverP4 * n0;
+  const raanJ4 = j4Common * (-1.875 * cosi) * ((1 + 1.5 * e * e) * (7 * sin2i - 4)) / 6;
+  const argpJ4 =
+    j4Common * (-0.46875) *
+    (12 - 21 * sin2i + (-2.5 + e * e) * (15 - 35 * sin2i) * sin2i + (e * e) * (-21 + 49 * sin2i) * sin2i) / 4;
+
   return {
-    raanDot: -factor * cosi,
-    argpDot: factor * (2 - 2.5 * sin2i),
-    mDot: n0 + factor * Math.sqrt(1 - e * e) * (1 - 1.5 * sin2i),
+    raanDot: raanJ2 + raanJ4,
+    argpDot: argpJ2 + argpJ4,
+    mDot: n0 + mJ2,
   };
 }
 

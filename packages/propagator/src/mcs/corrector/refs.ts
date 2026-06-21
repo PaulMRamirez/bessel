@@ -193,6 +193,15 @@ function achieved(type: GoalType, s: MissionState, mu: number, bodyRadius?: numb
   }
 }
 
+/**
+ * Floor below which the position magnitude is too small to form a stable radial unit vector. The
+ * Radius/Altitude gradient is r/|r|; at |r| ~ 0 that divides to a NaN/Inf unit vector which would
+ * silently PASS the analytic-vs-FD check (NaN compares true to nothing, so the column is accepted)
+ * and then poison the STM columns. Return null below the floor so the corrector finite-differences
+ * that column instead, the same fall-back the analytic path already uses for unsupported goals.
+ */
+const RMAG_GRAD_FLOOR = 1e-9;
+
 /** Closed-form dg/dx (length 6), or null to force a finite-difference column. */
 function gradOf(type: GoalType, s: MissionState): Float64Array | null {
   const { r, v } = vecOf(s);
@@ -201,6 +210,7 @@ function gradOf(type: GoalType, s: MissionState): Float64Array | null {
   switch (type) {
     case 'Radius':
     case 'Altitude':
+      if (rmag < RMAG_GRAD_FLOOR) return null; // degenerate radial direction: force finite difference
       return Float64Array.of(unitR[0]!, unitR[1]!, unitR[2]!, 0, 0, 0);
     case 'Position.x': return Float64Array.of(1, 0, 0, 0, 0, 0);
     case 'Position.y': return Float64Array.of(0, 1, 0, 0, 0, 0);
