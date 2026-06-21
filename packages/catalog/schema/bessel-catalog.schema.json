@@ -159,6 +159,43 @@
       "minItems": 4,
       "maxItems": 4
     },
+    "referenceDirection": {
+      "type": "object",
+      "description": "One reference direction of a TwoVector orientation: either a fixed body-frame axis, or a direction toward a target.",
+      "properties": {
+        "axis": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 3,
+              "maxItems": 3,
+              "description": "Explicit axis vector [x, y, z] (need not be unit length)."
+            },
+            {
+              "enum": [
+                "x",
+                "y",
+                "z",
+                "-x",
+                "-y",
+                "-z"
+              ],
+              "description": "A named body-frame axis."
+            }
+          ]
+        },
+        "target": {
+          "$ref": "#/$defs/id"
+        },
+        "frame": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
     "orientation": {
       "type": "object",
       "properties": {
@@ -192,6 +229,12 @@
         "epoch": {
           "type": "string",
           "description": "UniformRotation reference epoch (UTC); defaults to the mission start."
+        },
+        "primary": {
+          "$ref": "#/$defs/referenceDirection"
+        },
+        "secondary": {
+          "$ref": "#/$defs/referenceDirection"
         }
       },
       "required": [
@@ -200,15 +243,34 @@
       "additionalProperties": false
     },
     "trajectory": {
+      "description": "Discriminated union over the trajectory source types. The type const selects the branch and its required parameters.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/trajectorySpice"
+        },
+        {
+          "$ref": "#/$defs/trajectoryKeplerian"
+        },
+        {
+          "$ref": "#/$defs/trajectoryTle"
+        },
+        {
+          "$ref": "#/$defs/trajectoryFixed"
+        },
+        {
+          "$ref": "#/$defs/trajectorySampled"
+        }
+      ]
+    },
+    "trajectorySpice": {
       "type": "object",
+      "description": "Ephemeris read directly from SPICE (spkpos), the default source.",
       "properties": {
         "type": {
-          "enum": [
-            "Spice",
-            "Keplerian",
-            "Fixed",
-            "Sampled"
-          ]
+          "const": "Spice"
+        },
+        "target": {
+          "$ref": "#/$defs/id"
         },
         "center": {
           "$ref": "#/$defs/id"
@@ -219,6 +281,160 @@
       },
       "required": [
         "type"
+      ],
+      "additionalProperties": false
+    },
+    "trajectoryKeplerian": {
+      "type": "object",
+      "description": "Two-body Keplerian propagation from classical orbital elements.",
+      "properties": {
+        "type": {
+          "const": "Keplerian"
+        },
+        "elements": {
+          "type": "object",
+          "description": "Classical orbital elements. Angles in radians, a in km, epoch in UTC.",
+          "properties": {
+            "a": {
+              "type": "number",
+              "description": "Semi-major axis, km."
+            },
+            "e": {
+              "type": "number",
+              "description": "Eccentricity."
+            },
+            "i": {
+              "type": "number",
+              "description": "Inclination, radians."
+            },
+            "raan": {
+              "type": "number",
+              "description": "Right ascension of the ascending node, radians."
+            },
+            "argp": {
+              "type": "number",
+              "description": "Argument of periapsis, radians."
+            },
+            "m0": {
+              "type": "number",
+              "description": "Mean anomaly at epoch, radians."
+            },
+            "epoch": {
+              "type": "string",
+              "description": "Element epoch (UTC)."
+            }
+          },
+          "required": [
+            "a",
+            "e",
+            "i",
+            "raan",
+            "argp",
+            "m0",
+            "epoch"
+          ],
+          "additionalProperties": false
+        },
+        "center": {
+          "$ref": "#/$defs/id"
+        },
+        "frame": {
+          "type": "string"
+        },
+        "mu": {
+          "type": "number",
+          "description": "Gravitational parameter of the center, km^3/s^2. Defaults from the center body."
+        }
+      },
+      "required": [
+        "type",
+        "elements"
+      ],
+      "additionalProperties": false
+    },
+    "trajectoryTle": {
+      "type": "object",
+      "description": "Two-line element set, propagated with SGP4.",
+      "properties": {
+        "type": {
+          "const": "Tle"
+        },
+        "line1": {
+          "type": "string"
+        },
+        "line2": {
+          "type": "string"
+        },
+        "center": {
+          "$ref": "#/$defs/id"
+        },
+        "frame": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "line1",
+        "line2"
+      ],
+      "additionalProperties": false
+    },
+    "trajectoryFixed": {
+      "type": "object",
+      "description": "A fixed point in the center frame (km).",
+      "properties": {
+        "type": {
+          "const": "Fixed"
+        },
+        "position": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3,
+          "description": "Position [x, y, z] in km, in the center frame."
+        },
+        "center": {
+          "$ref": "#/$defs/id"
+        },
+        "frame": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "position"
+      ],
+      "additionalProperties": false
+    },
+    "trajectorySampled": {
+      "type": "object",
+      "description": "Trajectory read from an external sampled state file.",
+      "properties": {
+        "type": {
+          "const": "Sampled"
+        },
+        "source": {
+          "type": "string",
+          "description": "Path or URL of the sampled state file."
+        },
+        "format": {
+          "enum": [
+            "xyz",
+            "oem"
+          ]
+        },
+        "center": {
+          "$ref": "#/$defs/id"
+        },
+        "frame": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "source"
       ],
       "additionalProperties": false
     },
