@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { openAnalyze } from './sample.ts';
 
 // The mission-design workbench is mission-independent: from a cold boot it assembles a
 // small Mission Control Sequence (initial LEO state, coast, impulsive prograde burn, and
@@ -10,7 +11,7 @@ test('mission design runs an MCS and reports corrector convergence', async ({ pa
   await page.goto('/');
   await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
 
-  await page.getByTestId('mission-design-menu').click();
+  await openAnalyze(page, 'maneuver');
   // Tune one parameter to prove the controls thread into the run, then run the sequence.
   await page.getByTestId('mcs-target-radius').fill('7300');
   await page.getByTestId('run-mcs').click();

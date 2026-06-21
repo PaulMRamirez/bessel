@@ -1,23 +1,23 @@
 import { test, expect } from '@playwright/test';
-import { loadCassiniSample } from './sample.ts';
+import { loadCassiniSample, openAnalyze } from './sample.ts';
 
 // The lighting analysis surfaces a real engine result in the UI: loading the
-// Cassini sample, the Analysis menu computes the spacecraft eclipse and renders
-// the umbra intervals as a Gantt timeline. (STK_PARITY_SPEC F5 / §4.9.)
+// Cassini sample, the Analyze dock's Access & Coverage tab computes the spacecraft
+// eclipse and renders the umbra intervals as a Gantt timeline. (STK_PARITY_SPEC F5.)
 
 test('lighting analysis computes and renders eclipse intervals', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
 
-  // The Analysis menu is always visible; before a spacecraft is loaded it shows a
-  // "load a spacecraft" notice and runs its tools on sample data.
-  await expect(page.getByTestId('analysis-menu')).toBeVisible();
-  await page.getByTestId('analysis-menu').click();
+  // The Analyze dock is always reachable; before a spacecraft is loaded the Access &
+  // Coverage tab shows a "load a spacecraft" notice and runs its tools on sample data.
+  await expect(page.getByTestId('analyze-toggle')).toBeVisible();
+  await openAnalyze(page, 'access');
   await expect(page.getByTestId('analysis-empty-notice')).toBeVisible();
-  await page.keyboard.press('Escape');
 
   await loadCassiniSample(page);
-  await page.getByTestId('analysis-menu').click();
+  // The dock stays open (no auto-dismiss); the notice clears once a spacecraft loads.
+  await openAnalyze(page, 'access');
   await expect(page.getByTestId('analysis-empty-notice')).toHaveCount(0);
   await page.getByTestId('compute-eclipse').click();
 
@@ -81,7 +81,7 @@ test('analysis tools honor user-supplied parameters (span, target, secondary)', 
   await page.goto('/');
   await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
   await loadCassiniSample(page);
-  await page.getByTestId('analysis-menu').click();
+  await openAnalyze(page, 'access');
 
   // The shared parameter form drives the span-based and target-based tools.
   await expect(page.getByTestId('analysis-params')).toBeVisible();

@@ -48,7 +48,7 @@ import {
   newBookmarkId,
   type Bookmark,
 } from '../bookmarks.ts';
-import type { AppStore } from '../store/index.ts';
+import type { AppStore, AnalyzeTab } from '../store/index.ts';
 import { bootScene, loadInstrument, type EngineCore } from './bootstrap.ts';
 import { applyViewModel } from './apply-view.ts';
 import { type HpopForceModel } from './hpop-model.ts';
@@ -974,6 +974,16 @@ export class BesselEngine {
     this.store.setState({ timeSystem: system });
     const e = this.core;
     if (e) pushEpochLabel(e.spice, this.store, e.clock.state.et, this.isDisposed);
+  }
+
+  /** Open or close the consolidated Analyze dock (it does not auto-dismiss). */
+  toggleAnalyze(): void {
+    this.store.setState((s) => ({ analyzeOpen: !s.analyzeOpen }));
+  }
+
+  /** Select an Analyze dock tab, opening the dock if it is closed. */
+  setAnalyzeTab(tab: AnalyzeTab): void {
+    this.store.setState(() => ({ analyzeOpen: true, analyzeTab: tab }));
   }
 
   stepRate(dir: -1 | 1): void {

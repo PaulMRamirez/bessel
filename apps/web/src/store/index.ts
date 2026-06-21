@@ -3,6 +3,7 @@ export { createStore, type Store, type Listener } from './create-store.ts';
 export {
   createAppStore,
   initialAppState,
+  type AnalyzeTab,
   type AppState,
   type AppStore,
   type Measurement,

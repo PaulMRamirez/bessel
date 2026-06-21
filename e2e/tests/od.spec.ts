@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { openAnalyze } from './sample.ts';
 
 // The orbit-determination workbench is mission-independent: from a cold boot it drives
 // @bessel/od batch least squares on a synthetic range / range-rate / angles measurement
@@ -9,7 +10,7 @@ test('orbit determination recovers a state with a residual RMS and covariance', 
   await page.goto('/');
   await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
 
-  await page.getByTestId('od-menu').click();
+  await openAnalyze(page, 'od');
   await page.getByTestId('run-od').click();
 
   await expect(page.getByTestId('od-result')).toBeVisible({ timeout: 20_000 });

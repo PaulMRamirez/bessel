@@ -39,16 +39,10 @@ import { Popover } from './overlays/Popover.tsx';
 // its menu opens (the Popover mounts its children only while open), keeping the analysis
 // engines and charting out of the first-paint chunk. PanelSuspense supplies the
 // accessible loading fallback while a panel's chunk loads.
-import {
-  AnalysisPanel,
-  MissionPanel,
-  OdPanel,
-  PanelSuspense,
-  PropagatePanel,
-  ReportPanel,
-  ScriptConsole,
-  TelemetryOverlay,
-} from './panels/lazy.tsx';
+import { PanelSuspense, ScriptConsole } from './panels/lazy.tsx';
+// The six former analysis popovers are consolidated into one pinnable dock; its tab
+// bodies stay lazy (imported from panels/lazy.tsx inside AnalyzeWorkbench).
+import { AnalyzeWorkbench } from './panels/AnalyzeWorkbench.tsx';
 
 const SPICE_IDS: Readonly<Record<string, string>> = Object.fromEntries(
   SOLAR_SYSTEM.map((p) => [p.name, p.spiceId]),
@@ -129,6 +123,8 @@ export function BesselViewer(): JSX.Element {
   const bounds = useStore(store, (s) => s.bounds);
   const epochLabel = useStore(store, (s) => s.epochLabel);
   const timeSystem = useStore(store, (s) => s.timeSystem);
+  const analyzeOpen = useStore(store, (s) => s.analyzeOpen);
+  const analyzeTab = useStore(store, (s) => s.analyzeTab);
   const focus = useStore(store, (s) => s.focus);
   const instruments = useStore(store, (s) => s.instruments);
   const footprintPoints = useStore(store, (s) => s.footprintPoints);
@@ -251,26 +247,16 @@ export function BesselViewer(): JSX.Element {
           />
         </PanelSuspense>
       </Popover>
-      <Popover label="Propagate" title="Orbit propagation" align="right" testId="propagate-menu">
-        <PanelSuspense>
-          <PropagatePanel engine={engine} store={store} />
-        </PanelSuspense>
-      </Popover>
-      <Popover label="Mission Design" title="Mission design (MCS)" align="right" testId="mission-design-menu">
-        <PanelSuspense>
-          <MissionPanel engine={engine} store={store} />
-        </PanelSuspense>
-      </Popover>
-      <Popover label="OD" title="Orbit determination" align="right" testId="od-menu">
-        <PanelSuspense>
-          <OdPanel engine={engine} store={store} />
-        </PanelSuspense>
-      </Popover>
-      <Popover label="Report" title="Data-provider workbench" align="right" testId="report-menu">
-        <PanelSuspense>
-          <ReportPanel engine={engine} store={store} />
-        </PanelSuspense>
-      </Popover>
+      <button
+        type="button"
+        className="bessel-popover-trigger"
+        data-testid="analyze-toggle"
+        aria-expanded={analyzeOpen}
+        aria-pressed={analyzeOpen}
+        onClick={() => engine?.toggleAnalyze()}
+      >
+        Analyze
+      </button>
       <Popover label="Views" title="Saved views" align="right" testId="views-menu">
         <BookmarksPanel
           bookmarks={bookmarks}
@@ -289,21 +275,6 @@ export function BesselViewer(): JSX.Element {
           }}
           importError={bookmarkImportError}
         />
-      </Popover>
-      <Popover label="Analysis" title="Analysis" align="right" testId="analysis-menu">
-        <PanelSuspense>
-          <AnalysisPanel engine={engine} store={store} hasSpacecraft={hasSpacecraft} />
-        </PanelSuspense>
-      </Popover>
-      <Popover label="Telemetry" title="Predicted versus actual" align="right" testId="telemetry-menu">
-        <PanelSuspense>
-          {!hasSpacecraft ? (
-            <p className="bessel-loader-hint" data-testid="telemetry-empty-notice">
-              Load a spacecraft to analyze.
-            </p>
-          ) : null}
-          <TelemetryOverlay series={telemetryOverlay} nowEt={et} fault={telemetryFault} />
-        </PanelSuspense>
       </Popover>
       <Tooltip label="Toggle light / dark theme">
         <ThemeToggle theme={theme} onToggle={toggleTheme} />
@@ -486,6 +457,22 @@ export function BesselViewer(): JSX.Element {
     />
   );
 
+  // The Analyze dock fills the AppShell 'right' slot when open; closed, the canvas
+  // reclaims the width. It stays mounted while open (no auto-dismiss).
+  const right = analyzeOpen ? (
+    <AnalyzeWorkbench
+      engine={engine}
+      store={store}
+      hasSpacecraft={hasSpacecraft}
+      activeTab={analyzeTab}
+      onTab={(t) => engine?.setAnalyzeTab(t)}
+      onClose={() => engine?.toggleAnalyze()}
+      telemetryOverlay={telemetryOverlay}
+      et={et}
+      telemetryFault={telemetryFault}
+    />
+  ) : undefined;
+
   return (
     <AppShell
       title="Bessel"
@@ -493,6 +480,7 @@ export function BesselViewer(): JSX.Element {
       actions={actions}
       left={left}
       center={center}
+      right={right}
       bottom={bottom}
     />
   );

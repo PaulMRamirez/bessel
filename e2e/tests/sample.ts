@@ -18,3 +18,14 @@ export async function loadCassiniSample(page: Page): Promise<void> {
   // Let the rebuilt scene settle (positions, instrument FOV) before assertions.
   await page.waitForTimeout(300);
 }
+
+// Open the consolidated Analyze dock to a given tab. The dock is a single toggle that
+// does NOT auto-dismiss, so open it only when closed (a second toggle would close it),
+// then select the tab (re-selecting an active tab is a safe no-op click).
+export async function openAnalyze(page: Page, tab: string): Promise<void> {
+  const dock = page.getByTestId('analyze-workbench');
+  if (!(await dock.isVisible().catch(() => false))) {
+    await page.getByTestId('analyze-toggle').click();
+  }
+  await page.getByTestId(`tab-${tab}`).click();
+}

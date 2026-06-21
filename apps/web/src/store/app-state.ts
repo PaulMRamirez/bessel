@@ -10,6 +10,9 @@ import { DEFAULT_OBJECT_ENTRIES } from '../catalog-load.ts';
 import type { Bookmark } from '../bookmarks.ts';
 import { createStore, type Store } from './create-store.ts';
 
+/** The active tab in the consolidated Analyze dock. */
+export type AnalyzeTab = 'propagation' | 'maneuver' | 'od' | 'access' | 'report' | 'compare';
+
 export interface AppState {
   // Lifecycle.
   status: string;
@@ -22,6 +25,10 @@ export interface AppState {
   epochLabel: string;
   /** Time system the epoch label is displayed in (display only; et stays TDB seconds). */
   timeSystem: TimeSystem;
+  /** Whether the consolidated Analyze dock (right panel) is open. */
+  analyzeOpen: boolean;
+  /** The active tab in the Analyze dock. */
+  analyzeTab: AnalyzeTab;
   // Camera and selection.
   focus: string;
   selection: readonly string[];
@@ -245,6 +252,8 @@ export const initialAppState: AppState = {
   bounds: [0, 1],
   epochLabel: '',
   timeSystem: 'UTC',
+  analyzeOpen: false,
+  analyzeTab: 'access',
   // Default to a heliocentric whole-system view; a loaded mission recenters on
   // its own center body.
   focus: 'Sun',

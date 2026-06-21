@@ -797,6 +797,71 @@ button[aria-pressed='true'] {
   display: none;
 }
 
+/* The consolidated Analyze dock (right slot): header, tab bar, and the scrolling
+   tab panel. Fills the resizable dock-side column. */
+.bessel-workbench {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.bessel-workbench-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.bessel-workbench-close {
+  background: transparent;
+  border: none;
+  color: var(--text-2);
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: var(--space-1);
+}
+
+.bessel-workbench-close:hover {
+  color: var(--text-0);
+}
+
+.bessel-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: var(--space-1) var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.bessel-tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-1);
+  cursor: pointer;
+  padding: var(--space-1) var(--space-2);
+  font-size: 0.8rem;
+}
+
+.bessel-tab:hover {
+  color: var(--text-0);
+}
+
+.bessel-tab[aria-selected='true'] {
+  color: var(--text-0);
+  border-bottom-color: var(--accent);
+}
+
+.bessel-tabpanel {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-2) var(--space-3);
+}
+
 /* One-click sample mission chip and the load-from-URL field (B4). */
 .bessel-loader-sample {
   font-size: 0.8rem;
