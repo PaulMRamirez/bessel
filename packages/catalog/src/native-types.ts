@@ -15,9 +15,83 @@ export interface TimeRange {
   readonly stop: string;
 }
 
-export interface Trajectory {
-  readonly type: 'Spice' | 'Keplerian' | 'InterpolatedStates' | 'FixedPoint';
-  readonly center?: string;
+/** Classical orbital elements for a Keplerian trajectory. */
+export interface KeplerianElements {
+  /** Semi-major axis, km. */
+  readonly a: number;
+  /** Eccentricity. */
+  readonly e: number;
+  /** Inclination, radians. */
+  readonly i: number;
+  /** Right ascension of the ascending node, radians. */
+  readonly raan: number;
+  /** Argument of periapsis, radians. */
+  readonly argp: number;
+  /** Mean anomaly at epoch, radians. */
+  readonly m0: number;
+  /** Element epoch (UTC). */
+  readonly epoch: string;
+}
+
+/**
+ * A trajectory source. Discriminated on `type`, mirroring the schema oneOf.
+ * Every branch carries the optional `center` and `frame` shared fields.
+ */
+export type Trajectory =
+  | {
+      readonly type: 'Spice';
+      readonly target?: string;
+      readonly center?: string;
+      readonly frame?: string;
+    }
+  | {
+      readonly type: 'Keplerian';
+      readonly elements: KeplerianElements;
+      readonly center?: string;
+      readonly frame?: string;
+      /** Gravitational parameter of the center, km^3/s^2. */
+      readonly mu?: number;
+    }
+  | {
+      readonly type: 'Tle';
+      readonly line1: string;
+      readonly line2: string;
+      readonly center?: string;
+      readonly frame?: string;
+    }
+  | {
+      readonly type: 'Fixed';
+      /** Position [x, y, z] in km, in the center frame. */
+      readonly position: readonly [number, number, number];
+      readonly center?: string;
+      readonly frame?: string;
+    }
+  | {
+      readonly type: 'Sampled';
+      /** Path or URL of the sampled state file. */
+      readonly source: string;
+      readonly format?: 'xyz' | 'oem';
+      readonly center?: string;
+      readonly frame?: string;
+    };
+
+export type TrajectoryType = Trajectory['type'];
+
+export const TRAJECTORY_TYPES: readonly TrajectoryType[] = [
+  'Spice',
+  'Keplerian',
+  'Tle',
+  'Fixed',
+  'Sampled',
+];
+
+/**
+ * One reference direction of a TwoVector orientation: either a fixed body-frame
+ * axis (explicit vector or named axis), or a direction toward a target.
+ */
+export interface ReferenceDirection {
+  readonly axis?: readonly [number, number, number] | 'x' | 'y' | 'z' | '-x' | '-y' | '-z';
+  readonly target?: string;
   readonly frame?: string;
 }
 
@@ -31,6 +105,36 @@ export interface Orientation {
   readonly ratePerSec?: number;
   /** UniformRotation reference epoch (UTC); defaults to the mission start. */
   readonly epoch?: string;
+  /** TwoVector primary reference direction. */
+  readonly primary?: ReferenceDirection;
+  /** TwoVector secondary reference direction. */
+  readonly secondary?: ReferenceDirection;
+}
+
+export type OrientationType = Orientation['type'];
+
+export const ORIENTATION_TYPES: readonly OrientationType[] = [
+  'Spice',
+  'Fixed',
+  'UniformRotation',
+  'TwoVector',
+];
+
+/** Per-item label override, mirroring schema $defs.label. */
+export interface Label {
+  readonly text?: string;
+  readonly color?: CssColor;
+  readonly show?: boolean;
+}
+
+/** Trajectory plot styling, mirroring schema $defs.trajectoryPlot. */
+export interface TrajectoryPlot {
+  readonly duration?: string | number;
+  readonly lead?: string | number;
+  readonly trail?: string | number;
+  readonly sampleCount?: number;
+  readonly color?: CssColor;
+  readonly fade?: number;
 }
 
 export interface Arc {
@@ -101,18 +205,22 @@ export const GEOMETRY_TYPES: readonly GeometryType[] = [
 export interface CatalogBody {
   readonly id: string;
   readonly name?: string;
+  readonly label?: Label;
   readonly trajectory?: Trajectory;
   readonly orientation?: Orientation;
   readonly geometry?: Geometry;
+  readonly trajectoryPlot?: TrajectoryPlot;
 }
 
 export interface CatalogSpacecraft {
   readonly id: string;
   readonly name?: string;
+  readonly label?: Label;
   readonly trajectory?: Trajectory;
   readonly arcs?: readonly Arc[];
   readonly orientation?: Orientation;
   readonly geometry?: Geometry;
+  readonly trajectoryPlot?: TrajectoryPlot;
 }
 
 export interface FovStyle {
