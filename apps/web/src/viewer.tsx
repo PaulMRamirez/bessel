@@ -152,6 +152,7 @@ export function BesselViewer(): JSX.Element {
   const et = useStore(store, (s) => s.et);
   const bounds = useStore(store, (s) => s.bounds);
   const epochLabel = useStore(store, (s) => s.epochLabel);
+  const boundsLabel = useStore(store, (s) => s.boundsLabel);
   const timeSystem = useStore(store, (s) => s.timeSystem);
   const analyzeOpen = useStore(store, (s) => s.analyzeOpen);
   const analyzeTab = useStore(store, (s) => s.analyzeTab);
@@ -626,6 +627,8 @@ export function BesselViewer(): JSX.Element {
       min={bounds[0]}
       max={bounds[1]}
       value={et}
+      minLabel={boundsLabel?.[0] ?? null}
+      maxLabel={boundsLabel?.[1] ?? null}
       annotations={annotations}
       nextEventLabel={nextEvent?.label ?? null}
       nextEventTMinus={nextEvent?.tMinus ?? null}

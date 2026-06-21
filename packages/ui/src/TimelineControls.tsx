@@ -35,6 +35,9 @@ export interface TimelineControlsProps {
   readonly min: number;
   readonly max: number;
   readonly value: number;
+  /** Formatted window start/end, shown at the scrub track ends, or null when unknown. */
+  readonly minLabel?: string | null;
+  readonly maxLabel?: string | null;
   readonly annotations?: readonly TimelineAnnotation[];
   /** The next upcoming event label + its T-minus (derived by the viewer), or null. */
   readonly nextEventLabel?: string | null;
@@ -166,6 +169,12 @@ export function TimelineControls(props: TimelineControlsProps): JSX.Element {
             })}
           </div>
         )}
+        {props.minLabel || props.maxLabel ? (
+          <div className="bessel-scrub-bounds" aria-hidden="true" data-testid="scrub-bounds">
+            <span>{props.minLabel}</span>
+            <span>{props.maxLabel}</span>
+          </div>
+        ) : null}
       </div>
       <span data-testid="epoch" className="bessel-epoch">
         {props.epochLabel}

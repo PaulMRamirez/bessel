@@ -74,7 +74,7 @@ function anglesClose(a: number | null, b: number | null): boolean {
   if (a === null || b === null) return a === b;
   return Math.abs(a - b) < 0.05;
 }
-import { pushEpochLabel, pushReadouts, pushBodyState } from './telemetry.ts';
+import { pushEpochLabel, pushReadouts, pushBodyState, pushBoundsLabels } from './telemetry.ts';
 import { centerMu } from './center-mu.ts';
 import { RATE_STEPS } from './constants.ts';
 
@@ -182,6 +182,7 @@ export class BesselEngine {
       if (cssW > 0 && cssH > 0) this.resize(cssW, cssH);
       this.raf = requestAnimationFrame(this.frame);
       this.store.setState({ status: 'Ready', ready: true });
+      this.refreshBoundsLabels();
       void this.loadBookmarksFromStorage();
       void this.loadWelcomeSeenFromStorage();
       void this.loadSavedScriptsFromStorage();
@@ -1215,6 +1216,17 @@ export class BesselEngine {
     this.store.setState({ timeSystem: system });
     const e = this.core;
     if (e) pushEpochLabel(e.spice, this.store, e.clock.state.et, this.isDisposed);
+    // The window-bound labels are in the same time system, so re-format them too.
+    this.refreshBoundsLabels();
+  }
+
+  /** Re-format the loaded window's start/end labels (active time system) for the scrub
+   *  track. Fire-and-forget; reads the current bounds from the store. */
+  private refreshBoundsLabels(): void {
+    const e = this.core;
+    if (!e) return;
+    const [lo, hi] = this.store.getState().bounds;
+    pushBoundsLabels(e.spice, this.store, lo, hi, this.isDisposed);
   }
 
   /** Set the SPICE frame the State panel reports r/v and elements in. The next
@@ -1466,6 +1478,7 @@ export class BesselEngine {
         realImageryApplied: false,
         status: 'Ready',
       });
+      this.refreshBoundsLabels();
       // A scene rebuild creates fresh procedural materials, so re-apply real
       // imagery to the new bodies if the toggle is on (it is otherwise lost).
       if (this.store.getState().settings.realImagery) void this.applyRealImagery();

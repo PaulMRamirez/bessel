@@ -294,6 +294,17 @@
   min-width: 0;
 }
 
+/* Window context: the loaded start/end epochs at the two ends of the scrub track. */
+.bessel-scrub-bounds {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 2px;
+  font-size: 0.66rem;
+  /* --text-1 (not --text-2) so the small labels clear the WCAG AA contrast threshold. */
+  color: var(--text-1);
+  font-variant-numeric: tabular-nums;
+}
+
 .bessel-epoch {
   font-variant-numeric: tabular-nums;
   /* The current epoch is the bar's primary readout: anchor it with size and weight. */

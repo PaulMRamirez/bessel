@@ -262,6 +262,29 @@ describe('@bessel/ui TimelineControls annotations', () => {
     expect(out).toContain('aria-label="Event: Saturn orbit insertion"');
   });
 
+  it('labels the scrub track ends with the formatted window start and end', () => {
+    const out = html(
+      createElement(TimelineControls, {
+        playing: false,
+        rate: 1,
+        epochLabel: '2004-07-01',
+        timeSystem: 'UTC',
+        min: 0,
+        max: 100,
+        value: 50,
+        minLabel: '2004-06-22T00:00:00',
+        maxLabel: '2004-08-22T00:00:00',
+        onPlayToggle: () => {},
+        onRateChange: () => {},
+        onScrub: () => {},
+        onTimeSystemChange: () => {},
+      }),
+    );
+    expect(out).toContain('data-testid="scrub-bounds"');
+    expect(out).toContain('2004-06-22T00:00:00');
+    expect(out).toContain('2004-08-22T00:00:00');
+  });
+
   it('renders transport controls, disabling the back/forward ends at the bounds', () => {
     const atStart = html(
       createElement(TimelineControls, {

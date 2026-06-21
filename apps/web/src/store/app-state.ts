@@ -53,6 +53,9 @@ export interface AppState {
   et: number;
   bounds: readonly [number, number];
   epochLabel: string;
+  /** Formatted [start, end] of the loaded window (active time system), for the scrub
+   *  track end labels; null until first computed. */
+  boundsLabel: readonly [string, string] | null;
   /** Time system the epoch label is displayed in (display only; et stays TDB seconds). */
   timeSystem: TimeSystem;
   /** Whether the consolidated Analyze dock (right panel) is open. */
@@ -309,6 +312,7 @@ export const initialAppState: AppState = {
   et: 0,
   bounds: [0, 1],
   epochLabel: '',
+  boundsLabel: null,
   timeSystem: 'UTC',
   analyzeOpen: false,
   analyzeTab: 'access',

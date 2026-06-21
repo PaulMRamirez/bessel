@@ -22,6 +22,23 @@ export function pushEpochLabel(
   });
 }
 
+export function pushBoundsLabels(
+  spice: SpiceEngine,
+  store: AppStore,
+  lo: number,
+  hi: number,
+  isDisposed: () => boolean,
+): void {
+  // Formats the window ends in the active time system, the same SPICE path as the
+  // epoch label, so the scrub track can show where the loaded window starts and stops.
+  const tdb = store.getState().timeSystem === 'TDB';
+  const fmt = (et: number): Promise<string> =>
+    tdb ? spice.et2tdb(et, 0) : spice.et2utc(et, 'ISOC', 0);
+  void Promise.all([fmt(lo), fmt(hi)]).then(([a, b]) => {
+    if (!isDisposed()) store.setState({ boundsLabel: [a, b] });
+  });
+}
+
 export function pushReadouts(
   spice: SpiceEngine,
   store: AppStore,

@@ -33,3 +33,15 @@ test('the transport jumps to the window start and end and steps within it', asyn
   await page.getByTestId('timeline-step-forward').click();
   await expect(toStart).toBeEnabled();
 });
+
+test('the scrub track labels the loaded window start and end', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
+  await loadCassiniSample(page);
+
+  // The Cassini sample window spans late June to late August 2004 (the labels track
+  // the SPK coverage, which sits just inside the nominal arc), and both ends show.
+  const bounds = page.getByTestId('scrub-bounds');
+  await expect(bounds).toContainText('2004-06', { timeout: 10_000 });
+  await expect(bounds).toContainText('2004-08');
+});
