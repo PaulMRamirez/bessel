@@ -13,7 +13,8 @@ vi.mock('@capacitor/filesystem', () => ({
 }));
 
 // atob/btoa exist in node 16+, used by the base64 conversion under test.
-import { importKernelZip } from './kernel-source.ts';
+import { CapacitorKernelSource, importKernelZip } from './kernel-source.ts';
+import { PalError } from '@bessel/pal';
 
 function base64ToBytes(b64: string): Uint8Array {
   const bin = atob(b64);
@@ -44,5 +45,25 @@ describe('@bessel/pal-capacitor importKernelZip', () => {
 
     // The directory entry was skipped.
     expect(writes.has('/kernels/empty')).toBe(false);
+  });
+});
+
+describe('@bessel/pal-capacitor CapacitorKernelSource path confinement', () => {
+  const source = new CapacitorKernelSource('/kernels');
+
+  it.each(['../../../etc/passwd', '/etc/passwd', 'sub/../../escape', 'a\\b'])(
+    'rejects a traversal name in resolve: %s',
+    async (name) => {
+      await expect(source.resolve(name)).rejects.toBeInstanceOf(PalError);
+    },
+  );
+
+  it('rejects a forged handle id outside the kernel dir on read', async () => {
+    await expect(source.read({ id: '/etc/passwd', name: 'passwd' })).rejects.toBeInstanceOf(
+      PalError,
+    );
+    await expect(
+      source.read({ id: '/kernels/../escape', name: 'escape' }),
+    ).rejects.toBeInstanceOf(PalError);
   });
 });

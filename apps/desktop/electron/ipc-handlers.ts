@@ -4,7 +4,6 @@
 // serialized so the renderer can rethrow them typed.
 
 import { BrowserWindow, dialog, ipcMain } from 'electron';
-import { isAbsolute, join } from 'node:path';
 import { PalError, type KernelHandle } from '@bessel/pal';
 import {
   BESSEL_IPC,
@@ -12,7 +11,11 @@ import {
   type DialogSaveOptions,
   type PythonRunRequest,
 } from '@bessel/pal-electron';
-import { NodeKernelSource, resolveLoadableKernels } from '@bessel/pal-electron/node';
+import {
+  NodeKernelSource,
+  resolveLoadableKernels,
+  confineMetaKernelPath,
+} from '@bessel/pal-electron/node';
 import { kernelRoot } from './kernel-root.ts';
 import { detectPython, runPython } from './python-bridge.ts';
 
@@ -28,18 +31,19 @@ const byId = (id: string): KernelHandle => ({ id, name: id });
 export function registerIpcHandlers(): void {
   const source = new NodeKernelSource(kernelRoot());
 
-  ipcMain.handle(BESSEL_IPC.listKernels, () => source.list());
+  ipcMain.handle(BESSEL_IPC.listKernels, () => source.list().catch(serialize));
   ipcMain.handle(BESSEL_IPC.resolveKernel, (_e, name: string) =>
     source.resolve(name).catch(serialize),
   );
   ipcMain.handle(BESSEL_IPC.readKernel, (_e, id: string) => source.read(byId(id)).catch(serialize));
   ipcMain.handle(BESSEL_IPC.readKernelRange, (_e, id: string, offset: number, length: number) =>
-    source.readRange(byId(id), offset, length),
+    source.readRange(byId(id), offset, length).catch(serialize),
   );
-  ipcMain.handle(BESSEL_IPC.resolveMetaKernel, (_e, tmPath: string) => {
-    const resolved = isAbsolute(tmPath) ? tmPath : join(kernelRoot(), tmPath);
-    return resolveLoadableKernels(resolved).catch(serialize);
-  });
+  ipcMain.handle(BESSEL_IPC.resolveMetaKernel, (_e, tmPath: string) =>
+    Promise.resolve()
+      .then(() => resolveLoadableKernels(confineMetaKernelPath(tmPath, kernelRoot())))
+      .catch(serialize),
+  );
 
   ipcMain.handle(BESSEL_IPC.openDialog, async (_e, options: DialogOpenOptions) => {
     const opts = {

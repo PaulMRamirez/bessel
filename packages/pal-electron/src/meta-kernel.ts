@@ -4,8 +4,26 @@
 // relative entries resolving against the meta-kernel's own directory.
 
 import { readFile, stat } from 'node:fs/promises';
-import { dirname, isAbsolute, resolve } from 'node:path';
+import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { PalError } from '@bessel/pal';
+
+/**
+ * Confine a caller-supplied meta-kernel path to `root`. An absolute path or one that
+ * escapes the root via `..` fails loudly rather than letting the renderer read an
+ * arbitrary `.tm` from anywhere on disk.
+ */
+export function confineMetaKernelPath(tmPath: string, root: string): string {
+  const base = resolve(root);
+  if (isAbsolute(tmPath)) {
+    throw new PalError(`refusing an absolute meta-kernel path "${tmPath}"`, 'kernel-not-found', 'confineMetaKernelPath');
+  }
+  const target = resolve(base, tmPath);
+  const rel = relative(base, target);
+  if (rel === '' || rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
+    throw new PalError(`refusing a meta-kernel path that escapes ${base}: "${tmPath}"`, 'kernel-not-found', 'confineMetaKernelPath');
+  }
+  return target;
+}
 
 /** Extract the quoted string list assigned to NAME inside the data block. SPICE
  *  continues a long string across entries with a '+' token between quotes. */
