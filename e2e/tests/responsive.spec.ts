@@ -27,12 +27,33 @@ test('the panel rail collapses into a toggleable drawer on a narrow viewport', a
   await expect(page.getByTestId('panel-drawer')).toHaveAttribute('aria-hidden', 'true');
 });
 
-test('the desktop viewport keeps the side-by-side dock (no drawer toggle)', async ({ page }) => {
+test('the menu-heavy top-bar actions collapse behind a More menu on a narrow viewport', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.goto('/');
+  await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
+
+  // Analyze stays inline; the menu-heavy actions move behind a single More popover.
+  await expect(page.getByTestId('analyze-toggle')).toBeVisible();
+  await expect(page.getByTestId('more-menu')).toBeVisible();
+  await expect(page.getByTestId('mission-menu')).toHaveCount(0);
+
+  // Opening More reveals the collapsed menus (Mission, Capture, Script, Views).
+  await page.getByTestId('more-menu').click();
+  await expect(page.getByTestId('mission-menu')).toBeVisible();
+  await expect(page.getByTestId('script-menu')).toBeVisible();
+  await expect(page.getByTestId('views-menu')).toBeVisible();
+});
+
+test('the desktop viewport keeps the side-by-side dock and flat top-bar menus', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/');
   await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
 
-  // Strictly viewport-gated: the drawer affordance never appears on desktop.
+  // Strictly viewport-gated: neither the drawer nor the More menu appears on desktop.
   await expect(page.getByTestId('panels-drawer-toggle')).toHaveCount(0);
+  await expect(page.getByTestId('more-menu')).toHaveCount(0);
+  await expect(page.getByTestId('mission-menu')).toBeVisible();
   await expect(page.getByTestId('select-Saturn')).toBeVisible();
 });

@@ -39,7 +39,7 @@ import { createAppStore, useStore, type AppStore } from './store/index.ts';
 import { SCRIPT_VERBS } from './script-runner.ts';
 import { useBesselEngine } from './engine/index.ts';
 import { createMissionRegistry } from './missions.ts';
-import { AppShell, resolvePanel, pluginPanelIds } from './shell/index.ts';
+import { AppShell, resolvePanel, pluginPanelIds, useMediaQuery } from './shell/index.ts';
 import { Popover } from './overlays/Popover.tsx';
 // Heavy workbench and menu panels are code-split: each loads on demand the first time
 // its menu opens (the Popover mounts its children only while open), keeping the analysis
@@ -252,8 +252,9 @@ export function BesselViewer(): JSX.Element {
     return future ? { label: future.label, tMinus: formatTMinus(future.et - et) } : null;
   }, [annotations, et]);
 
-  const actions = (
-    <>
+  const narrowChrome = useMediaQuery('(max-width: 820px)');
+
+  const missionMenu = (
       <Popover label="Mission" title="Mission and operations" align="right" testId="mission-menu">
         <CatalogLoader
           onLoad={(file) => void engine?.loadCatalog(file)}
@@ -271,68 +272,112 @@ export function BesselViewer(): JSX.Element {
           />
         </div>
       </Popover>
-      {PluginPanel ? (
-        <Popover label="Plugins" title="Mission plugins" align="right" testId="plugins-menu">
-          <PanelSuspense>
-            <PluginPanel engine={engine} store={store} registry={registryRef.current} />
-          </PanelSuspense>
-        </Popover>
-      ) : null}
-      <Popover label="Capture" title="Capture" align="right" testId="capture-menu">
-        <CaptureControls
-          recording={recording}
-          onCaptureStill={() => engine?.captureStill()}
-          onToggleRecording={() => engine?.toggleRecording()}
+  );
+
+  const pluginsMenu = PluginPanel ? (
+    <Popover label="Plugins" title="Mission plugins" align="right" testId="plugins-menu">
+      <PanelSuspense>
+        <PluginPanel engine={engine} store={store} registry={registryRef.current} />
+      </PanelSuspense>
+    </Popover>
+  ) : null;
+
+  const captureMenu = (
+    <Popover label="Capture" title="Capture" align="right" testId="capture-menu">
+      <CaptureControls
+        recording={recording}
+        onCaptureStill={() => engine?.captureStill()}
+        onToggleRecording={() => engine?.toggleRecording()}
+      />
+    </Popover>
+  );
+
+  const scriptMenu = (
+    <Popover label="Script" title="Scripting console" align="right" testId="script-menu">
+      <PanelSuspense>
+        <ScriptConsole
+          source={scriptSource}
+          onChange={setScriptSource}
+          onRun={runScript}
+          log={scriptLog}
+          onClearLog={() => setScriptLog([])}
+          verbs={SCRIPT_VERBS}
+          savedScriptNames={savedScripts.map((s) => s.name)}
+          onSave={(name) => void engine?.saveScript(name, scriptSource)}
+          onLoadSaved={loadSavedScript}
+          onDeleteSaved={(name) => void engine?.deleteScript(name)}
         />
+      </PanelSuspense>
+    </Popover>
+  );
+
+  const analyzeButton = (
+    <button
+      type="button"
+      className="bessel-popover-trigger"
+      data-testid="analyze-toggle"
+      aria-expanded={analyzeOpen}
+      aria-pressed={analyzeOpen}
+      onClick={() => engine?.toggleAnalyze()}
+    >
+      Analyze
+    </button>
+  );
+
+  const viewsMenu = (
+    <Popover label="Views" title="Saved views" align="right" testId="views-menu">
+      <BookmarksPanel
+        bookmarks={bookmarks}
+        onSave={(name) => void engine?.saveBookmark(name)}
+        onApply={(id) => void engine?.applyBookmark(id)}
+        onDelete={(id) => void engine?.deleteBookmark(id)}
+        onCopyLink={(id) => void engine?.copyBookmarkLink(id).then(showShare)}
+        onExport={() => engine?.exportBookmarks()}
+        onImport={(text) => {
+          setBookmarkImportError(null);
+          void Promise.resolve()
+            .then(() => engine?.importBookmarks(text))
+            .catch((err: unknown) =>
+              setBookmarkImportError(err instanceof Error ? err.message : String(err)),
+            );
+        }}
+        importError={bookmarkImportError}
+      />
+    </Popover>
+  );
+
+  const themeToggle = (
+    <Tooltip label="Toggle light / dark theme">
+      <ThemeToggle theme={theme} onToggle={toggleTheme} />
+    </Tooltip>
+  );
+
+  // On a narrow viewport the menu-heavy actions collapse behind a single "More"
+  // overflow popover, keeping the bar from clipping; Analyze and the theme toggle
+  // (the two most-reached controls) stay inline. Desktop renders them flat as before.
+  const actions = narrowChrome ? (
+    <>
+      {analyzeButton}
+      <Popover label="More" title="More actions" align="right" testId="more-menu">
+        <div className="bessel-appbar-overflow">
+          {missionMenu}
+          {pluginsMenu}
+          {captureMenu}
+          {scriptMenu}
+          {viewsMenu}
+        </div>
       </Popover>
-      <Popover label="Script" title="Scripting console" align="right" testId="script-menu">
-        <PanelSuspense>
-          <ScriptConsole
-            source={scriptSource}
-            onChange={setScriptSource}
-            onRun={runScript}
-            log={scriptLog}
-            onClearLog={() => setScriptLog([])}
-            verbs={SCRIPT_VERBS}
-            savedScriptNames={savedScripts.map((s) => s.name)}
-            onSave={(name) => void engine?.saveScript(name, scriptSource)}
-            onLoadSaved={loadSavedScript}
-            onDeleteSaved={(name) => void engine?.deleteScript(name)}
-          />
-        </PanelSuspense>
-      </Popover>
-      <button
-        type="button"
-        className="bessel-popover-trigger"
-        data-testid="analyze-toggle"
-        aria-expanded={analyzeOpen}
-        aria-pressed={analyzeOpen}
-        onClick={() => engine?.toggleAnalyze()}
-      >
-        Analyze
-      </button>
-      <Popover label="Views" title="Saved views" align="right" testId="views-menu">
-        <BookmarksPanel
-          bookmarks={bookmarks}
-          onSave={(name) => void engine?.saveBookmark(name)}
-          onApply={(id) => void engine?.applyBookmark(id)}
-          onDelete={(id) => void engine?.deleteBookmark(id)}
-          onCopyLink={(id) => void engine?.copyBookmarkLink(id).then(showShare)}
-          onExport={() => engine?.exportBookmarks()}
-          onImport={(text) => {
-            setBookmarkImportError(null);
-            void Promise.resolve()
-              .then(() => engine?.importBookmarks(text))
-              .catch((err: unknown) =>
-                setBookmarkImportError(err instanceof Error ? err.message : String(err)),
-              );
-          }}
-          importError={bookmarkImportError}
-        />
-      </Popover>
-      <Tooltip label="Toggle light / dark theme">
-        <ThemeToggle theme={theme} onToggle={toggleTheme} />
-      </Tooltip>
+      {themeToggle}
+    </>
+  ) : (
+    <>
+      {missionMenu}
+      {pluginsMenu}
+      {captureMenu}
+      {scriptMenu}
+      {analyzeButton}
+      {viewsMenu}
+      {themeToggle}
     </>
   );
 
