@@ -169,6 +169,31 @@ describe('buildCatalogMissionScene (orchestration with a mock SPICE)', () => {
     expect(mission.bodyFrames.has('Belt')).toBe(false);
   });
 
+  it('resolves every catalog instrument, with the first as the active one', async () => {
+    const withInstruments: BesselCatalog = {
+      version: '1.0',
+      bodies: [{ id: 'Saturn', name: 'Saturn' }],
+      spacecraft: [
+        {
+          id: 'Probe',
+          name: 'Probe',
+          trajectory: { type: 'Spice', center: 'Saturn' },
+          arcs: [{ timeRange: { start: '2000-01-01', stop: '2010-01-01' }, trajectory: { type: 'Spice' } }],
+        },
+      ],
+      instruments: [
+        { id: 'WAC', parent: 'Probe', sensor: '-82361', targets: ['Saturn'] },
+        { id: 'NAC', parent: 'Probe', sensor: '-82360', targets: ['Saturn'] },
+        // Malformed: a non-numeric sensor is skipped, not resolved.
+        { id: 'BAD', parent: 'Probe', sensor: 'nope', targets: ['Saturn'] },
+      ],
+    };
+    const mission = await buildCatalogMissionScene(mockSpice(), withInstruments);
+    expect(mission.instruments.map((i) => i.name)).toEqual(['WAC', 'NAC']);
+    expect(mission.instruments[0]?.sensorId).toBe(-82361);
+    expect(mission.instrument?.name).toBe('WAC');
+  });
+
   it('resolves a UniformRotation orientation into a uniform attitude spec', async () => {
     const spun: BesselCatalog = {
       version: '1.0',

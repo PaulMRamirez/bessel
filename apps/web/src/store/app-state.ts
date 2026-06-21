@@ -116,6 +116,10 @@ export interface AppState {
   instruments: boolean;
   footprintPoints: number;
   fovOk: boolean;
+  /** Names of every resolved instrument, for the selector (empty or single hides it). */
+  instrumentNames: readonly string[];
+  /** The active instrument name driving FOV/footprint, or null when none. */
+  activeInstrumentId: string | null;
   /** True when the rendered scene drew at least one image-textured ring. */
   ringTextured: boolean;
   /** True when the rendered scene built at least one translucent cloud shell. */
@@ -337,6 +341,8 @@ export const initialAppState: AppState = {
   instruments: false,
   footprintPoints: 0,
   fovOk: false,
+  instrumentNames: [],
+  activeInstrumentId: null,
   ringTextured: false,
   cloudShell: false,
   realImageryApplied: false,

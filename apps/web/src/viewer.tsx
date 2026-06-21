@@ -158,6 +158,8 @@ export function BesselViewer(): JSX.Element {
   const timelineError = useStore(store, (s) => s.timelineError);
   const focus = useStore(store, (s) => s.focus);
   const instruments = useStore(store, (s) => s.instruments);
+  const instrumentNames = useStore(store, (s) => s.instrumentNames);
+  const activeInstrumentId = useStore(store, (s) => s.activeInstrumentId);
   const footprintPoints = useStore(store, (s) => s.footprintPoints);
   const fovOk = useStore(store, (s) => s.fovOk);
   const ringTextured = useStore(store, (s) => s.ringTextured);
@@ -443,6 +445,23 @@ export function BesselViewer(): JSX.Element {
             >
               {track ? 'Stop tracking' : 'Track spacecraft'}
             </button>
+            {instruments && instrumentNames.length > 1 ? (
+              <label className="bessel-instrument-select">
+                <span className="bessel-visually-hidden">Active instrument</span>
+                <select
+                  value={activeInstrumentId ?? ''}
+                  onChange={(e) => void engine?.setActiveInstrument(e.target.value)}
+                  data-testid="instrument-select"
+                  aria-label="Active instrument"
+                >
+                  {instrumentNames.map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
             {instruments ? (
               <span
                 className="bessel-viewcontrols__layers"

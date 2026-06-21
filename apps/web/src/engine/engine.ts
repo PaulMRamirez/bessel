@@ -1179,6 +1179,18 @@ export class BesselEngine {
     }
   }
 
+  /** Switch the active instrument by name: reload its FOV so the cone, footprint, and
+   *  the in-FOV tool all track the chosen sensor. No-op when the name is unknown. */
+  async setActiveInstrument(name: string): Promise<void> {
+    const e = this.core;
+    if (!e) return;
+    const descriptor = e.instruments.find((i) => i.name === name);
+    if (!descriptor) return;
+    e.instrument = await loadInstrument(e.spice, descriptor);
+    if (this.disposed) return;
+    this.store.setState({ activeInstrumentId: descriptor.name, fovOk: !!e.instrument });
+  }
+
   togglePlay(): void {
     this.store.setState((s) => ({ playing: !s.playing }));
   }
@@ -1411,6 +1423,7 @@ export class BesselEngine {
       e.table = mission.table;
       e.identity = mission.identity;
       e.bodyFrames = mission.bodyFrames;
+      e.instruments = mission.instruments;
       e.instrument = await loadInstrument(e.spice, mission.instrument ?? null);
       this.startTelemetry();
       const [et0, et1] = mission.window;
@@ -1431,6 +1444,8 @@ export class BesselEngine {
         selection: [mission.identity.centerBody],
         footprintPoints: 0,
         fovOk: !!e.instrument,
+        instrumentNames: mission.instruments.map((i) => i.name),
+        activeInstrumentId: e.instrument?.descriptor.name ?? null,
         annotations,
         spacecraftQuat: null,
         telemetryOverlay: [],
@@ -1462,14 +1477,20 @@ export class BesselEngine {
     if (e) {
       e.scene.reset();
       e.identity = { ...e.identity, spacecraftName: null };
-      // Drop the unloaded mission's frames so they cannot leak into the neutral scene.
+      // Drop the unloaded mission's frames and instruments so they cannot leak into
+      // the neutral scene.
       e.bodyFrames = new Map();
+      e.instruments = [];
+      e.instrument = null;
     }
     this.store.setState({
       objects: [...DEFAULT_OBJECT_ENTRIES],
       loadedName: null,
       loadError: null,
       telemetryResidualKm: null,
+      instrumentNames: [],
+      activeInstrumentId: null,
+      fovOk: false,
       status: 'Ready',
     });
   }

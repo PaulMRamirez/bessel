@@ -105,3 +105,28 @@ test.describe('Cassini instruments', () => {
     await expect(page.getByTestId('setting-fov')).not.toBeChecked();
   });
 });
+
+test.describe('instrument selector', () => {
+  test('a multi-instrument mission shows a selector that switches the active sensor', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
+
+    // Load a mission declaring two ISS sensors (both defined in the bundled IK).
+    await page.getByTestId('mission-menu').click();
+    await page.getByTestId('catalog-file-input').setInputFiles('e2e/fixtures/two-instruments.json');
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('select-Cassini')).toBeVisible({ timeout: 30_000 });
+
+    // The selector appears only once instruments are shown (single-instrument missions hide it).
+    await page.getByTestId('toggle-instruments').click();
+    const selector = page.getByTestId('instrument-select');
+    await expect(selector).toBeVisible();
+    await expect(selector).toHaveValue('CASSINI_ISS_WAC');
+
+    // Switching the active instrument updates the selection (reloads the FOV sensor).
+    await selector.selectOption('CASSINI_ISS_NAC');
+    await expect(selector).toHaveValue('CASSINI_ISS_NAC');
+  });
+});

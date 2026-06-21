@@ -37,6 +37,8 @@ export interface EngineCore {
   // The active mission's instrument, or null for a neutral or instrument-less
   // mission. Mutable so loading a new catalog re-points FOV and footprint.
   instrument: LoadedInstrument | null;
+  // Every resolved instrument descriptor for the active mission, for the selector.
+  instruments: readonly InstrumentDescriptor[];
   storage: Storage;
   fs: FileSystem;
   // The active mission's spacecraft and center body. Mutable so loading a new
@@ -90,6 +92,7 @@ export async function bootScene(
     storage: platform.storage,
     fs: platform.fs,
     identity: mission.identity,
+    instruments: mission.instruments,
     bodyFrames: mission.bodyFrames,
   };
 }

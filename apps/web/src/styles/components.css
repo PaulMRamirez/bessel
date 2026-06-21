@@ -1129,6 +1129,16 @@ button[aria-pressed='true'] {
   border-left: 1px solid var(--border);
 }
 
+/* Instrument selector: shown only for multi-instrument missions. */
+.bessel-instrument-select select {
+  font-size: 0.82rem;
+  color: var(--text-0);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.2rem var(--space-1);
+}
+
 /* Timeline enrichment (B8): visible marker labels, next-event readout, parse error. */
 .bessel-marker-group {
   display: contents;
