@@ -56,6 +56,13 @@ export class HttpKernelSource implements KernelSource {
         `HttpKernelSource.readRange(${handle.name})`,
       );
     }
-    return new Uint8Array(await res.arrayBuffer());
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    // A 200 means the server ignored the Range header and sent the whole body; slice
+    // the requested window ourselves so the caller never receives more than it asked
+    // for. A 206 already carries exactly the requested range.
+    if (res.status === 200) {
+      return bytes.subarray(offset, offset + length);
+    }
+    return bytes;
   }
 }

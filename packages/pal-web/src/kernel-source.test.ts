@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { type AddressInfo } from 'node:net';
-import { beforeAll, afterAll } from 'vitest';
+import { beforeAll, afterAll, describe, it, expect } from 'vitest';
 import { kernelSourceContract } from '@bessel/pal/testing';
 import { HttpKernelSource } from './index.ts';
 
@@ -51,3 +51,30 @@ kernelSourceContract('pal-web HttpKernelSource', () => ({
   presentName: 'naif0012.tls',
   missingName: 'does-not-exist.bsp',
 }));
+
+describe('HttpKernelSource.readRange when the server ignores Range', () => {
+  // A server that returns 200 with the whole body regardless of the Range header.
+  let plainServer: Server;
+  let plainUrl = '';
+  const body = new Uint8Array(256).map((_, i) => i);
+
+  beforeAll(async () => {
+    plainServer = createServer((_req, res) => {
+      res.writeHead(200);
+      res.end(Buffer.from(body));
+    });
+    await new Promise<void>((resolve) => plainServer.listen(0, '127.0.0.1', resolve));
+    const port = (plainServer.address() as AddressInfo).port;
+    plainUrl = `http://127.0.0.1:${port}/whole.bin`;
+  });
+
+  afterAll(() => plainServer.close());
+
+  it('slices the 200 body to the requested window', async () => {
+    const source = new HttpKernelSource({ 'whole.bin': plainUrl });
+    const handle = await source.resolve('whole.bin');
+    const range = await source.readRange!(handle, 10, 8);
+    expect(range.byteLength).toBe(8);
+    expect(Array.from(range)).toEqual([10, 11, 12, 13, 14, 15, 16, 17]);
+  });
+});

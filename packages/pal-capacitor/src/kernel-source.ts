@@ -12,6 +12,22 @@ function base64ToBytes(b64: string): Uint8Array {
   return out;
 }
 
+/**
+ * Reject a kernel leaf name that could escape its directory: a `..` segment, a leading
+ * slash, or any path separator. Fails loudly so a forged name cannot read or write
+ * outside the kernel dir.
+ */
+function assertSafeLeaf(name: string, location: string): void {
+  if (
+    name === '' ||
+    name.startsWith('/') ||
+    name.includes('\\') ||
+    name.split('/').some((seg) => seg === '..')
+  ) {
+    throw new PalError(`refusing an unsafe kernel name "${name}"`, 'kernel-not-found', location);
+  }
+}
+
 function bytesToBase64(bytes: Uint8Array): string {
   let bin = '';
   const chunk = 0x8000;
@@ -28,7 +44,19 @@ export class CapacitorKernelSource implements KernelSource {
   ) {}
 
   private path(name: string): string {
+    assertSafeLeaf(name, `CapacitorKernelSource.path(${name})`);
     return `${this.dir}/${name}`;
+  }
+
+  /** Re-validate a handle id is `${dir}/<safe-leaf>` so a forged handle cannot escape. */
+  private confineHandleId(id: string): string {
+    const prefix = `${this.dir}/`;
+    const location = `CapacitorKernelSource.read(${id})`;
+    if (!id.startsWith(prefix)) {
+      throw new PalError(`refusing a kernel path outside ${this.dir}: "${id}"`, 'read-failed', location);
+    }
+    assertSafeLeaf(id.slice(prefix.length), location);
+    return id;
   }
 
   async list(): Promise<KernelHandle[]> {
@@ -50,7 +78,8 @@ export class CapacitorKernelSource implements KernelSource {
   }
 
   async read(handle: KernelHandle): Promise<Uint8Array> {
-    const res = await Filesystem.readFile({ path: handle.id, directory: this.directory });
+    const path = this.confineHandleId(handle.id);
+    const res = await Filesystem.readFile({ path, directory: this.directory });
     if (typeof res.data !== 'string') {
       return new Uint8Array(await res.data.arrayBuffer());
     }
@@ -69,6 +98,7 @@ export async function importKernelZip(
   for (const [name, bytes] of Object.entries(entries)) {
     if (name.endsWith('/')) continue;
     const leaf = name.split('/').pop() ?? name;
+    assertSafeLeaf(leaf, `importKernelZip(${name})`);
     const path = `${destDir}/${leaf}`;
     await Filesystem.writeFile({ path, directory, data: bytesToBase64(bytes) });
     written.push(path);
