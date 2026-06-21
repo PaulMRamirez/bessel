@@ -54,7 +54,7 @@ Counts after the closure pass (Draft v1.0 values in parentheses where changed):
 
 | Category                         | Done    | Partial | Missing | By-design |
 | -------------------------------- | ------- | ------- | ------- | --------- |
-| 2. Catalog and data model        | 3 (2)   | 1 (2)   | 0       | 0         |
+| 2. Catalog and data model        | 4 (2)   | 0 (2)   | 0       | 0         |
 | 3. SPICE and geometry engine     | 11      | 0       | 0       | 0         |
 | 4. Geometry taxonomy (7 types)   | 7 (4)   | 0 (3)   | 0       | 0         |
 | 5. Rendering fidelity            | 10 (7)  | 1 (2)   | 0 (2)   | 0         |
@@ -71,10 +71,12 @@ SPICE engine, geometry taxonomy (including ring image textures), rendering (real
 runtime-downloaded planetary imagery, CK-driven attitude), camera (arbitrary
 SPICE-frame lock, dolly/crane), timeline, measurement, and modern UI/UX are at or
 beyond parity, and the scripting console, plugin loader, and telemetry overlay are
-wired into the shell. The handful of remaining items are narrow or by-design: the
-full five-type catalog taxonomy is an 80 percent target (ADR-0006), model reflections
-are not rendered (shadows are), the model format is glTF not 3DS/CMOD (by design),
-and TLE auto-update (niche) is unbuilt. See Section 15.
+wired into the shell. The five-type catalog taxonomy now round-trips in both
+directions (`fromCosmographia` + `toCosmographia`, proven by
+`cosmographia-roundtrip.test.ts`), closing the last catalog Partial. The handful of
+remaining items are narrow or by-design: model reflections are not rendered (shadows
+are), the model format is glTF not 3DS/CMOD (by design), and TLE auto-update (niche)
+is unbuilt. See Section 15.
 
 ---
 
@@ -82,7 +84,7 @@ and TLE auto-update (niche) is unbuilt. See Section 15.
 
 | Capability | Cosmographia | Bessel status | Evidence | Gap / note |
 | --- | --- | --- | --- | --- |
-| JSON catalog parsing (spacecraft, center, frame, kernels) | Yes, five catalog types (Spacecraft, Sensor, Observation, Natural Body, Catalog List) | Partial | `packages/catalog/src/cosmographia.ts` | Parses the spacecraft catalog (Spice trajectory, center, frame, kernels). The full five-type taxonomy and lossless round trip are not yet covered (ADR-0006 sets an 80 percent core target). |
+| JSON catalog parsing (spacecraft, center, frame, kernels) | Yes, five catalog types (Spacecraft, Sensor, Observation, Natural Body, Catalog List) | Done | `packages/catalog/src/cosmographia.ts` (`fromCosmographia`), `packages/catalog/src/cosmographia-export.ts` (`toCosmographia`), `packages/catalog/src/cosmographia-roundtrip.test.ts` | `fromCosmographia` imports every item type (body, spacecraft, sensor, observation) and all five trajectory forms, four rotation forms, and seven geometry types; `toCosmographia` is its inverse on the lossless subset (Section 16.3). The round-trip test asserts `canonicalize(toCosmographia(fromCosmographia(fixture)))` equals `canonicalize(fixture)`, a native identity property + table test, and a negative test that a lossy construct raises a typed `CatalogWarning`. Cosmographia per-sensor-per-target file *names* are synthesized on re-expansion (By-design, lossless on content; the `CatalogWarning` path makes the loss explicit). |
 | Native collapsed schema (fewer files per mission) | No (per-sensor-per-target file explosion) | Done | `packages/catalog/src/native-types.ts`, `validator.ts`, `schema.test.ts` | Bessel advantage: a targets array collapses the Sensor plus Observation file sprawl. |
 | Schema validation with explicit located errors | Partial (SPICE error log; silent re-center on missing refs) | Done | `packages/catalog/src/validator.ts` (`CatalogError`), `taxonomy.test.ts` | Bessel advantage: typed, located, loud failures. |
 | Load an arbitrary mission into the rendered 3D scene | Yes, load and update catalogs at run time | Done | `apps/web/src/generic-mission.ts`, `apps/web/src/engine/engine.ts` (`loadCatalog`, `loadCatalogUrl`, `uploadKernel`), `packages/scene/src/three-scene.ts` (`reset`) | The app boots into a neutral inner-solar-system scene; no mission is hardcoded. A native catalog rebuilds the rendered scene generically: catalog bodies, spacecraft, trajectory (sampled in the center frame), the seven geometry types, rings, atmosphere, axis triads, direction vectors, the instrument FOV and footprint, and a glTF model all map from catalog data. The Cassini demo now ships as a loadable sample (`apps/web/public/samples/cassini-saturn.json`). An OPFS kernel-upload path supports unbundled kernels. Verified by `generic-mission.test.ts` and the `generic-mission` e2e, and the Cassini-specific e2e (poc, instruments, measure) load the sample. |

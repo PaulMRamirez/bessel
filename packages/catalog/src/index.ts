@@ -33,14 +33,35 @@ export class CatalogError extends Error {
   }
 }
 
+/**
+ * Located, typed, non-fatal catalog warning. Emitted (never silently swallowed)
+ * when a construct falls outside the lossless round-trip subset, so loss is
+ * always explicit. Carries the same `message` + `location` shape as CatalogError
+ * but does not abort the export; the offending construct is named so a user can
+ * see exactly what was synthesized or could not round-trip.
+ */
+export class CatalogWarning {
+  readonly name = 'CatalogWarning';
+  constructor(
+    readonly message: string,
+    readonly location: string,
+  ) {}
+}
+
 export {
   parseCosmographiaCatalog,
   cosmographiaGeometryToNative,
   cosmographiaTrajectoryToNative,
   cosmographiaRotationToNative,
   fromCosmographia,
+  toCosmographia,
 } from './cosmographia.ts';
-export type { CosmographiaCatalog, CosmographiaItem } from './cosmographia.ts';
+export type {
+  CosmographiaCatalog,
+  CosmographiaItem,
+  CosmographiaExport,
+  CosmographiaExportItem,
+} from './cosmographia.ts';
 
 export {
   parseBesselCatalog,
