@@ -932,6 +932,23 @@ button[aria-pressed='true'] {
   color: var(--text-1);
 }
 
+/* Chart/table toggle + copy + precision control above an analysis result (B18). */
+.bessel-result-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  margin-bottom: var(--space-1);
+  font-size: 0.75rem;
+}
+
+.bessel-result-toolbar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--text-1);
+}
+
 /* Always-mounted telemetry fault alert, centered under the app bar. The wrapper is
    inert until a fault fires (FaultBanner returns null when nominal). */
 .bessel-fault-chrome {

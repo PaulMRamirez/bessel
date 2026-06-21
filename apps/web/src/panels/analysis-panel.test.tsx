@@ -72,3 +72,26 @@ describe('AnalysisPanel tool grouping (B10)', () => {
     }
   });
 });
+
+describe('AnalysisPanel result tables (B18)', () => {
+  it('renders the chart/table toolbar and table over a seeded series and interval', () => {
+    const store = createAppStore();
+    store.setState({
+      rangeSeries: { et: [0, 60], value: [10, 20], label: 'range (km)' },
+      accessWindow: [[0, 100]],
+      accessSpan: [0, 200],
+    });
+    const out = renderToStaticMarkup(
+      createElement(AnalysisPanel, { engine: null, store, hasSpacecraft: true }),
+    );
+    // Toolbar + table testids derive from each block's result testid.
+    expect(out).toContain('data-testid="range-result-toolbar"');
+    expect(out).toContain('data-testid="range-result-view-table"');
+    expect(out).toContain('data-testid="range-result-copy"');
+    expect(out).toContain('data-testid="range-result-precision"');
+    expect(out).toContain('data-testid="access-result-toolbar"');
+    // Chart is the default view, with both view toggles present.
+    expect(out).toContain('data-testid="range-result-view-chart"');
+    expect(out).toContain('data-testid="range-result-view-table"');
+  });
+});

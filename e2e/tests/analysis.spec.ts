@@ -31,6 +31,20 @@ test('lighting analysis computes and renders eclipse intervals', async ({ page }
   await expect(page.getByTestId('range-chart')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId('range-chart').locator('polyline')).toHaveCount(1);
 
+  // B18: the result is also a copyable data table. Chart is the default; toggling to
+  // Table shows the underlying rows, Copy writes TSV to the clipboard, and the digits
+  // selector changes the cell precision.
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.getByTestId('range-result-view-table').click();
+  await expect(page.getByTestId('range-result-table')).toBeVisible();
+  await expect(page.getByTestId('range-result-table')).toContainText('et (s)');
+  await page.getByTestId('range-result-copy').click();
+  await expect(page.getByTestId('range-result-copy')).toHaveText('Copied');
+  const clip = await page.evaluate(() => navigator.clipboard.readText());
+  expect(clip).toContain('et (s)');
+  expect(clip).toMatch(/\d/);
+  await page.getByTestId('range-result-precision').selectOption('3');
+
   // The access analysis finds line-of-sight visibility windows (spacecraft to the
   // Sun, occulted by the center body) through the geometry-finder + window algebra.
   await page.getByTestId('compute-access').click();

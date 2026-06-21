@@ -7,16 +7,11 @@
 
 import { useMemo, useState, type ReactNode } from 'react';
 import { Button } from '@bessel/selene-design';
-import {
-  GroundTrackMap,
-  IntervalTimeline,
-  PanelContainer,
-  TimeSeriesChart,
-  downloadBlob,
-} from '@bessel/ui';
+import { GroundTrackMap, PanelContainer } from '@bessel/ui';
 import { seriesToCsv, intervalsToCsv } from '@bessel/interop';
 import type { BesselEngine } from '../engine/index.ts';
-import { useStore, type AppStore, type Series } from '../store/index.ts';
+import { useStore, type AppStore } from '../store/index.ts';
+import { IntervalResult, SeriesResult, StatResult } from './analysis-result.tsx';
 
 export interface AnalysisPanelProps {
   readonly engine: BesselEngine | null;
@@ -26,11 +21,6 @@ export interface AnalysisPanelProps {
 
 const fmt = (n: number, digits = 2): string =>
   Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: digits }) : '-';
-
-/** Download a CSV string as a file. */
-function exportCsv(filename: string, csv: string): void {
-  downloadBlob(new Blob([csv], { type: 'text/csv' }), filename);
-}
 
 /** A primary panel action button (selene), preserving the data-testid test hook. */
 function Action(props: {
@@ -43,71 +33,6 @@ function Action(props: {
     <Button variant={props.variant ?? 'secondary'} full testId={props.testId} onClick={props.onClick}>
       {props.children}
     </Button>
-  );
-}
-
-/** A small "Export CSV" button used under each analysis result. */
-function CsvButton(props: { onClick: () => void; testId: string }): JSX.Element {
-  return (
-    <Button variant="secondary" testId={props.testId} className="bessel-csv-button" onClick={props.onClick}>
-      Export CSV
-    </Button>
-  );
-}
-
-/** A time-series analysis result block: title + chart + optional CSV, or a hint. */
-function SeriesResult(props: {
-  series: Series | null;
-  resultTestId: string;
-  chartTestId: string;
-  hint: string;
-  csv?: { testId: string; filename: string; build: (s: Series) => string };
-}): JSX.Element {
-  const { series, csv } = props;
-  if (!series) return <p className="bessel-loader-hint">{props.hint}</p>;
-  return (
-    <div data-testid={props.resultTestId}>
-      <div className="bessel-panel-title">{series.label}</div>
-      <TimeSeriesChart et={series.et} value={series.value} label={series.label} testId={props.chartTestId} />
-      {csv ? <CsvButton testId={csv.testId} onClick={() => exportCsv(csv.filename, csv.build(series))} /> : null}
-    </div>
-  );
-}
-
-type Intervals = readonly (readonly [number, number])[];
-
-/** An interval (Gantt) analysis result block: title + timeline + optional CSV/extra, or a hint. */
-function IntervalResult(props: {
-  intervals: Intervals | null;
-  span: readonly [number, number] | null;
-  title: string;
-  label: string;
-  resultTestId: string;
-  timelineTestId: string;
-  hint: string;
-  csv?: { testId: string; filename: string; build: (i: Intervals) => string };
-  extra?: ReactNode;
-}): JSX.Element {
-  const { intervals, span, csv } = props;
-  if (!intervals || !span) return <p className="bessel-loader-hint">{props.hint}</p>;
-  return (
-    <div data-testid={props.resultTestId}>
-      <div className="bessel-panel-title">{props.title}</div>
-      <IntervalTimeline intervals={intervals} span={span} label={props.label} testId={props.timelineTestId} />
-      {csv ? <CsvButton testId={csv.testId} onClick={() => exportCsv(csv.filename, csv.build(intervals))} /> : null}
-      {props.extra}
-    </div>
-  );
-}
-
-/** A scalar-readout result: a stat paragraph when present, else a hint. */
-function StatResult(props: { show: boolean; resultTestId: string; hint: string; children: ReactNode }): JSX.Element {
-  return props.show ? (
-    <p className="bessel-analysis-stat" data-testid={props.resultTestId}>
-      {props.children}
-    </p>
-  ) : (
-    <p className="bessel-loader-hint">{props.hint}</p>
   );
 }
 

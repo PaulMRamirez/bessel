@@ -9,14 +9,29 @@ export interface ReportTableProps {
   readonly rows: readonly (readonly (string | number)[])[];
   /** Max rows to render (default 25); extra rows are summarized. */
   readonly maxRows?: number;
+  /** Significant digits for numeric cells (default 6). */
+  readonly precision?: number;
   readonly testId?: string;
+}
+
+/** Serialize a report to TSV at the given precision (for clipboard copy). Pure. */
+export function reportToText(
+  columns: readonly string[],
+  rows: readonly (readonly (string | number)[])[],
+  precision = 6,
+): string {
+  const fmt = (v: string | number): string => (typeof v === 'number' ? v.toPrecision(precision) : v);
+  const header = columns.join('\t');
+  const body = rows.map((r) => r.map(fmt).join('\t')).join('\n');
+  return body ? `${header}\n${body}\n` : `${header}\n`;
 }
 
 export function ReportTable(props: ReportTableProps): JSX.Element {
   const maxRows = props.maxRows ?? 25;
+  const prec = props.precision ?? 6;
   const shown = props.rows.slice(0, maxRows);
   const hidden = props.rows.length - shown.length;
-  const cell = (v: string | number): string => (typeof v === 'number' ? v.toPrecision(6) : v);
+  const cell = (v: string | number): string => (typeof v === 'number' ? v.toPrecision(prec) : v);
   return (
     <div className="bessel-report" data-testid={props.testId ?? 'report-table'}>
       <table className="bessel-report-table">

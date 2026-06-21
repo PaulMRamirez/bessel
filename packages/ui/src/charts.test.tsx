@@ -7,9 +7,25 @@ import { describe, it, expect } from 'vitest';
 import { IntervalTimeline } from './IntervalTimeline.tsx';
 import { TimeSeriesChart } from './TimeSeriesChart.tsx';
 import { GroundTrackMap } from './GroundTrackMap.tsx';
-import { ReportTable } from './ReportTable.tsx';
+import { ReportTable, reportToText } from './ReportTable.tsx';
 
 const html = (el: Parameters<typeof renderToStaticMarkup>[0]): string => renderToStaticMarkup(el);
+
+describe('ReportTable precision + reportToText', () => {
+  it('formats cells at the requested significant digits (default 6)', () => {
+    const cols = ['a'];
+    const rows = [[1234.5678]];
+    expect(html(createElement(ReportTable, { columns: cols, rows, precision: 3 }))).toContain('1.23e+3');
+    // Omitting precision preserves the 6-sig-fig default (guards existing callers).
+    expect(html(createElement(ReportTable, { columns: cols, rows }))).toContain('1234.57');
+  });
+
+  it('serializes a report to TSV at the requested precision', () => {
+    expect(reportToText(['et', 'v'], [[0, 1234.5678]], 3)).toBe('et\tv\n0.00\t1.23e+3\n');
+    // Empty rows yield a header-only document.
+    expect(reportToText(['et', 'v'], [], 6)).toBe('et\tv\n');
+  });
+});
 
 describe('IntervalTimeline', () => {
   it('renders one bar per interval and an interval count', () => {
