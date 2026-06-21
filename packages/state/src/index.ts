@@ -48,6 +48,7 @@ export { exportCzml, CzmlError, type CzmlOptions, type CzmlSample } from './czml
 export {
   TelemetryAdapter,
   TelemetryError,
+  OVERLAY_HISTORY_LIMIT,
   parseTelemetryMessage,
   residualKm,
   type SocketLike,

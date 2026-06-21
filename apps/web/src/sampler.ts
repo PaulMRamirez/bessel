@@ -54,6 +54,9 @@ export async function sampleEphemeris(
 export function positionAt(table: EphemerisTable, name: string, et: number): Km3 {
   const flat = table.byBody.get(name);
   if (!flat) return [0, 0, 0];
+  // A degenerate window (et1 === et0) would make the interpolation fraction 0/0 =
+  // NaN; with a single epoch there is one sample to return, so return it directly.
+  if (table.et1 === table.et0 || table.steps <= 1) return [flat[0]!, flat[1]!, flat[2]!];
   const clamped = Math.max(table.et0, Math.min(table.et1, et));
   const f = ((clamped - table.et0) / (table.et1 - table.et0)) * (table.steps - 1);
   const i = Math.min(table.steps - 2, Math.floor(f));
@@ -69,9 +72,18 @@ export function positionAt(table: EphemerisTable, name: string, et: number): Km3
 
 /** Finite-difference velocity (km/s) of a body at et, from the sampled table. */
 export function velocityAt(table: EphemerisTable, name: string, et: number): Km3 {
-  const a = positionAt(table, name, et - 1);
-  const b = positionAt(table, name, et + 1);
-  return [(b[0] - a[0]) / 2, (b[1] - a[1]) / 2, (b[2] - a[2]) / 2];
+  // positionAt clamps its epoch to [et0, et1]. At a window edge the stencil epochs
+  // collapse onto that bound (e.g. at et0 the back sample clamps to et0), so a fixed
+  // /2 divisor would halve the span actually spanned and report ~2x speed. Divide by
+  // the real span between the two clamped epochs instead. Guard a zero span (a
+  // degenerate single-sample window) by returning zero velocity.
+  const lo = Math.max(table.et0, Math.min(table.et1, et - 1));
+  const hi = Math.max(table.et0, Math.min(table.et1, et + 1));
+  const span = hi - lo;
+  if (span <= 0) return [0, 0, 0];
+  const a = positionAt(table, name, lo);
+  const b = positionAt(table, name, hi);
+  return [(b[0] - a[0]) / span, (b[1] - a[1]) / span, (b[2] - a[2]) / span];
 }
 
 /**

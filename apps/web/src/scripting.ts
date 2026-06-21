@@ -193,8 +193,11 @@ export function createScriptHost(engine: BesselEngine, store: AppStore): ScriptH
     setTime: (et) => engine.scrub(et),
     getTime: () => store.getState().et,
     track: (name) => {
+      // Center on the named target first so the frame loop tracks it (the tracked
+      // object is the current focus), then turn tracking on. Routing through
+      // toggleTrack() would re-center on the spacecraft and discard the named target.
       engine.centerOn(name);
-      if (!store.getState().track) engine.toggleTrack();
+      engine.setTracking(true);
     },
     untrack: () => {
       if (store.getState().track) engine.toggleTrack();
