@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import fc from 'fast-check';
 import {
   DEFAULT_VIEW,
+  CzmlError,
   buildMmgisUrl,
   decodeView,
   encodeView,
@@ -117,5 +118,41 @@ describe('@bessel/state CZML export', () => {
     expect(entity.position.cartesian[0]).toBe(0);
     expect(entity.position.cartesian[1]).toBe(1000);
     expect(entity.position.cartesian[4]).toBe(3600);
+  });
+
+  it('fails loudly on a non-finite start epoch instead of emitting null', () => {
+    expect(() =>
+      exportCzml({
+        id: 'X',
+        name: 'X',
+        start: 'not-a-date',
+        stop: '2004-07-01T02:00:00Z',
+        samples: [{ t: '2004-07-01T00:00:00Z', position: [1, 2, 3] }],
+      }),
+    ).toThrow(CzmlError);
+  });
+
+  it('fails loudly on a non-finite sample time instead of emitting null', () => {
+    expect(() =>
+      exportCzml({
+        id: 'X',
+        name: 'X',
+        start: '2004-07-01T00:00:00Z',
+        stop: '2004-07-01T02:00:00Z',
+        samples: [{ t: 'garbage', position: [1, 2, 3] }],
+      }),
+    ).toThrow(/garbage/);
+  });
+});
+
+describe('@bessel/state camera fragment hardening', () => {
+  it('falls back to default pose fields for a truncated/hostile fragment', () => {
+    // A hostile fragment with non-numeric pose fields must not yield NaN distance/
+    // azimuth/elevation (the camera-relative renderer would draw a garbage frame).
+    const view = decodeView('cam=orbit::evil,NaN,');
+    expect(Number.isFinite(view.camera.distance)).toBe(true);
+    expect(Number.isFinite(view.camera.azimuth)).toBe(true);
+    expect(Number.isFinite(view.camera.elevation)).toBe(true);
+    expect(view.camera).toMatchObject({ mode: 'orbit', distance: 1, azimuth: 0, elevation: 0 });
   });
 });

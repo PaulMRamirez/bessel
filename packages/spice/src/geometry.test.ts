@@ -51,6 +51,16 @@ describe('@bessel/spice geometry surface', () => {
     expect(m).toBeCloseTo(1, 3);
   });
 
+  it('never returns more getfov boundary vectors than the requested room', async () => {
+    // The bounds buffer holds room*24 bytes, so the reader is clamped to room: even if a
+    // reported count exceeded room it could not read past the buffer. CSPICE enforces
+    // room >= the shape's corners, so request enough room and assert the clamp invariant.
+    const room = 8;
+    const fov = await spice.getfov(CASSINI_ISS_NAC, room);
+    expect(fov.bounds.length).toBeLessThanOrEqual(room);
+    expect(fov.bounds.length).toBe(4); // the NAC is a rectangle (4 corners)
+  });
+
   it('computes the sub-spacecraft point on Saturn via subpnt', async () => {
     const sub = await spice.subpnt('NEAR POINT/ELLIPSOID', 'SATURN', et, 'IAU_SATURN', 'NONE', 'CASSINI');
     const r = Math.hypot(sub.point.x, sub.point.y, sub.point.z);

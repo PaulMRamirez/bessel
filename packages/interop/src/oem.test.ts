@@ -48,4 +48,16 @@ describe('parseOem', () => {
     const bad = SAMPLE.replace('-0.535 7.707 0.0', '-0.535 oops 0.0');
     expect(() => parseOem(bad)).toThrow(OemError);
   });
+
+  it('does not capture a "=" line outside META as metadata', () => {
+    // A covariance/USER_DEFINED key after META_STOP must not overwrite the segment's
+    // metadata: REF_FRAME stays ICRF rather than being clobbered by a stray label.
+    const withTrailing = SAMPLE.replace(
+      'META_STOP\n',
+      'META_STOP\nREF_FRAME = HIJACKED\nUSER_DEFINED_X = 1\n',
+    );
+    const oem = parseOem(withTrailing);
+    expect(oem.metadata.refFrame).toBe('ICRF');
+    expect(oem.states).toHaveLength(3);
+  });
 });

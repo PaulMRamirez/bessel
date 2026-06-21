@@ -9,6 +9,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import {
   createSpiceEngine,
   createSpiceWorkerPool,
+  dispatchSpice,
   gridEpochs,
   installSpiceWorker,
   runEvalSpec,
@@ -85,6 +86,24 @@ describe('@bessel/spice EvalSpec interpreter (F3)', () => {
     }
   });
 
+  it('throws a located SpiceError for rangeRate of a coincident pair (|r|=0)', async () => {
+    // Observer == target gives a zero relative position, so d|r|/dt is undefined: the
+    // provider must throw rather than divide by a faked 1.0 and emit a km^2/s dot product.
+    const spec: EvalSpec = {
+      grid: { et: [et0] },
+      providers: [{ kind: 'rangeRate', observer: '10', target: '10' }],
+    };
+    await expect(runEvalSpec(spice, spec)).rejects.toThrow(/rangeRate undefined/);
+  });
+
+  it('throws a located SpiceError for subPointLonLat of a coincident pair (|r|=0)', async () => {
+    const spec: EvalSpec = {
+      grid: { et: [et0] },
+      providers: [{ kind: 'subPointLonLat', observer: '10', target: '10', frame: 'J2000' }],
+    };
+    await expect(runEvalSpec(spice, spec)).rejects.toThrow(/subPointLonLat undefined/);
+  });
+
   it('throws JobCancelledError when the token trips', async () => {
     const spec: EvalSpec = {
       grid: { start: et0, stop: et0 + 600 * 99, step: 600 },
@@ -135,6 +154,14 @@ describe('@bessel/spice evalSeries worker job (F3)', () => {
     const cancelled = await waitFor(20);
     expect(cancelled.res.ok).toBe(false);
     if (!cancelled.res.ok) expect(cancelled.res.error).toContain('cancelled');
+  });
+
+  it('rejects an unknown worker method instead of resolving undefined', async () => {
+    // A future request variant without a dispatch arm must reject, not silently resolve
+    // {ok:true,result:undefined}. The engine is never touched, so a bare stub suffices.
+    const stub = {} as SpiceEngine;
+    const unknown = { id: 99, method: 'doesNotExist' } as unknown as SpiceWorkerRequest;
+    await expect(dispatchSpice(stub, unknown)).rejects.toThrow(/unhandled worker method/);
   });
 });
 

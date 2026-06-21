@@ -46,7 +46,11 @@ export function writeAem(aem: Aem): string {
   for (const [key, field] of META_ORDER) {
     let value = meta[field];
     if (key === 'ATTITUDE_TYPE') value = value ?? 'QUATERNION';
-    if (key === 'QUATERNION_TYPE') value = value ?? 'FIRST';
+    // Records are stored scalar-first ([w, x, y, z]) and recordLine emits them in that
+    // order, so the written type must be FIRST regardless of the source metadata.
+    // Honoring a stored 'LAST' would mislabel scalar-first components and corrupt the
+    // round-trip ([1,0,0,0] reads back as [0,1,0,0]).
+    if (key === 'QUATERNION_TYPE') value = 'FIRST';
     if (value !== undefined) lines.push(`${key} = ${value}`);
   }
   lines.push('META_STOP');

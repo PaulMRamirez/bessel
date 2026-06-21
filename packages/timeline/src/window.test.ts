@@ -105,6 +105,14 @@ describe('windowIntersect', () => {
     ]);
     expect(r).toEqual([[3, 6]]);
   });
+
+  it('intersectAll of an empty list returns the explicit domain (AND identity)', () => {
+    expect(windowIntersectAll([], [0, 10])).toEqual([[0, 10]]);
+  });
+
+  it('intersectAll of an empty list with no domain throws (full domain is undefined)', () => {
+    expect(() => windowIntersectAll([])).toThrow(/domain/);
+  });
 });
 
 describe('windowDifference', () => {

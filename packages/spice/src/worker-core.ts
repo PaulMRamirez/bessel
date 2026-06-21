@@ -3,7 +3,7 @@
 // web app) wire it with a locateFile that points at the emitted cspice.wasm asset.
 
 import { createSpiceEngine, type SpiceEngineOptions } from './engine.ts';
-import type { SpiceEngine } from './index.ts';
+import { SpiceError, type SpiceEngine } from './index.ts';
 import type { SpiceWorkerRequest, SpiceWorkerResponse } from './protocol.ts';
 import { runEvalSpec } from './eval-series.ts';
 
@@ -179,6 +179,12 @@ export async function dispatchSpice(engine: SpiceEngine, req: SpiceWorkerRequest
       return engine.et2lst(req.et, req.body, req.lon, req.lstType);
     case 'tkvrsn':
       return engine.tkvrsn();
+    default:
+      // A request variant with no dispatch arm must reject, never resolve undefined
+      // (which the client would silently surface as a missing result). evalSeries and
+      // cancelJob are handled in installSpiceWorker before reaching here, so any method
+      // landing in this default is genuinely unhandled. Fail loudly (CLAUDE.md).
+      throw new SpiceError(`dispatchSpice: unhandled worker method "${req.method}"`);
   }
 }
 
