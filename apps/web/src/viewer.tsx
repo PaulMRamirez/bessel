@@ -12,7 +12,9 @@ import {
   CaptureControls,
   CatalogLoader,
   DEFAULT_LADDER,
+  FaultBanner,
   KeyboardHelp,
+  LiveGeometryReadout,
   MeasurePanel,
   ObjectBrowser,
   ObjectInspector,
@@ -26,6 +28,7 @@ import {
   TimelineControls,
   Tooltip,
   ViewControls,
+  WelcomeCard,
   useKeyboardShortcuts,
   type CatalogSample,
   type KeyboardAction,
@@ -152,6 +155,7 @@ export function BesselViewer(): JSX.Element {
   const objects = useStore(store, (s) => s.objects);
   const loadedName = useStore(store, (s) => s.loadedName);
   const loadError = useStore(store, (s) => s.loadError);
+  const welcomeSeen = useStore(store, (s) => s.welcomeSeen);
   const measurement = useStore(store, (s) => s.measurement);
   const bookmarks = useStore(store, (s) => s.bookmarks);
 
@@ -198,6 +202,10 @@ export function BesselViewer(): JSX.Element {
   // markers) appears only once a mission with a spacecraft is loaded, so the
   // default solar-system view stays uncluttered.
   const hasSpacecraft = objects.some((e) => e.kind === 'spacecraft');
+  // The live geometry readout stays visible through a pass (independent of selection)
+  // whenever tracking is on or the spacecraft itself is the focus.
+  const focusIsSpacecraft = focusEntry?.kind === 'spacecraft';
+  const showLiveReadout = hasSpacecraft && (track || focusIsSpacecraft);
 
   // Timeline annotations are computed in the engine/mission layer (where SPICE
   // lives) from arc boundaries plus a SPICE-found closest approach, and arrive
@@ -360,6 +368,11 @@ export function BesselViewer(): JSX.Element {
           </>
         ) : null}
       </div>
+      {/* Always-mounted telemetry fault alert: a fault reaches the operator with no
+          menu open. Renders nothing (no role/contrast surface) when nominal. */}
+      <div className="bessel-fault-chrome">
+        <FaultBanner fault={telemetryFault} testId="telemetry-fault-alert" />
+      </div>
       <div className="bessel-viewcontrols" role="group" aria-label="Instruments and sharing">
         {hasSpacecraft && (
           <>
@@ -419,6 +432,9 @@ export function BesselViewer(): JSX.Element {
         </button>
       </div>
       <KeyboardHelp open={helpOpen} onClose={() => engine?.setHelpOpen(false)} />
+      {/* Always-visible geometry, bound to the tracked/focused object, so a canvas
+          click that clears the selection does not blank the live numbers. */}
+      {showLiveReadout ? <LiveGeometryReadout target={focus} readouts={readouts} /> : null}
       {selection.length > 0 ? (
         <aside
           className="bessel-inspector-card"
@@ -435,6 +451,17 @@ export function BesselViewer(): JSX.Element {
             angleDeg={measurement?.angleDeg ?? null}
           />
         </aside>
+      ) : null}
+      {!loadedName && !welcomeSeen ? (
+        <WelcomeCard
+          onLoadSample={() => void engine?.loadSampleMission(SAMPLE_CATALOGS[0]!.url)}
+          onTour={() => {
+            void engine?.dismissWelcome();
+            engine?.runTour();
+          }}
+          onExplore={() => void engine?.dismissWelcome()}
+          onClose={() => void engine?.dismissWelcome()}
+        />
       ) : null}
     </div>
   );

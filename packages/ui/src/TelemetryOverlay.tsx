@@ -11,6 +11,7 @@
 
 import { StatusDot, TeleCell, Gauge, Metric } from '@bessel/selene-design';
 import type { PredictedVsActual } from '@bessel/state';
+import { FaultBanner } from './FaultBanner.tsx';
 import { SEVERITY_HEX, STROKE, toneFor } from './telemetry-colors.ts';
 
 /** Yamcs XTCE alarm severities, ascending. The threshold line takes the highest tripped. */
@@ -106,11 +107,7 @@ export function TelemetryOverlay(props: TelemetryOverlayProps): JSX.Element {
       data-testid="telemetry-overlay"
       data-severity={severity}
     >
-      {props.fault ? (
-        <p className="bessel-telemetry-fault" role="alert" data-testid="telemetry-fault-banner">
-          Telemetry fault: {props.fault}
-        </p>
-      ) : null}
+      <FaultBanner fault={props.fault ?? null} />
       <svg
         width={w}
         height={h}

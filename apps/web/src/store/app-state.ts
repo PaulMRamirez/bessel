@@ -45,6 +45,8 @@ export interface AppState {
   analyzeTab: AnalyzeTab;
   /** Shared analysis parameters the dock's tabs read by default. */
   analysisContext: AnalysisContext;
+  /** True once the first-run welcome card has been dismissed or acted on (persisted). */
+  welcomeSeen: boolean;
   // Camera and selection.
   focus: string;
   selection: readonly string[];
@@ -271,6 +273,7 @@ export const initialAppState: AppState = {
   analyzeOpen: false,
   analyzeTab: 'access',
   analysisContext: { spanSec: 86400, stepSec: 120, target: '', observer: '', frame: 'J2000' },
+  welcomeSeen: false,
   // Default to a heliocentric whole-system view; a loaded mission recenters on
   // its own center body.
   focus: 'Sun',

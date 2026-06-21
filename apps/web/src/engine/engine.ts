@@ -41,6 +41,7 @@ import { buildMissionAnnotations } from './mission-annotations.ts';
 import { createScript } from '../scripting.ts';
 import { runScript, type ScriptResult } from '../script-runner.ts';
 import { MockTelemetrySocket } from '../telemetry-mock.ts';
+import { loadWelcomeSeen, persistWelcomeSeen } from '../welcome.ts';
 import {
   loadBookmarks,
   persistBookmarks,
@@ -135,6 +136,7 @@ export class BesselEngine {
       this.raf = requestAnimationFrame(this.frame);
       this.store.setState({ status: 'Ready', ready: true });
       void this.loadBookmarksFromStorage();
+      void this.loadWelcomeSeenFromStorage();
     } catch (err) {
       if (!this.disposed) {
         this.store.setState({
@@ -901,6 +903,27 @@ export class BesselEngine {
     if (!e) return;
     const bookmarks = await loadBookmarks(e.storage);
     if (!this.disposed) this.store.setState({ bookmarks });
+  }
+
+  private async loadWelcomeSeenFromStorage(): Promise<void> {
+    const e = this.core;
+    if (!e) return;
+    const seen = await loadWelcomeSeen(e.storage);
+    if (!this.disposed && seen) this.store.setState({ welcomeSeen: true });
+  }
+
+  /** Dismiss the first-run welcome card and persist that it has been seen. */
+  async dismissWelcome(): Promise<void> {
+    if (this.store.getState().welcomeSeen) return;
+    this.store.setState({ welcomeSeen: true });
+    const e = this.core;
+    if (e) await persistWelcomeSeen(e.storage);
+  }
+
+  /** Dismiss the welcome card and load a sample mission from a URL (the front-door path). */
+  async loadSampleMission(url: string): Promise<void> {
+    await this.dismissWelcome();
+    await this.loadCatalogUrl(url);
   }
 
   async saveBookmark(name: string): Promise<void> {

@@ -2,6 +2,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, it, expect } from 'vitest';
 import { CatalogLoader } from './CatalogLoader.tsx';
+import { LiveGeometryReadout } from './LiveGeometryReadout.tsx';
 import { ObjectBrowser } from './ObjectBrowser.tsx';
 import { ReadoutPanel } from './ReadoutPanel.tsx';
 import { SettingsPanel } from './SettingsPanel.tsx';
@@ -79,6 +80,44 @@ describe('@bessel/ui ReadoutPanel', () => {
     expect(out).toContain('42.3 deg');
     expect(out).toContain('n/a');
     expect(out).toContain('aria-label="Geometry readouts for Saturn"');
+  });
+});
+
+describe('@bessel/ui LiveGeometryReadout', () => {
+  it('formats finite values, shows n/a for null, and uses distinct testids', () => {
+    const out = html(
+      createElement(LiveGeometryReadout, {
+        target: 'Saturn',
+        readouts: {
+          rangeKm: 1234567,
+          altitudeKm: 1174299,
+          phaseDeg: 42.34,
+          incidenceDeg: null,
+          emissionDeg: null,
+        },
+      }),
+    );
+    expect(out).toContain('data-testid="live-readout"');
+    expect(out).toContain('aria-label="Live geometry for Saturn"');
+    expect(out).toContain('1,234,567 km');
+    expect(out).toContain('42.3 deg');
+  });
+
+  it('shows n/a for null geometry', () => {
+    const out = html(
+      createElement(LiveGeometryReadout, {
+        target: 'Probe',
+        readouts: {
+          rangeKm: null,
+          altitudeKm: null,
+          phaseDeg: null,
+          incidenceDeg: null,
+          emissionDeg: null,
+        },
+      }),
+    );
+    expect(out).toContain('data-testid="live-readout-range"');
+    expect(out).toContain('n/a');
   });
 });
 

@@ -9,6 +9,7 @@ import AxeBuilder from '@axe-core/playwright';
 test('the scripting console runs a cosmoscripting program against the viewer', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
+  await page.getByTestId('welcome-explore').click();
 
   // Open the Script popover from the right-side actions group.
   await page.getByTestId('script-menu').click();
@@ -36,6 +37,7 @@ test('the scripting console reports a bad line loudly without aborting prior ver
 }) => {
   await page.goto('/');
   await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
+  await page.getByTestId('welcome-explore').click();
 
   await page.getByTestId('script-menu').click();
   await page.getByTestId('script-input').fill('gotoObject Earth\nwarpDrive');
@@ -52,6 +54,7 @@ test('the scripting console has no serious or critical accessibility violations'
 }) => {
   await page.goto('/');
   await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
+  await page.getByTestId('welcome-explore').click();
   await page.getByTestId('script-menu').click();
   await expect(page.getByTestId('script-input')).toBeVisible();
 

@@ -89,4 +89,10 @@ test('the track-along-trajectory camera mode renders a non-empty frame', async (
   await page.waitForTimeout(400);
   const stats = await frameStats(viewport);
   expect(stats.nonBackground).toBeGreaterThan(100);
+
+  // The live geometry readout appears on track and stays bound to SPICE geometry
+  // independent of the selection (a canvas click that clears selection does not blank it).
+  await expect(page.getByTestId('live-readout')).toBeVisible();
+  await viewport.click({ position: { x: 40, y: 40 } });
+  await expect(page.getByTestId('live-readout')).toHaveCount(1);
 });
