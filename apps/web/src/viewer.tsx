@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SOLAR_SYSTEM } from '@bessel/scene';
 import { StatusDot, type StatusTone } from '@bessel/selene-design';
+import { sortByEt } from '@bessel/timeline';
 import {
   BookmarksPanel,
   CameraFrameControls,
@@ -56,6 +57,19 @@ const SPICE_IDS: Readonly<Record<string, string>> = Object.fromEntries(
 const SAMPLE_CATALOGS: readonly CatalogSample[] = [
   { label: 'Cassini at Saturn', url: `${import.meta.env.BASE_URL}samples/cassini-saturn.json` },
 ];
+
+/** A compact T-minus string for a future event (always positive). */
+function formatTMinus(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds));
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${sec}s`;
+  return `${sec}s`;
+}
 
 /** A selene StatusDot tone for the status HUD, derived purely from existing app
  *  state. The visible status text is unchanged; the dot only adds a color cue. */
@@ -128,6 +142,7 @@ export function BesselViewer(): JSX.Element {
   const timeSystem = useStore(store, (s) => s.timeSystem);
   const analyzeOpen = useStore(store, (s) => s.analyzeOpen);
   const analyzeTab = useStore(store, (s) => s.analyzeTab);
+  const timelineError = useStore(store, (s) => s.timelineError);
   const focus = useStore(store, (s) => s.focus);
   const instruments = useStore(store, (s) => s.instruments);
   const footprintPoints = useStore(store, (s) => s.footprintPoints);
@@ -211,6 +226,12 @@ export function BesselViewer(): JSX.Element {
   // lives) from arc boundaries plus a SPICE-found closest approach, and arrive
   // here as inert data (the dependency rule). No hard-coded markers.
   const annotations = missionAnnotations;
+  // The next upcoming event + a live T-minus, derived from the current epoch and the
+  // sorted annotations (recomputes on every et tick, so it counts down during playback).
+  const nextEvent = useMemo(() => {
+    const future = sortByEt(annotations).find((a) => a.et > et);
+    return future ? { label: future.label, tMinus: formatTMinus(future.et - et) } : null;
+  }, [annotations, et]);
 
   const actions = (
     <>
@@ -291,32 +312,39 @@ export function BesselViewer(): JSX.Element {
   );
 
   const left = (
-    <PanelContainer title="Objects" testId="panel-objects">
-      <SearchBox value={query} onChange={setQuery} placeholder="Filter objects" />
-      <ViewControls
-        onViewTopDown={() => engine?.viewTopDown()}
-        onViewFromSun={() => engine?.viewFromSun()}
-        onViewAlongVelocity={hasSpacecraft ? () => engine?.viewAlongVelocity() : undefined}
-        mode={cameraMode}
-        onMode={(m) => engine?.setCameraMode(m)}
-      />
-      <CameraFrameControls
-        frame={cameraFrame}
-        frameMode={cameraMode === 'frame'}
-        onFrame={(f) => engine?.setCameraFrame(f)}
-        onDolly={(forward) => engine?.dolly(forward)}
-        onCrane={(up) => engine?.crane(up)}
-      />
-      <ObjectBrowser
-        entries={filteredEntries}
-        focus={focus}
-        selection={selection}
-        visibility={visibility}
-        onToggleSelect={(id) => engine?.toggleSelectObject(id)}
-        onToggleVisible={(id, visible) => engine?.toggleVisibleObject(id, visible)}
-        onCenter={(id) => engine?.centerOn(id)}
-      />
-    </PanelContainer>
+    <>
+      <PanelContainer title="Objects" testId="panel-objects">
+        <SearchBox value={query} onChange={setQuery} placeholder="Filter objects" />
+        <ObjectBrowser
+          entries={filteredEntries}
+          focus={focus}
+          selection={selection}
+          visibility={visibility}
+          onToggleSelect={(id) => engine?.toggleSelectObject(id)}
+          onToggleVisible={(id, visible) => engine?.toggleVisibleObject(id, visible)}
+          onCenter={(id) => engine?.centerOn(id)}
+        />
+      </PanelContainer>
+      <PanelContainer title="Camera" testId="panel-camera" defaultCollapsed>
+        <ViewControls
+          onViewTopDown={() => engine?.viewTopDown()}
+          onViewFromSun={() => engine?.viewFromSun()}
+          onViewAlongVelocity={hasSpacecraft ? () => engine?.viewAlongVelocity() : undefined}
+          mode={cameraMode}
+          onMode={(m) => engine?.setCameraMode(m)}
+        />
+        <CameraFrameControls
+          frame={cameraFrame}
+          frameMode={cameraMode === 'frame'}
+          onFrame={(f) => {
+            engine?.setCameraFrame(f);
+            if (cameraMode !== 'frame') engine?.setCameraMode('frame');
+          }}
+          onDolly={(forward) => engine?.dolly(forward)}
+          onCrane={(up) => engine?.crane(up)}
+        />
+      </PanelContainer>
+    </>
   );
 
   const center = (
@@ -392,6 +420,32 @@ export function BesselViewer(): JSX.Element {
             >
               {track ? 'Stop tracking' : 'Track spacecraft'}
             </button>
+            {instruments ? (
+              <span
+                className="bessel-viewcontrols__layers"
+                role="group"
+                aria-label="Instrument layers"
+              >
+                <button
+                  type="button"
+                  className="bessel-viewcontrols__layer-toggle"
+                  onClick={() => engine?.setSetting('fov', !settings.fov)}
+                  aria-pressed={settings.fov}
+                  data-testid="toggle-fov"
+                >
+                  Sensor FOV
+                </button>
+                <button
+                  type="button"
+                  className="bessel-viewcontrols__layer-toggle"
+                  onClick={() => engine?.setSetting('footprint', !settings.footprint)}
+                  aria-pressed={settings.footprint}
+                  data-testid="toggle-footprint"
+                >
+                  Footprint
+                </button>
+              </span>
+            ) : null}
           </>
         )}
         <button type="button" onClick={() => void engine?.share().then(showShare)} data-testid="share">
@@ -476,10 +530,14 @@ export function BesselViewer(): JSX.Element {
       max={bounds[1]}
       value={et}
       annotations={annotations}
+      nextEventLabel={nextEvent?.label ?? null}
+      nextEventTMinus={nextEvent?.tMinus ?? null}
       onPlayToggle={() => engine?.togglePlay()}
       onRateChange={(r) => engine?.setRate(r)}
       onScrub={(v) => engine?.scrub(v)}
       onTimeSystemChange={(s) => engine?.setTimeSystem(s)}
+      onGoToEpoch={(t) => void engine?.goToEpoch(t)}
+      goToEpochError={timelineError}
       onAnnotationSelect={(v) => engine?.scrub(v)}
     />
   );

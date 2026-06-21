@@ -6,7 +6,8 @@ import { LiveGeometryReadout } from './LiveGeometryReadout.tsx';
 import { ObjectBrowser } from './ObjectBrowser.tsx';
 import { ReadoutPanel } from './ReadoutPanel.tsx';
 import { SettingsPanel } from './SettingsPanel.tsx';
-import { TimelineControls } from './TimelineControls.tsx';
+import { TimelineControls, humanizeRate } from './TimelineControls.tsx';
+import { CameraFrameControls } from './CameraFrameControls.tsx';
 import { KeyboardHelp } from './KeyboardHelp.tsx';
 import { OpsPanel } from './OpsPanel.tsx';
 
@@ -243,5 +244,80 @@ describe('@bessel/ui KeyboardHelp', () => {
   });
   it('renders nothing when closed', () => {
     expect(html(createElement(KeyboardHelp, { open: false, onClose: () => {} }))).toBe('');
+  });
+});
+
+describe('@bessel/ui humanizeRate', () => {
+  it('glosses rates as a plain-language cadence', () => {
+    expect(humanizeRate(86400)).toBe('1 day/sec');
+    expect(humanizeRate(604800)).toBe('7 days/sec');
+    expect(humanizeRate(3600)).toBe('1 hour/sec');
+    expect(humanizeRate(60)).toBe('1 min/sec');
+    expect(humanizeRate(1)).toBe('1 sec/sec');
+  });
+});
+
+describe('@bessel/ui TimelineControls enrichment (B8)', () => {
+  const base = {
+    playing: false,
+    rate: 1,
+    epochLabel: '2004-07-01',
+    timeSystem: 'UTC' as const,
+    min: 0,
+    max: 100,
+    value: 0,
+    onPlayToggle: () => {},
+    onRateChange: () => {},
+    onScrub: () => {},
+    onTimeSystemChange: () => {},
+  };
+
+  it('glosses the rate options and renders a go-to-epoch field', () => {
+    const out = html(createElement(TimelineControls, base));
+    expect(out).toContain('86400x (~ 1 day/sec)');
+    expect(out).toContain('3600x (~ 1 hour/sec)');
+    expect(out).toContain('data-testid="goto-epoch"');
+    expect(out).toContain('aria-label="Go to epoch (UTC)"');
+  });
+
+  it('shows the next event with its T-minus, or none', () => {
+    const withNext = html(
+      createElement(TimelineControls, { ...base, nextEventLabel: 'Periapsis', nextEventTMinus: '2h 5m' }),
+    );
+    expect(withNext).toContain('Next: Periapsis T-2h 5m');
+    const none = html(createElement(TimelineControls, base));
+    expect(none).toContain('No upcoming events');
+  });
+
+  it('renders a visible marker label and a loud go-to-epoch error when set', () => {
+    const out = html(
+      createElement(TimelineControls, {
+        ...base,
+        annotations: [{ id: 'soi', et: 50, label: 'Saturn orbit insertion' }],
+        goToEpochError: 'Could not parse epoch',
+      }),
+    );
+    expect(out).toContain('class="bessel-marker-label"');
+    expect(out).toContain('Saturn orbit insertion');
+    expect(out).toMatch(/role="alert"[^>]*data-testid="goto-epoch-error"/);
+  });
+});
+
+describe('@bessel/ui CameraFrameControls (B9)', () => {
+  const base = {
+    frame: 'J2000',
+    onFrame: () => {},
+    onDolly: () => {},
+    onCrane: () => {},
+  };
+
+  it('keeps the frame select operable and hints the Frame-mode coupling', () => {
+    const off = html(createElement(CameraFrameControls, { ...base, frameMode: false }));
+    expect(off).toContain('data-testid="camera-frame-select"');
+    // The select must NOT be disabled (regression guard against the old dead control).
+    expect(off).not.toMatch(/data-testid="camera-frame-select"[^>]*disabled/);
+    expect(off).toContain('Picks Frame mode');
+    const on = html(createElement(CameraFrameControls, { ...base, frameMode: true }));
+    expect(on).toContain('Frame locked');
   });
 });

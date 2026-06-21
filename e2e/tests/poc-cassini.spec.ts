@@ -1,5 +1,5 @@
 import { test, expect, type Locator } from '@playwright/test';
-import { loadCassiniSample } from './sample.ts';
+import { loadCassiniSample, expandCamera } from './sample.ts';
 
 // Phase 0 acceptance (SPEC Section 9): load the Cassini sample mission, assert the
 // trajectory renders (a non-empty WebGL frame), and assert that advancing the
@@ -57,6 +57,8 @@ test('poc-cassini renders the trajectory and the timeline changes the frame', as
   await page.getByTestId('layers-popover').click();
   await expect(page.getByTestId('setting-orbits')).toBeChecked();
   await page.getByTestId('layers-popover').click(); // close before using the canvas
+  // The view presets live in the collapsible Camera panel; expand it first.
+  await expandCamera(page);
   await expect(page.getByTestId('view-top-down')).toBeVisible();
   await page.getByTestId('view-top-down').click();
   await page.waitForTimeout(300);

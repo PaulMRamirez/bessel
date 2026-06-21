@@ -52,6 +52,16 @@ test('attitude is data-driven, annotations scrub, and the telemetry overlay rend
     .poll(async () => (await viewport.getAttribute('data-epoch')) ?? '', { timeout: 5_000 })
     .not.toBe(epochBefore);
 
+  // B8: the timeline shows the next upcoming event, and the go-to-epoch field jumps
+  // the clock to a typed epoch (parsed via SPICE).
+  await expect(page.getByTestId('next-event')).toBeVisible();
+  const epochAtMarker = await viewport.getAttribute('data-epoch');
+  await page.getByTestId('goto-epoch').fill('2004-06-25T00:00:00');
+  await page.getByTestId('goto-epoch').press('Enter');
+  await expect
+    .poll(async () => (await viewport.getAttribute('data-epoch')) ?? '', { timeout: 5_000 })
+    .not.toBe(epochAtMarker);
+
   // D3: the predicted-versus-actual overlay renders with the series, residual,
   // threshold, and a now-line. SVG primitives are asserted by attachment (a flat
   // polyline has a zero-height bounding box, which Playwright reports as hidden).

@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { test, expect } from '@playwright/test';
 import { frameStats } from './frame-stats.ts';
+import { expandCamera } from './sample.ts';
 
 // Cosmographia rendering/camera parity (Track B): three closing items, each
 // surfaced in the UI and asserted deterministically, with the axe a11y scan.
@@ -59,8 +60,10 @@ test('real imagery loads (mocked), camera locks to a SPICE frame, and dolly/cran
   const imageryFrame = await frameStats(viewport);
   expect(imageryFrame.nonBackground).toBeGreaterThan(200);
 
-  // (2) Lock the camera to an arbitrary SPICE reference frame. Switch to Frame
-  // mode, then pick IAU_EARTH; the viewport reflects the active mode.
+  // (2) Lock the camera to an arbitrary SPICE reference frame. The camera controls
+  // live in the collapsible Camera panel; expand it, switch to Frame mode, then pick
+  // IAU_EARTH; the viewport reflects the active mode.
+  await expandCamera(page);
   await page.getByTestId('camera-mode-frame').click();
   await expect(viewport).toHaveAttribute('data-cam-mode', 'frame');
   await page.getByTestId('camera-frame-select').selectOption('IAU_EARTH');

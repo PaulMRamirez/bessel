@@ -286,6 +286,12 @@ button[aria-pressed='true'] {
   gap: var(--space-2);
 }
 
+/* The class display above would otherwise override the [hidden] attribute the
+   collapsible PanelContainer sets, so a collapsed panel must re-assert display:none. */
+.bessel-panel-body[hidden] {
+  display: none;
+}
+
 .bessel-panel-title {
   font-size: 0.9rem;
   margin: 0 0 var(--space-1);
@@ -384,7 +390,7 @@ button[aria-pressed='true'] {
   justify-content: space-between;
   gap: var(--space-2);
   font-size: 0.78rem;
-  color: var(--text-2);
+  color: var(--text-1);
 }
 
 .bessel-frame-select select {
@@ -1016,6 +1022,56 @@ button[aria-pressed='true'] {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+}
+
+/* The Frame-mode/Lock-frame coupling hint (B9). */
+.bessel-frame-hint {
+  color: var(--text-1);
+  font-size: 0.7rem;
+}
+
+/* Co-located instrument layer toggles in the canvas view-controls (B11). */
+.bessel-viewcontrols__layers {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding-left: var(--space-2);
+  border-left: 1px solid var(--border);
+}
+
+/* Timeline enrichment (B8): visible marker labels, next-event readout, parse error. */
+.bessel-marker-group {
+  display: contents;
+}
+
+.bessel-marker-label {
+  position: absolute;
+  top: 14px;
+  transform: translateX(-50%);
+  max-width: 7rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  color: var(--text-1);
+  font-size: 0.65rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.bessel-next-event {
+  color: var(--text-1);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.bessel-goto-epoch {
+  width: 9rem;
+}
+
+.bessel-timeline-error {
+  color: #ff8a8a;
+  font-size: 0.75rem;
 }
 
 /* One-click sample mission chip and the load-from-URL field (B4). */

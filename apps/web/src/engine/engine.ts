@@ -965,6 +965,27 @@ export class BesselEngine {
     this.core?.clock.setEpoch(value);
   }
 
+  /** Jump the clock to a typed epoch, parsed via SPICE and clamped to the bounds.
+   *  Fails loudly: a bad string sets a typed timelineError and leaves the clock put. */
+  async goToEpoch(text: string): Promise<void> {
+    const e = this.core;
+    const trimmed = text.trim();
+    if (!e || !trimmed) return;
+    try {
+      const et = await e.spice.str2et(trimmed);
+      if (this.disposed) return;
+      const [lo, hi] = this.store.getState().bounds;
+      this.store.setState({ timelineError: null });
+      this.scrub(Math.max(lo, Math.min(hi, et)));
+    } catch (err) {
+      this.store.setState({
+        timelineError: `Could not parse epoch "${trimmed}": ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      });
+    }
+  }
+
   toggleTrack(): void {
     const next = !this.store.getState().track;
     this.store.setState({ track: next });

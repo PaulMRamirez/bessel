@@ -47,6 +47,8 @@ export interface AppState {
   analysisContext: AnalysisContext;
   /** True once the first-run welcome card has been dismissed or acted on (persisted). */
   welcomeSeen: boolean;
+  /** A loud go-to-epoch parse error to surface next to the field, or null. */
+  timelineError: string | null;
   // Camera and selection.
   focus: string;
   selection: readonly string[];
@@ -274,6 +276,7 @@ export const initialAppState: AppState = {
   analyzeTab: 'access',
   analysisContext: { spanSec: 86400, stepSec: 120, target: '', observer: '', frame: 'J2000' },
   welcomeSeen: false,
+  timelineError: null,
   // Default to a heliocentric whole-system view; a loaded mission recenters on
   // its own center body.
   focus: 'Sun',

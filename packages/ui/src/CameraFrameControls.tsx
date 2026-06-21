@@ -1,9 +1,10 @@
-// Camera reference-frame selector and the dolly/crane motion band. When the
-// camera is in 'frame' mode it locks its basis to a chosen SPICE frame (any
-// frame->J2000 rotation, e.g. IAU_EARTH or a mission frame), beyond the
-// orbit/sync/track set. The dolly/crane band exposes the richer Cosmographia
-// camera-motion verbs as click-and-hold buttons (also bound to keys R/F, T/G).
-// Presentational: the viewer wires each callback to the engine.
+// Camera reference-frame selector and the dolly/crane motion band. Selecting a frame
+// engages 'frame' camera mode (the viewer auto-switches), so the picker is always
+// operable rather than a dead control that needs Frame mode chosen first; it locks the
+// camera basis to a chosen SPICE frame (any frame->J2000 rotation, e.g. IAU_EARTH or a
+// mission frame), beyond the orbit/sync/track set. The dolly/crane band exposes the
+// richer Cosmographia camera-motion verbs as click-and-hold buttons (also bound to keys
+// R/F, T/G). Presentational: the viewer wires each callback to the engine.
 
 /** A handful of common SPICE frames offered in the picker; any string is valid. */
 export const COMMON_SPICE_FRAMES: readonly string[] = [
@@ -18,7 +19,7 @@ export const COMMON_SPICE_FRAMES: readonly string[] = [
 export interface CameraFrameControlsProps {
   /** The currently selected SPICE frame name (shown when frame mode is active). */
   readonly frame: string;
-  /** True when the 'frame' camera mode is active (enables the selector). */
+  /** True when the 'frame' camera mode is active (drives the inline hint). */
   readonly frameMode: boolean;
   readonly onFrame: (frame: string) => void;
   /** Dolly the camera along its view axis: forward > 0 approaches the focus. */
@@ -36,7 +37,6 @@ export function CameraFrameControls(props: CameraFrameControlsProps): JSX.Elemen
         <span>Lock frame</span>
         <select
           value={props.frame}
-          disabled={!props.frameMode}
           onChange={(e) => props.onFrame(e.target.value)}
           data-testid="camera-frame-select"
           aria-label="SPICE reference frame"
@@ -50,6 +50,9 @@ export function CameraFrameControls(props: CameraFrameControlsProps): JSX.Elemen
             </option>
           ))}
         </select>
+        <span className="bessel-frame-hint" data-testid="camera-frame-hint">
+          {props.frameMode ? 'Frame locked' : 'Picks Frame mode'}
+        </span>
       </label>
       <div className="bessel-view-modes" role="group" aria-label="Camera motion">
         <button

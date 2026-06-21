@@ -85,4 +85,23 @@ test.describe('Cassini instruments', () => {
     const stats = await colorStats(viewport);
     expect(stats.magenta).toBeGreaterThan(50);
   });
+
+  test('co-located FOV and Footprint toggles appear with instruments and stay in sync', async ({
+    page,
+  }) => {
+    // Hidden until instruments are shown.
+    await expect(page.getByTestId('toggle-fov')).toHaveCount(0);
+    await expect(page.getByTestId('toggle-footprint')).toHaveCount(0);
+
+    await page.getByTestId('toggle-instruments').click();
+    await expect(page.getByTestId('toggle-fov')).toBeVisible();
+    await expect(page.getByTestId('toggle-footprint')).toBeVisible();
+    await expect(page.getByTestId('toggle-fov')).toHaveAttribute('aria-pressed', 'true');
+
+    // The co-located pill drives the same setting as the Layers checkbox (one source).
+    await page.getByTestId('toggle-fov').click();
+    await expect(page.getByTestId('toggle-fov')).toHaveAttribute('aria-pressed', 'false');
+    await page.getByTestId('layers-popover').click();
+    await expect(page.getByTestId('setting-fov')).not.toBeChecked();
+  });
 });

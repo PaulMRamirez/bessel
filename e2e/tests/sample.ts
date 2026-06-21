@@ -19,6 +19,13 @@ export async function loadCassiniSample(page: Page): Promise<void> {
   await page.waitForTimeout(300);
 }
 
+// Expand the left-rail "Camera" panel (collapsed by default), where the view/frame/
+// dolly/crane controls now live. Safe to call repeatedly (it stays open once opened).
+export async function expandCamera(page: Page): Promise<void> {
+  const toggle = page.getByTestId('panel-camera').getByRole('button', { name: 'Camera' });
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+}
+
 // Open the consolidated Analyze dock to a given tab. The dock is a single toggle that
 // does NOT auto-dismiss, so open it only when closed (a second toggle would close it),
 // then select the tab (re-selecting an active tab is a safe no-op click).

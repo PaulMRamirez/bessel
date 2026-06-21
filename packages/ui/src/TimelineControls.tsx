@@ -2,10 +2,29 @@
 // event-marker annotations over the scrub track. Keyboard operable (native button,
 // input, and per-marker button semantics).
 
+import { useState } from 'react';
 import { markerFraction, type TimelineAnnotation } from '@bessel/timeline';
 
 /** The time system the displayed epoch is expressed in. */
 export type TimeSystem = 'UTC' | 'TDB';
+
+/** Plain-language gloss for a playback rate (mission seconds per wall-clock second). */
+export function humanizeRate(secPerSec: number): string {
+  const units: readonly (readonly [number, string])[] = [
+    [86400, 'day'],
+    [3600, 'hour'],
+    [60, 'min'],
+    [1, 'sec'],
+  ];
+  for (const [size, name] of units) {
+    if (secPerSec >= size) {
+      const n = secPerSec / size;
+      const q = Number.isInteger(n) ? String(n) : n.toFixed(1);
+      return `${q} ${name}${n === 1 ? '' : 's'}/sec`;
+    }
+  }
+  return `${secPerSec}x`;
+}
 
 export interface TimelineControlsProps {
   readonly playing: boolean;
@@ -17,10 +36,17 @@ export interface TimelineControlsProps {
   readonly max: number;
   readonly value: number;
   readonly annotations?: readonly TimelineAnnotation[];
+  /** The next upcoming event label + its T-minus (derived by the viewer), or null. */
+  readonly nextEventLabel?: string | null;
+  readonly nextEventTMinus?: string | null;
   readonly onPlayToggle: () => void;
   readonly onRateChange: (rate: number) => void;
   readonly onScrub: (et: number) => void;
   readonly onTimeSystemChange: (system: TimeSystem) => void;
+  /** Jump the clock to a typed epoch (parsed/validated by the engine). */
+  readonly onGoToEpoch?: (text: string) => void;
+  /** A loud parse error for the go-to-epoch field, or null. */
+  readonly goToEpochError?: string | null;
   readonly onAnnotationSelect?: (et: number) => void;
 }
 
@@ -29,6 +55,11 @@ const TIME_SYSTEMS: readonly TimeSystem[] = ['UTC', 'TDB'];
 
 export function TimelineControls(props: TimelineControlsProps): JSX.Element {
   const annotations = props.annotations ?? [];
+  const [goto, setGoto] = useState('');
+  const submitGoto = (): void => {
+    const t = goto.trim();
+    if (t) props.onGoToEpoch?.(t);
+  };
   return (
     <div className="bessel-timeline" role="group" aria-label="Timeline controls">
       <button type="button" onClick={props.onPlayToggle} aria-pressed={props.playing}>
@@ -43,7 +74,7 @@ export function TimelineControls(props: TimelineControlsProps): JSX.Element {
         >
           {RATES.map((r) => (
             <option key={r} value={r}>
-              {r}x
+              {r}x (~ {humanizeRate(r)})
             </option>
           ))}
         </select>
@@ -61,18 +92,25 @@ export function TimelineControls(props: TimelineControlsProps): JSX.Element {
         />
         {annotations.length > 0 && (
           <div className="bessel-markers" aria-label="Timeline events">
-            {annotations.map((a) => (
-              <button
-                key={a.id}
-                type="button"
-                className="bessel-marker"
-                style={{ left: `${markerFraction(a.et, props.min, props.max) * 100}%` }}
-                title={a.label}
-                aria-label={`Event: ${a.label}`}
-                data-testid={`marker-${a.id}`}
-                onClick={() => props.onAnnotationSelect?.(a.et)}
-              />
-            ))}
+            {annotations.map((a) => {
+              const left = `${markerFraction(a.et, props.min, props.max) * 100}%`;
+              return (
+                <span key={a.id} className="bessel-marker-group">
+                  <button
+                    type="button"
+                    className="bessel-marker"
+                    style={{ left }}
+                    title={a.label}
+                    aria-label={`Event: ${a.label}`}
+                    data-testid={`marker-${a.id}`}
+                    onClick={() => props.onAnnotationSelect?.(a.et)}
+                  />
+                  <span className="bessel-marker-label" style={{ left }} aria-hidden="true">
+                    {a.label}
+                  </span>
+                </span>
+              );
+            })}
           </div>
         )}
       </div>
@@ -98,6 +136,29 @@ export function TimelineControls(props: TimelineControlsProps): JSX.Element {
           </button>
         ))}
       </div>
+      <input
+        type="text"
+        className="bessel-goto-epoch"
+        value={goto}
+        placeholder={`Go to (${props.timeSystem})`}
+        aria-label={`Go to epoch (${props.timeSystem})`}
+        data-testid="goto-epoch"
+        onChange={(e) => setGoto(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') submitGoto();
+        }}
+        onBlur={submitGoto}
+      />
+      {props.goToEpochError ? (
+        <span role="alert" className="bessel-timeline-error" data-testid="goto-epoch-error">
+          {props.goToEpochError}
+        </span>
+      ) : null}
+      <span className="bessel-next-event" data-testid="next-event">
+        {props.nextEventLabel
+          ? `Next: ${props.nextEventLabel} T-${props.nextEventTMinus ?? ''}`
+          : 'No upcoming events'}
+      </span>
     </div>
   );
 }
