@@ -862,6 +862,24 @@ button[aria-pressed='true'] {
   padding: var(--space-2) var(--space-3);
 }
 
+/* Flatten the collapsible tool sections inside the Analysis tab so they read as
+   section dividers, not nested cards. */
+.bessel-analysis > .bessel-panel {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+}
+
+.bessel-analysis > .bessel-panel:last-of-type {
+  border-bottom: none;
+}
+
+.bessel-analysis > .bessel-panel > .bessel-panel-body {
+  padding-left: 0;
+  padding-right: 0;
+}
+
 /* One-click sample mission chip and the load-from-URL field (B4). */
 .bessel-loader-sample {
   font-size: 0.8rem;

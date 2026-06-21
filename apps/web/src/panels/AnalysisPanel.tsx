@@ -7,7 +7,13 @@
 
 import { useMemo, useState, type ReactNode } from 'react';
 import { Button } from '@bessel/selene-design';
-import { GroundTrackMap, IntervalTimeline, TimeSeriesChart, downloadBlob } from '@bessel/ui';
+import {
+  GroundTrackMap,
+  IntervalTimeline,
+  PanelContainer,
+  TimeSeriesChart,
+  downloadBlob,
+} from '@bessel/ui';
 import { seriesToCsv, intervalsToCsv } from '@bessel/interop';
 import type { BesselEngine } from '../engine/index.ts';
 import { useStore, type AppStore, type Series } from '../store/index.ts';
@@ -34,7 +40,7 @@ function Action(props: {
   variant?: 'primary' | 'secondary';
 }): JSX.Element {
   return (
-    <Button variant={props.variant ?? 'primary'} full testId={props.testId} onClick={props.onClick}>
+    <Button variant={props.variant ?? 'secondary'} full testId={props.testId} onClick={props.onClick}>
       {props.children}
     </Button>
   );
@@ -204,161 +210,168 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
         </label>
       </div>
 
-      {/* Lighting (eclipse umbra) */}
-      <Action onClick={() => void engine?.computeEclipse(span)} testId="compute-eclipse">
-        Compute eclipse
-      </Action>
-      <IntervalResult
-        intervals={eclipseUmbra}
-        span={eclipseSpan}
-        title="Umbra intervals"
-        label="Eclipse umbra"
-        resultTestId="eclipse-result"
-        timelineTestId="eclipse-timeline"
-        hint="Compute the spacecraft eclipse over the next day."
-        csv={{
-          testId: 'eclipse-csv',
-          filename: 'eclipse-umbra.csv',
-          build: (i) => intervalsToCsv(i, { meta: runMeta }),
-        }}
-      />
-
-      {/* Range time series */}
-      <Action onClick={() => void engine?.computeRange(targetSpan)} testId="compute-range">
-        Compute range
-      </Action>
-      <SeriesResult
-        series={rangeSeries}
-        resultTestId="range-result"
-        chartTestId="range-chart"
-        hint="Plot the spacecraft range over the next day."
-        csv={{
-          testId: 'range-csv',
-          filename: 'range.csv',
-          build: (s) => seriesToCsv(s.et, [s.value], ['range_km'], { meta: runMeta }),
-        }}
-      />
-
-      {/* Access windows + figure of merit */}
-      <Action onClick={() => void engine?.computeAccess(targetSpan)} testId="compute-access">
-        Compute access
-      </Action>
-      <IntervalResult
-        intervals={accessWindow}
-        span={accessSpan}
-        title={`${accessLabel} access`}
-        label={`${accessLabel} access`}
-        resultTestId="access-result"
-        timelineTestId="access-timeline"
-        hint="Find the spacecraft line-of-sight access to the Sun."
-        csv={{
-          testId: 'access-csv',
-          filename: 'access.csv',
-          build: (i) => intervalsToCsv(i, { meta: runMeta }),
-        }}
-        extra={
-          accessFom ? (
-            <p className="bessel-analysis-stat" data-testid="access-fom">
-              Coverage {fmt(accessFom.percentCoverage * 100, 1)}%, {accessFom.accessCount} access
-              {accessFom.accessCount === 1 ? '' : 'es'}, max gap {fmt(accessFom.maxGapSec / 60, 1)} min
-            </p>
-          ) : null
-        }
-      />
-
-      {/* Communications link budget */}
-      <Action onClick={() => void engine?.computeLinkBudget(span)} testId="compute-link">
-        Compute downlink Eb/N0
-      </Action>
-      <SeriesResult
-        series={linkSeries}
-        resultTestId="link-result"
-        chartTestId="link-chart"
-        hint="Plot the downlink Eb/N0 to a DSN station."
-      />
-
-      {/* Conjunction (closest approach + Pc) */}
-      <Action
-        onClick={() => void engine?.computeConjunction(secondary ? { secondary } : {})}
-        testId="compute-conjunction"
-      >
-        Compute closest approach
-      </Action>
-      <StatResult
-        show={!!conjunction}
-        resultTestId="conjunction-result"
-        hint="Closest approach and collision probability for the loaded pair."
-      >
-        {conjunction && (
-          <>
-            {conjunction.label}: miss {fmt(conjunction.missKm)} km at TCA {fmt(conjunction.tcaSec / 60, 1)} min,
-            rel speed {fmt(conjunction.relSpeedKmS, 3)} km/s, Pc {conjunction.pc.toExponential(2)}
-          </>
+      <PanelContainer title="Geometry" testId="analysis-section-geometry">
+        <Action variant="primary" onClick={() => void engine?.computeRange(targetSpan)} testId="compute-range">
+          Compute range
+        </Action>
+        <SeriesResult
+          series={rangeSeries}
+          resultTestId="range-result"
+          chartTestId="range-chart"
+          hint="Plot the spacecraft range over the next day."
+          csv={{
+            testId: 'range-csv',
+            filename: 'range.csv',
+            build: (s) => seriesToCsv(s.et, [s.value], ['range_km'], { meta: runMeta }),
+          }}
+        />
+        <Action onClick={() => void engine?.computeGroundTrack(span)} testId="compute-groundtrack">
+          Compute ground track
+        </Action>
+        {groundTrack ? (
+          <div data-testid="groundtrack-result">
+            <div className="bessel-panel-title">{groundTrack.label}</div>
+            <GroundTrackMap
+              lon={groundTrack.lon}
+              lat={groundTrack.lat}
+              label={groundTrack.label}
+              testId="ground-track"
+            />
+          </div>
+        ) : (
+          <p className="bessel-loader-hint">Project the sub-spacecraft point over the next day.</p>
         )}
-      </StatResult>
+      </PanelContainer>
 
-      {/* Constellation design */}
-      <Action onClick={() => engine?.computeConstellation()} testId="compute-constellation">
-        Design Walker constellation
-      </Action>
-      <StatResult
-        show={!!constellation}
-        resultTestId="constellation-result"
-        hint="Generate a Walker Delta constellation pattern."
-      >
-        {constellation && (
-          <>
-            Walker {constellation.pattern} {constellation.totalSats}/{constellation.planes}/1:
-            {' '}{constellation.perPlane} sats x {constellation.planes} planes at {fmt(constellation.altitudeKm, 0)} km,
-            {' '}{fmt(constellation.inclinationDeg, 0)} deg
-          </>
-        )}
-      </StatResult>
+      <PanelContainer title="Access & Coverage" testId="analysis-section-access">
+        <Action variant="primary" onClick={() => void engine?.computeAccess(targetSpan)} testId="compute-access">
+          Compute access
+        </Action>
+        <IntervalResult
+          intervals={accessWindow}
+          span={accessSpan}
+          title={`${accessLabel} access`}
+          label={`${accessLabel} access`}
+          resultTestId="access-result"
+          timelineTestId="access-timeline"
+          hint="Find the spacecraft line-of-sight access to the Sun."
+          csv={{
+            testId: 'access-csv',
+            filename: 'access.csv',
+            build: (i) => intervalsToCsv(i, { meta: runMeta }),
+          }}
+          extra={
+            accessFom ? (
+              <p className="bessel-analysis-stat" data-testid="access-fom">
+                Coverage {fmt(accessFom.percentCoverage * 100, 1)}%, {accessFom.accessCount} access
+                {accessFom.accessCount === 1 ? '' : 'es'}, max gap {fmt(accessFom.maxGapSec / 60, 1)} min
+              </p>
+            ) : null
+          }
+        />
+        <Action onClick={() => void engine?.computeEclipse(span)} testId="compute-eclipse">
+          Compute eclipse
+        </Action>
+        <IntervalResult
+          intervals={eclipseUmbra}
+          span={eclipseSpan}
+          title="Umbra intervals"
+          label="Eclipse umbra"
+          resultTestId="eclipse-result"
+          timelineTestId="eclipse-timeline"
+          hint="Compute the spacecraft eclipse over the next day."
+          csv={{
+            testId: 'eclipse-csv',
+            filename: 'eclipse-umbra.csv',
+            build: (i) => intervalsToCsv(i, { meta: runMeta }),
+          }}
+        />
+      </PanelContainer>
 
-      {/* Attitude slew profile */}
-      <Action onClick={() => void engine?.computeSlew()} testId="compute-slew">
-        Compute attitude slew
-      </Action>
-      <SeriesResult
-        series={slewSeries}
-        resultTestId="slew-result"
-        chartTestId="slew-chart"
-        hint="Eigen-axis slew from nadir to Sun pointing."
-      />
+      <PanelContainer title="Comms" testId="analysis-section-comms">
+        <Action variant="primary" onClick={() => void engine?.computeLinkBudget(span)} testId="compute-link">
+          Compute downlink Eb/N0
+        </Action>
+        <SeriesResult
+          series={linkSeries}
+          resultTestId="link-result"
+          chartTestId="link-chart"
+          hint="Plot the downlink Eb/N0 to a DSN station."
+        />
+      </PanelContainer>
 
-      {/* Maneuver design (Lambert transfer) */}
-      <Action onClick={() => void engine?.computeTransfer()} testId="compute-transfer">
-        Solve Lambert transfer
-      </Action>
-      <StatResult
-        show={!!transfer}
-        resultTestId="transfer-result"
-        hint="Lambert arc departure delta-v over a 2 h transfer."
-      >
-        {transfer && (
-          <>
-            {transfer.label}: delta-v {fmt(transfer.deltaVKmS, 4)} km/s over {fmt(transfer.tofHours, 1)} h
-          </>
-        )}
-      </StatResult>
+      <PanelContainer title="Conjunction" testId="analysis-section-conjunction">
+        <Action
+          variant="primary"
+          onClick={() => void engine?.computeConjunction(secondary ? { secondary } : {})}
+          testId="compute-conjunction"
+        >
+          Compute closest approach
+        </Action>
+        <StatResult
+          show={!!conjunction}
+          resultTestId="conjunction-result"
+          hint="Closest approach and collision probability for the loaded pair."
+        >
+          {conjunction && (
+            <>
+              {conjunction.label}: miss {fmt(conjunction.missKm)} km at TCA {fmt(conjunction.tcaSec / 60, 1)} min,
+              rel speed {fmt(conjunction.relSpeedKmS, 3)} km/s, Pc {conjunction.pc.toExponential(2)}
+            </>
+          )}
+        </StatResult>
+      </PanelContainer>
 
-      {/* 2D ground track */}
-      <Action onClick={() => void engine?.computeGroundTrack(span)} testId="compute-groundtrack">
-        Compute ground track
-      </Action>
-      {groundTrack ? (
-        <div data-testid="groundtrack-result">
-          <div className="bessel-panel-title">{groundTrack.label}</div>
-          <GroundTrackMap lon={groundTrack.lon} lat={groundTrack.lat} label={groundTrack.label} testId="ground-track" />
-        </div>
-      ) : (
-        <p className="bessel-loader-hint">Project the sub-spacecraft point over the next day.</p>
-      )}
+      <PanelContainer title="Constellation" testId="analysis-section-constellation">
+        <Action variant="primary" onClick={() => engine?.computeConstellation()} testId="compute-constellation">
+          Design Walker constellation
+        </Action>
+        <StatResult
+          show={!!constellation}
+          resultTestId="constellation-result"
+          hint="Generate a Walker Delta constellation pattern."
+        >
+          {constellation && (
+            <>
+              Walker {constellation.pattern} {constellation.totalSats}/{constellation.planes}/1:
+              {' '}{constellation.perPlane} sats x {constellation.planes} planes at {fmt(constellation.altitudeKm, 0)} km,
+              {' '}{fmt(constellation.inclinationDeg, 0)} deg
+            </>
+          )}
+        </StatResult>
+      </PanelContainer>
 
-      {/* Interop: export CCSDS OEM */}
-      <Action variant="secondary" onClick={() => void engine?.exportOem()} testId="export-oem">
-        Export CCSDS OEM
-      </Action>
+      <PanelContainer title="Maneuver" testId="analysis-section-maneuver">
+        <Action variant="primary" onClick={() => void engine?.computeSlew()} testId="compute-slew">
+          Compute attitude slew
+        </Action>
+        <SeriesResult
+          series={slewSeries}
+          resultTestId="slew-result"
+          chartTestId="slew-chart"
+          hint="Eigen-axis slew from nadir to Sun pointing."
+        />
+        <Action onClick={() => void engine?.computeTransfer()} testId="compute-transfer">
+          Solve Lambert transfer
+        </Action>
+        <StatResult
+          show={!!transfer}
+          resultTestId="transfer-result"
+          hint="Lambert arc departure delta-v over a 2 h transfer."
+        >
+          {transfer && (
+            <>
+              {transfer.label}: delta-v {fmt(transfer.deltaVKmS, 4)} km/s over {fmt(transfer.tofHours, 1)} h
+            </>
+          )}
+        </StatResult>
+      </PanelContainer>
+
+      <PanelContainer title="Export" testId="analysis-section-export">
+        <Action onClick={() => void engine?.exportOem()} testId="export-oem">
+          Export CCSDS OEM
+        </Action>
+      </PanelContainer>
     </div>
   );
 }
