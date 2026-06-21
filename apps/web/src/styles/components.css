@@ -273,8 +273,20 @@
   min-width: 120px;
 }
 
+/* The scrub input fills its (flex-grown) track wrapper; without this the range input
+   keeps its ~120px intrinsic width and leaves the rest of the track empty. */
+.bessel-scrub-track input[type='range'] {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
 .bessel-epoch {
   font-variant-numeric: tabular-nums;
+  /* The current epoch is the bar's primary readout: anchor it with size and weight. */
+  font-size: 1.02rem;
+  font-weight: 600;
+  color: var(--text-0);
   min-width: 11ch;
 }
 
