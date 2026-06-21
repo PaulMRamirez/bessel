@@ -1448,12 +1448,11 @@ export class BesselEngine {
     }
     this.store.setState({ objects: loaded.entries, loadedName: loaded.name, loadError: null });
 
-    // Cosmographia single-spacecraft catalogs update only the object list for now;
-    // a native catalog with a spacecraft time window re-renders the scene
-    // generically. A bodies-only catalog (no window to sample over) updates only
-    // the object list, never a loud error.
+    // A catalog (native or imported from Cosmographia) with a spacecraft time
+    // window re-renders the scene generically. A bodies-only catalog (no window
+    // to sample over) updates only the object list, never a loud error.
     const hasWindow = !!loaded.catalog?.spacecraft?.[0]?.arcs?.[0]?.timeRange;
-    if (loaded.kind === 'native' && loaded.catalog && hasWindow) {
+    if (loaded.catalog && hasWindow) {
       await this.renderNativeMission(loaded.catalog);
     }
   }

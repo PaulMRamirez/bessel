@@ -127,6 +127,12 @@ export interface Label {
   readonly show?: boolean;
 }
 
+/**
+ * Body mass, mirroring schema $defs.mass. The string form matches Cosmographia
+ * for round-trip; the object form is the Bessel-preferred shape.
+ */
+export type Mass = string | { readonly value: number; readonly unit: string };
+
 /** Trajectory plot styling, mirroring schema $defs.trajectoryPlot. */
 export interface TrajectoryPlot {
   readonly duration?: string | number;
@@ -210,6 +216,7 @@ export interface CatalogBody {
   readonly orientation?: Orientation;
   readonly geometry?: Geometry;
   readonly trajectoryPlot?: TrajectoryPlot;
+  readonly mass?: Mass;
 }
 
 export interface CatalogSpacecraft {
@@ -221,6 +228,7 @@ export interface CatalogSpacecraft {
   readonly orientation?: Orientation;
   readonly geometry?: Geometry;
   readonly trajectoryPlot?: TrajectoryPlot;
+  readonly mass?: Mass;
 }
 
 export interface FovStyle {

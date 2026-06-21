@@ -6,7 +6,7 @@
 import {
   CatalogError,
   parseBesselCatalog,
-  parseCosmographiaCatalog,
+  fromCosmographia,
   type BesselCatalog,
 } from '@bessel/catalog';
 import { SOLAR_SYSTEM } from '@bessel/scene';
@@ -36,11 +36,16 @@ export async function parseAnyCatalog(filename: string, text: string): Promise<L
   }
 
   if (isRecord(raw) && Array.isArray(raw['items'])) {
-    const sc = parseCosmographiaCatalog(raw);
+    // The full importer turns every item (bodies, spacecraft, geometry,
+    // rotationModel, instruments, observations) into a schema-valid native
+    // catalog, so a Cosmographia file now carries a `catalog` and reaches
+    // renderNativeMission exactly like a native one.
+    const catalog = await fromCosmographia(raw);
     return {
-      name: sc.name || filename,
+      name: catalog.name || filename,
       kind: 'cosmographia',
-      entries: [{ id: sc.name, name: sc.name, kind: 'spacecraft' }],
+      entries: nativeEntries(catalog),
+      catalog,
     };
   }
 
