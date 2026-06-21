@@ -163,6 +163,10 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
     [epochLabel, timeSystem, useShared, ctx.frame, effSpanSec, effStepSec, effTarget, secondary],
   );
 
+  // A scalar readout exports as a quantity/value table with the shared run metadata.
+  const scalarCsv = (rows: readonly (readonly (string | number)[])[]): string =>
+    tableToCsv(['quantity', 'value'], rows, { meta: runMeta });
+
   const eclipseUmbra = useStore(store, (s) => s.eclipseUmbra);
   const eclipseSpan = useStore(store, (s) => s.eclipseSpan);
   const rangeSeries = useStore(store, (s) => s.rangeSeries);
@@ -443,19 +447,15 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
                   testId: 'conjunction-csv',
                   filename: 'conjunction.csv',
                   build: () =>
-                    tableToCsv(
-                      ['quantity', 'value'],
-                      [
-                        ['pair', conjunction.label],
-                        ['miss_km', conjunction.missKm],
-                        ['tca_s', conjunction.tcaSec],
-                        ['rel_speed_km_s', conjunction.relSpeedKmS],
-                        ['pc', conjunction.pc],
-                        ['sigma_km', conjunction.sigmaKm],
-                        ['hard_body_radius_km', conjunction.radiusKm],
-                      ],
-                      { meta: runMeta },
-                    ),
+                    scalarCsv([
+                      ['pair', conjunction.label],
+                      ['miss_km', conjunction.missKm],
+                      ['tca_s', conjunction.tcaSec],
+                      ['rel_speed_km_s', conjunction.relSpeedKmS],
+                      ['pc', conjunction.pc],
+                      ['sigma_km', conjunction.sigmaKm],
+                      ['hard_body_radius_km', conjunction.radiusKm],
+                    ]),
                 }
               : undefined
           }
@@ -497,18 +497,15 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
                   testId: 'constellation-csv',
                   filename: 'constellation.csv',
                   build: () =>
-                    tableToCsv(
-                      ['quantity', 'value'],
-                      [
-                        ['pattern', constellation.pattern],
-                        ['total_sats', constellation.totalSats],
-                        ['planes', constellation.planes],
-                        ['phasing', constellation.phasing],
-                        ['per_plane', constellation.perPlane],
-                        ['inclination_deg', constellation.inclinationDeg],
-                        ['altitude_km', constellation.altitudeKm],
-                      ],
-                    ),
+                    scalarCsv([
+                      ['pattern', constellation.pattern],
+                      ['total_sats', constellation.totalSats],
+                      ['planes', constellation.planes],
+                      ['phasing', constellation.phasing],
+                      ['per_plane', constellation.perPlane],
+                      ['inclination_deg', constellation.inclinationDeg],
+                      ['altitude_km', constellation.altitudeKm],
+                    ]),
                 }
               : undefined
           }
@@ -570,15 +567,11 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
                   testId: 'transfer-csv',
                   filename: 'transfer.csv',
                   build: () =>
-                    tableToCsv(
-                      ['quantity', 'value'],
-                      [
-                        ['arc', transfer.label],
-                        ['delta_v_km_s', transfer.deltaVKmS],
-                        ['tof_hours', transfer.tofHours],
-                      ],
-                      { meta: runMeta },
-                    ),
+                    scalarCsv([
+                      ['arc', transfer.label],
+                      ['delta_v_km_s', transfer.deltaVKmS],
+                      ['tof_hours', transfer.tofHours],
+                    ]),
                 }
               : undefined
           }
