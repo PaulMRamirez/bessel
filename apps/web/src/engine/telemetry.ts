@@ -4,6 +4,7 @@
 
 import type { SpiceEngine } from '@bessel/spice';
 import { computeReadouts } from '../readouts.ts';
+import { computeBodyState } from '../body-state.ts';
 import type { AppStore } from '../store/index.ts';
 
 export function pushEpochLabel(
@@ -36,5 +37,27 @@ export function pushReadouts(
   if (!observerId) return;
   void computeReadouts(spice, focusName, focusName, et, observerId, bodyFrames).then((r) => {
     if (!isDisposed()) store.setState({ readouts: r });
+  });
+}
+
+export function pushBodyState(
+  spice: SpiceEngine,
+  store: AppStore,
+  target: string,
+  center: string,
+  frame: string,
+  et: number,
+  mu: number | null,
+  isDisposed: () => boolean,
+): void {
+  // State vectors and osculating elements for the focused body about its center.
+  // With no central GM (an unknown body) there is no orbit to report, so the panel
+  // stays n/a rather than computing elements from a guessed mu.
+  if (mu === null) {
+    if (!isDisposed()) store.setState({ bodyState: null });
+    return;
+  }
+  void computeBodyState(spice, target, center, frame, et, mu).then((s) => {
+    if (!isDisposed()) store.setState({ bodyState: s });
   });
 }

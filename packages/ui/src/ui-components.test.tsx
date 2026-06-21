@@ -5,6 +5,7 @@ import { CatalogLoader } from './CatalogLoader.tsx';
 import { LiveGeometryReadout } from './LiveGeometryReadout.tsx';
 import { ObjectBrowser } from './ObjectBrowser.tsx';
 import { ReadoutPanel } from './ReadoutPanel.tsx';
+import { StateVectorPanel, type BodyState } from './StateVectorPanel.tsx';
 import { SettingsPanel } from './SettingsPanel.tsx';
 import { TimelineControls, humanizeRate } from './TimelineControls.tsx';
 import { CameraFrameControls } from './CameraFrameControls.tsx';
@@ -81,6 +82,55 @@ describe('@bessel/ui ReadoutPanel', () => {
     expect(out).toContain('42.3 deg');
     expect(out).toContain('n/a');
     expect(out).toContain('aria-label="Geometry readouts for Saturn"');
+  });
+});
+
+describe('@bessel/ui StateVectorPanel', () => {
+  const state: BodyState = {
+    target: 'Cassini',
+    center: 'Saturn',
+    r: [1000.5, -2000.25, 300],
+    v: [1.5, -2.25, 0.5],
+    semiMajorKm: 120000,
+    ecc: 0.3,
+    incDeg: 28.5,
+    raanDeg: 120,
+    argpDeg: 45,
+    trueAnomalyDeg: 90,
+  };
+
+  it('renders r/v vectors, elements, the frame select, and a copy button', () => {
+    const out = html(
+      createElement(StateVectorPanel, {
+        target: 'Cassini',
+        state,
+        frame: 'J2000',
+        onFrameChange: () => {},
+      }),
+    );
+    expect(out).toContain('data-testid="state-r"');
+    expect(out).toContain('[1000.500, -2000.250, 300.000] km');
+    expect(out).toContain('data-testid="state-v"');
+    expect(out).toContain('120,000 km'); // semi-major
+    expect(out).toContain('28.50 deg'); // inclination
+    expect(out).toContain('data-testid="state-copy"');
+    // The selected frame is reflected in the option set.
+    expect(out).toContain('data-testid="state-frame-select"');
+  });
+
+  it('carries a non-standard frame into the option list', () => {
+    const out = html(
+      createElement(StateVectorPanel, { target: 'Cassini', state, frame: 'IAU_TITAN', onFrameChange: () => {} }),
+    );
+    expect(out).toContain('value="IAU_TITAN"');
+  });
+
+  it('shows n/a and no copy button when the state is null', () => {
+    const out = html(
+      createElement(StateVectorPanel, { target: 'Cassini', state: null, frame: 'J2000', onFrameChange: () => {} }),
+    );
+    expect(out).toContain('data-testid="state-empty"');
+    expect(out).not.toContain('data-testid="state-copy"');
   });
 });
 

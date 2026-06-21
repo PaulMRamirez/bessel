@@ -17,6 +17,7 @@ import {
   KeyboardHelp,
   LiveGeometryReadout,
   MeasurePanel,
+  StateVectorPanel,
   ObjectBrowser,
   ObjectInspector,
   OpsPanel,
@@ -157,6 +158,8 @@ export function BesselViewer(): JSX.Element {
   const settings = useStore(store, (s) => s.settings);
   const visibility = useStore(store, (s) => s.visibility);
   const readouts = useStore(store, (s) => s.readouts);
+  const bodyState = useStore(store, (s) => s.bodyState);
+  const stateFrame = useStore(store, (s) => s.stateFrame);
   const helpOpen = useStore(store, (s) => s.helpOpen);
   const recording = useStore(store, (s) => s.recording);
   const theme = useStore(store, (s) => s.theme);
@@ -503,6 +506,12 @@ export function BesselViewer(): JSX.Element {
             distanceKm={measurement?.distanceKm ?? null}
             relativeSpeedKmS={measurement?.relativeSpeedKmS ?? null}
             angleDeg={measurement?.angleDeg ?? null}
+          />
+          <StateVectorPanel
+            target={focus}
+            state={bodyState}
+            frame={stateFrame}
+            onFrameChange={(f) => engine?.setStateFrame(f)}
           />
         </aside>
       ) : null}

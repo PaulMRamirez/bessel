@@ -73,7 +73,8 @@ function anglesClose(a: number | null, b: number | null): boolean {
   if (a === null || b === null) return a === b;
   return Math.abs(a - b) < 0.05;
 }
-import { pushEpochLabel, pushReadouts } from './telemetry.ts';
+import { pushEpochLabel, pushReadouts, pushBodyState } from './telemetry.ts';
+import { centerMu } from './center-mu.ts';
 import { RATE_STEPS } from './constants.ts';
 
 /** IAU body-fixed frame name for a body, for sync-orbit (e.g. Earth -> IAU_EARTH). */
@@ -306,6 +307,13 @@ export class BesselEngine {
       const focus = e.scene.focusBody;
       const observer = focus === e.identity.spacecraftName ? null : (e.identity.spacecraftId ?? null);
       pushReadouts(e.spice, this.store, focus, observer, now, e.bodyFrames, this.isDisposed);
+      // State vectors and osculating elements: the focused body about its center
+      // (the Sun when the focus is itself the mission center), in the chosen frame.
+      const center = focus === e.identity.centerBody ? 'Sun' : e.identity.centerBody;
+      const frame = this.store.getState().stateFrame;
+      void centerMu(e, center).then((mu) => {
+        if (!this.disposed) pushBodyState(e.spice, this.store, focus, center, frame, now, mu, this.isDisposed);
+      });
       this.updateMeasurement(now);
     }
     // Mock telemetry: emit a synthetic "actual" near the predicted position and
@@ -1137,6 +1145,13 @@ export class BesselEngine {
     this.store.setState({ timeSystem: system });
     const e = this.core;
     if (e) pushEpochLabel(e.spice, this.store, e.clock.state.et, this.isDisposed);
+  }
+
+  /** Set the SPICE frame the State panel reports r/v and elements in. The next
+   *  readout tick recomputes; clear the stale state so the panel does not flash an
+   *  old frame's numbers under the new label. */
+  setStateFrame(frame: string): void {
+    this.store.setState({ stateFrame: frame, bodyState: null });
   }
 
   /** Open or close the consolidated Analyze dock (it does not auto-dismiss). */

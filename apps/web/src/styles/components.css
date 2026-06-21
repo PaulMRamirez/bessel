@@ -316,6 +316,36 @@ button[aria-pressed='true'] {
   font-variant-numeric: tabular-nums;
 }
 
+/* State panel: shares the readouts dl grid, with a header row carrying the frame select. */
+.bessel-statevec dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.15rem var(--space-2);
+  margin: 0 0 var(--space-1);
+}
+
+.bessel-statevec dt {
+  color: var(--text-1);
+}
+
+.bessel-statevec dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.bessel-statevec-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.bessel-statevec-empty {
+  margin: 0;
+  color: var(--text-1);
+}
+
 .bessel-settings {
   display: flex;
   flex-direction: column;
@@ -1639,6 +1669,7 @@ button[aria-pressed='true'] {
    app's existing numeric surfaces (which already carry tabular-nums). */
 .bessel-epoch,
 .bessel-readouts dd,
+.bessel-statevec dd,
 .bessel-inspector-row dd,
 .bessel-measure-value,
 .bessel-telemetry-readout,

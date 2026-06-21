@@ -3,7 +3,7 @@
 // mirror refs) into one object that both React (via useStore) and the imperative
 // BesselEngine (via getState/setState) share.
 
-import type { CatalogEntry, Readouts, TimeSystem, VisualizationSettings } from '@bessel/ui';
+import type { BodyState, CatalogEntry, Readouts, TimeSystem, VisualizationSettings } from '@bessel/ui';
 import type { PredictedVsActual } from '@bessel/state';
 import type { TimelineAnnotation } from '@bessel/timeline';
 import { DEFAULT_OBJECT_ENTRIES } from '../catalog-load.ts';
@@ -126,6 +126,10 @@ export interface AppState {
   visibility: Readonly<Record<string, boolean>>;
   // Readouts and chrome.
   readouts: Readouts;
+  // State vectors and osculating elements for the focused body (null when n/a), in
+  // the selected SPICE frame.
+  bodyState: BodyState | null;
+  stateFrame: string;
   helpOpen: boolean;
   recording: boolean;
   // Theme: persisted to the document via data-theme.
@@ -350,6 +354,8 @@ export const initialAppState: AppState = {
     incidenceDeg: null,
     emissionDeg: null,
   },
+  bodyState: null,
+  stateFrame: 'J2000',
   helpOpen: false,
   recording: false,
   theme: 'dark',
