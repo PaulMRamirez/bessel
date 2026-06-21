@@ -42,6 +42,7 @@ import type {
 import type { SpiceEngine } from '@bessel/spice';
 import type { Object3D } from 'three';
 import brightStars from './assets/bright-stars.json';
+import { buildBodyFrameMap, resolveBodyFrame } from './readouts.ts';
 import { sampleEphemeris, positionAt, trajectoryOf, type EphemerisTable } from './sampler.ts';
 import { missionWindow } from './mission/duration.ts';
 import { STEPS, FOCUS_DISTANCE, DEFAULT_FOCUS_DISTANCE } from './engine/constants.ts';
@@ -97,6 +98,9 @@ export interface MissionScene {
   readonly spacecraftModel?: Object3D | null;
   /** The first catalog instrument, resolved, or null if the mission has none. */
   readonly instrument?: InstrumentDescriptor | null;
+  /** Body-name/id -> declared body-fixed frame, for illumination readouts and the
+   *  instrument target frame. Empty when no body declares a Spice orientation. */
+  readonly bodyFrames: ReadonlyMap<string, string>;
 }
 
 const INNER_BY_NAME = new Map(SOLAR_SYSTEM.map((p) => [p.name.toLowerCase(), p]));
@@ -398,7 +402,10 @@ export async function buildCatalogMissionScene(
   });
 
   const spacecraftModel = spacecraft ? await loadMeshModel(spacecraft) : null;
-  const instrument = resolveInstrument(catalog, spacecraft, centerBody, bodies);
+  // One source of truth for body-fixed frames: illumination readouts and the
+  // instrument target frame both resolve through this map.
+  const bodyFrames = buildBodyFrameMap(catalog);
+  const instrument = resolveInstrument(catalog, spacecraft, centerBody, bodies, bodyFrames);
   const attitude = await resolveAttitude(spice, spacecraft, et0);
   return {
     spec,
@@ -412,6 +419,7 @@ export async function buildCatalogMissionScene(
     },
     spacecraftModel,
     instrument,
+    bodyFrames,
   };
 }
 
@@ -573,18 +581,16 @@ function resolveInstrument(
   spacecraft: CatalogSpacecraft | null,
   centerBody: string,
   bodies: readonly PlanetDef[],
+  bodyFrames: ReadonlyMap<string, string>,
 ): InstrumentDescriptor | null {
   const inst: CatalogInstrument | undefined = catalog.instruments?.[0];
   if (!inst || !spacecraft) return null;
   const sensorId = Number(inst.sensor);
   const targetId = inst.targets[0];
   if (!Number.isFinite(sensorId) || !targetId) return null;
-  // Prefer the center body's declared orientation frame, else the IAU convention.
-  const centerCat = (catalog.bodies ?? []).find((b) => (b.name ?? b.id) === centerBody);
-  const targetFrame =
-    centerCat?.orientation?.type === 'Spice' && centerCat.orientation.frame
-      ? centerCat.orientation.frame
-      : `IAU_${centerBody.toUpperCase()}`;
+  // Same source of truth as the illumination readouts: the declared body-fixed
+  // frame, else the IAU convention (never null here since centerBody is never the Sun).
+  const targetFrame = resolveBodyFrame(centerBody, bodyFrames) ?? `IAU_${centerBody.toUpperCase()}`;
   void bodies;
   return { sensorId, observerId: spacecraft.id, targetId, targetFrame, anchorName: centerBody };
 }

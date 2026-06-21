@@ -42,6 +42,9 @@ export interface EngineCore {
   // The active mission's spacecraft and center body. Mutable so loading a new
   // catalog re-points the frame loop (track, FOV, footprint) without a hardcode.
   identity: MissionIdentity;
+  // Body-name/id -> declared body-fixed frame, for illumination readouts. Mutable
+  // so loading a new catalog re-points the frames; reset to empty on unload.
+  bodyFrames: ReadonlyMap<string, string>;
 }
 
 /** The neutral boot scene: the inner solar system, no spacecraft or instrument. */
@@ -87,6 +90,7 @@ export async function bootScene(
     storage: platform.storage,
     fs: platform.fs,
     identity: mission.identity,
+    bodyFrames: mission.bodyFrames,
   };
 }
 

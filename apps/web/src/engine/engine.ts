@@ -305,7 +305,7 @@ export class BesselEngine {
       this.readoutAccum = 0;
       const focus = e.scene.focusBody;
       const observer = focus === e.identity.spacecraftName ? null : (e.identity.spacecraftId ?? null);
-      pushReadouts(e.spice, this.store, focus, observer, now, this.isDisposed);
+      pushReadouts(e.spice, this.store, focus, observer, now, e.bodyFrames, this.isDisposed);
       this.updateMeasurement(now);
     }
     // Mock telemetry: emit a synthetic "actual" near the predicted position and
@@ -1348,6 +1348,7 @@ export class BesselEngine {
       // Swap the live mission state the frame loop reads each tick.
       e.table = mission.table;
       e.identity = mission.identity;
+      e.bodyFrames = mission.bodyFrames;
       e.instrument = await loadInstrument(e.spice, mission.instrument ?? null);
       this.startTelemetry();
       const [et0, et1] = mission.window;
@@ -1399,6 +1400,8 @@ export class BesselEngine {
     if (e) {
       e.scene.reset();
       e.identity = { ...e.identity, spacecraftName: null };
+      // Drop the unloaded mission's frames so they cannot leak into the neutral scene.
+      e.bodyFrames = new Map();
     }
     this.store.setState({
       objects: [...DEFAULT_OBJECT_ENTRIES],

@@ -27,13 +27,14 @@ export function pushReadouts(
   focusName: string,
   observerId: string | null,
   et: number,
+  bodyFrames: ReadonlyMap<string, string>,
   isDisposed: () => boolean,
 ): void {
   // Geometry readouts for the focused body, relative to the mission spacecraft.
   // With no spacecraft observer (a neutral scene) there is nothing to measure
   // from, so the readouts stay n/a rather than showing a wrong value.
   if (!observerId) return;
-  void computeReadouts(spice, focusName, focusName, et, observerId).then((r) => {
+  void computeReadouts(spice, focusName, focusName, et, observerId, bodyFrames).then((r) => {
     if (!isDisposed()) store.setState({ readouts: r });
   });
 }

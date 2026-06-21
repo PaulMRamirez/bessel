@@ -4,22 +4,40 @@
 // bodies that have one and falls back to nulls otherwise (no silent wrong values).
 import type { Readouts } from '@bessel/ui';
 import type { SpiceEngine } from '@bessel/spice';
+import type { BesselCatalog } from '@bessel/catalog';
 
 const RAD2DEG = 180 / Math.PI;
 
-/** Body-fixed frame for a body name, or null when none is expected. */
-function bodyFrame(name: string): string | null {
-  // The Sun is the light source: illumination angles on it are degenerate, so it
-  // is omitted and its phase/incidence/emission readouts stay n/a.
-  const frames: Record<string, string> = {
-    Saturn: 'IAU_SATURN',
-    Earth: 'IAU_EARTH',
-    Mars: 'IAU_MARS',
-    Jupiter: 'IAU_JUPITER',
-    Venus: 'IAU_VENUS',
-    Mercury: 'IAU_MERCURY',
-  };
-  return frames[name] ?? null;
+/** Build a body-name/id -> declared body-fixed frame map from a catalog's bodies.
+ *  Only bodies that declare a Spice orientation frame contribute; this is the same
+ *  field generic-mission.ts uses to orient rings and the instrument target frame. */
+export function buildBodyFrameMap(catalog: BesselCatalog): ReadonlyMap<string, string> {
+  const map = new Map<string, string>();
+  for (const b of catalog.bodies ?? []) {
+    if (b.orientation?.type === 'Spice' && b.orientation.frame) {
+      const frame = b.orientation.frame;
+      if (b.name) map.set(b.name, frame);
+      map.set(b.id, frame);
+    }
+  }
+  return map;
+}
+
+/** Body-fixed frame for a body: the catalog-declared frame, else the IAU_<NAME>
+ *  convention; null for the Sun (illumination there is degenerate). The returned
+ *  frame is a candidate only: computeReadouts still fails loud to n/a if SPICE
+ *  cannot resolve it against the loaded kernels. */
+export function resolveBodyFrame(
+  name: string,
+  bodyFrames?: ReadonlyMap<string, string>,
+): string | null {
+  // The Sun is the light source: illumination angles on it are degenerate.
+  if (name.toLowerCase() === 'sun') return null;
+  const declared = bodyFrames?.get(name);
+  if (declared) return declared;
+  // Generic IAU convention: "Enceladus" -> "IAU_ENCELADUS"; an unknown body simply
+  // fails loud to n/a if no such frame is furnished in the loaded kernels.
+  return `IAU_${name.trim().toUpperCase().replace(/\s+/g, '_')}`;
 }
 
 export async function computeReadouts(
@@ -28,6 +46,7 @@ export async function computeReadouts(
   targetId: string,
   et: number,
   observer: string,
+  bodyFrames?: ReadonlyMap<string, string>,
 ): Promise<Readouts> {
   const pos = await spice.spkpos(targetName, et, 'J2000', 'NONE', observer).catch(() => null);
   const rangeKm = pos ? Math.hypot(pos.position.x, pos.position.y, pos.position.z) : null;
@@ -46,7 +65,7 @@ export async function computeReadouts(
   let phaseDeg: number | null = null;
   let incidenceDeg: number | null = null;
   let emissionDeg: number | null = null;
-  const frame = bodyFrame(targetName);
+  const frame = resolveBodyFrame(targetName, bodyFrames);
   if (frame) {
     try {
       const sub = await spice.subpnt('NEAR POINT/ELLIPSOID', targetName, et, frame, 'NONE', observer);
