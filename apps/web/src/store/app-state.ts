@@ -91,6 +91,8 @@ export interface AppState {
   fovResult: IntervalAnalysisResult | null;
   /** Downlink Eb/N0 (dB) time series (spacecraft to Earth) from the last link run. */
   linkSeries: Series | null;
+  /** The radio parameters the last link run used, for a reproducible CSV export. */
+  linkParams: LinkBudgetParams | null;
   /** Closest-approach + collision-probability summary from the last conjunction run. */
   conjunction: ConjunctionResult | null;
   /** Walker constellation summary from the last coverage/constellation run. */
@@ -187,7 +189,19 @@ export interface ConjunctionResult {
   readonly relSpeedKmS: number;
   /** 2D probability of collision under an assumed covariance and hard-body radius. */
   readonly pc: number;
+  /** Per-axis position sigma (km) the Pc was computed against, for a faithful export. */
+  readonly sigmaKm: number;
+  /** Combined hard-body radius (km) the Pc was computed against. */
+  readonly radiusKm: number;
   readonly label: string;
+}
+
+/** The downlink-radio parameters a link-budget run used, kept so the CSV records them. */
+export interface LinkBudgetParams {
+  readonly eirpDbW: number;
+  readonly freqHz: number;
+  readonly gOverTDbK: number;
+  readonly dataRateBps: number;
 }
 
 export interface ConstellationResult {
@@ -195,6 +209,8 @@ export interface ConstellationResult {
   readonly planes: number;
   readonly perPlane: number;
   readonly pattern: 'delta' | 'star';
+  /** Inter-plane phasing factor F of the Walker T/P/F pattern. */
+  readonly phasing: number;
   /** Inclination (deg) and altitude (km) of the generated Walker pattern. */
   readonly inclinationDeg: number;
   readonly altitudeKm: number;
@@ -209,6 +225,8 @@ export interface TransferResult {
 }
 
 export interface GroundTrack {
+  /** Sample epochs (ET seconds), aligned to lon/lat, for time-stamped export. */
+  readonly et: Float64Array;
   /** Sub-spacecraft longitude and latitude samples (radians). */
   readonly lon: Float64Array;
   readonly lat: Float64Array;
@@ -330,6 +348,7 @@ export const initialAppState: AppState = {
   accessResult: null,
   fovResult: null,
   linkSeries: null,
+  linkParams: null,
   conjunction: null,
   constellation: null,
   slewSeries: null,

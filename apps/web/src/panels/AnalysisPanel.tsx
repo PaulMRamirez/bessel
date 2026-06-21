@@ -8,7 +8,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Button } from '@bessel/selene-design';
 import { GroundTrackMap, PanelContainer } from '@bessel/ui';
-import { seriesToCsv, intervalsToCsv } from '@bessel/interop';
+import { seriesToCsv, intervalsToCsv, tableToCsv } from '@bessel/interop';
 import type { BesselEngine } from '../engine/index.ts';
 import {
   useStore,
@@ -16,9 +16,41 @@ import {
   type AppStore,
   type RunStatus,
   type AccessFom,
+  type LinkBudgetParams,
 } from '../store/index.ts';
-import { IntervalResult, SeriesResult, StatResult } from './analysis-result.tsx';
+import { IntervalResult, ResultCsv, SeriesResult, StatResult } from './analysis-result.tsx';
+import {
+  LinkParamsForm,
+  ConjunctionParamsForm,
+  ConstellationParamsForm,
+  SlewParamsForm,
+  isValidWalker,
+  DEFAULT_LINK_PARAMS,
+  DEFAULT_CONJUNCTION_PARAMS,
+  DEFAULT_CONSTELLATION_PARAMS,
+  DEFAULT_SLEW_PARAMS,
+  type LinkParams,
+  type ConjunctionParams,
+  type ConstellationFormParams,
+  type SlewFormParams,
+} from './analysis-tool-forms.tsx';
 import { RunStatusNote } from './RunStatus.tsx';
+
+const RAD2DEG = 180 / Math.PI;
+
+/** Comment-preamble lines recording the radio parameters a link run used, so the
+ *  exported Eb/N0 series is reproducible. Empty when no run has stored params. */
+function linkParamsPreamble(p: LinkBudgetParams | null): string {
+  if (!p) return '';
+  return (
+    [
+      `# link_eirp_dBW: ${p.eirpDbW}`,
+      `# link_freq_GHz: ${p.freqHz / 1e9}`,
+      `# link_g_over_t_dBK: ${p.gOverTDbK}`,
+      `# link_data_rate_bps: ${p.dataRateBps}`,
+    ].join('\n') + '\n#\n'
+  );
+}
 
 export interface AnalysisPanelProps {
   readonly engine: BesselEngine | null;
@@ -96,6 +128,17 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
   const [target, setTarget] = useState('');
   const [secondary, setSecondary] = useState('');
 
+  // Per-tool parameters for the four configurable tools; default to the prior demo values.
+  const [link, setLink] = useState<LinkParams>(DEFAULT_LINK_PARAMS);
+  const [conj, setConj] = useState<ConjunctionParams>(DEFAULT_CONJUNCTION_PARAMS);
+  const [constellationParams, setConstellationParams] =
+    useState<ConstellationFormParams>(DEFAULT_CONSTELLATION_PARAMS);
+  const [slew, setSlew] = useState<SlewFormParams>(DEFAULT_SLEW_PARAMS);
+
+  // Gate the constellation run on a buildable T/P so a valid-looking pair that does not
+  // divide cannot fail silently inside walkerConstellation.
+  const constellationValid = isValidWalker(constellationParams.totalSats, constellationParams.planes);
+
   const effSpanSec = useShared ? ctx.spanSec : Math.max(60, spanDays * 86400);
   const effStepSec = useShared ? ctx.stepSec : Math.max(1, stepSec);
   const effTarget = useShared ? ctx.target : target;
@@ -120,6 +163,10 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
     [epochLabel, timeSystem, useShared, ctx.frame, effSpanSec, effStepSec, effTarget, secondary],
   );
 
+  // A scalar readout exports as a quantity/value table with the shared run metadata.
+  const scalarCsv = (rows: readonly (readonly (string | number)[])[]): string =>
+    tableToCsv(['quantity', 'value'], rows, { meta: runMeta });
+
   const eclipseUmbra = useStore(store, (s) => s.eclipseUmbra);
   const eclipseSpan = useStore(store, (s) => s.eclipseSpan);
   const rangeSeries = useStore(store, (s) => s.rangeSeries);
@@ -127,6 +174,7 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
   const fovResult = useStore(store, (s) => s.fovResult);
   const fovOk = useStore(store, (s) => s.fovOk);
   const linkSeries = useStore(store, (s) => s.linkSeries);
+  const linkParams = useStore(store, (s) => s.linkParams);
   const conjunction = useStore(store, (s) => s.conjunction);
   const constellation = useStore(store, (s) => s.constellation);
   const slewSeries = useStore(store, (s) => s.slewSeries);
@@ -243,6 +291,21 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
               label={groundTrack.label}
               testId="ground-track"
             />
+            <ResultCsv
+              testId="groundtrack-csv"
+              filename="ground-track.csv"
+              build={() =>
+                seriesToCsv(
+                  groundTrack.et,
+                  [
+                    Array.from(groundTrack.lon, (r) => r * RAD2DEG),
+                    Array.from(groundTrack.lat, (r) => r * RAD2DEG),
+                  ],
+                  ['lon_deg', 'lat_deg'],
+                  { meta: runMeta },
+                )
+              }
+            />
           </div>
         ) : (
           <p className="bessel-loader-hint">Project the sub-spacecraft point over the next day.</p>
@@ -325,10 +388,19 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
       </PanelContainer>
 
       <PanelContainer title="Comms" testId="analysis-section-comms">
+        <LinkParamsForm value={link} onChange={setLink} />
         <Action
           variant="primary"
           status={runStatus['compute-link']}
-          onClick={() => void engine?.computeLinkBudget(span)}
+          onClick={() =>
+            void engine?.computeLinkBudget({
+              ...span,
+              eirpDbW: link.eirpDbW,
+              freqHz: link.freqGHz * 1e9,
+              gOverTDbK: link.gOverTDbK,
+              dataRateBps: link.dataRateBps,
+            })
+          }
           testId="compute-link"
         >
           Compute downlink Eb/N0
@@ -337,17 +409,30 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
           series={linkSeries}
           resultTestId="link-result"
           chartTestId="link-chart"
-          hint="Plot the downlink Eb/N0 to a DSN station."
+          hint="Plot the downlink Eb/N0 to a ground station."
+          csv={{
+            testId: 'link-csv',
+            filename: 'link-ebn0.csv',
+            build: (s) =>
+              linkParamsPreamble(linkParams) + seriesToCsv(s.et, [s.value], ['ebN0_dB'], { meta: runMeta }),
+          }}
         />
         <RunStatusNote status={runStatus['compute-link']} id="compute-link" />
         <Keep tool="link" disabled={!linkSeries || trayFull} onKeep={() => engine?.keepSnapshot('link')} />
       </PanelContainer>
 
       <PanelContainer title="Conjunction" testId="analysis-section-conjunction">
+        <ConjunctionParamsForm value={conj} onChange={setConj} />
         <Action
           variant="primary"
           status={runStatus['compute-conjunction']}
-          onClick={() => void engine?.computeConjunction(secondary ? { secondary } : {})}
+          onClick={() =>
+            void engine?.computeConjunction({
+              ...(secondary ? { secondary } : {}),
+              sigmaKm: conj.sigmaKm,
+              radiusKm: conj.radiusKm,
+            })
+          }
           testId="compute-conjunction"
         >
           Compute closest approach
@@ -356,6 +441,24 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
           show={!!conjunction}
           resultTestId="conjunction-result"
           hint="Closest approach and collision probability for the loaded pair."
+          csv={
+            conjunction
+              ? {
+                  testId: 'conjunction-csv',
+                  filename: 'conjunction.csv',
+                  build: () =>
+                    scalarCsv([
+                      ['pair', conjunction.label],
+                      ['miss_km', conjunction.missKm],
+                      ['tca_s', conjunction.tcaSec],
+                      ['rel_speed_km_s', conjunction.relSpeedKmS],
+                      ['pc', conjunction.pc],
+                      ['sigma_km', conjunction.sigmaKm],
+                      ['hard_body_radius_km', conjunction.radiusKm],
+                    ]),
+                }
+              : undefined
+          }
         >
           {conjunction && (
             <>
@@ -369,22 +472,47 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
       </PanelContainer>
 
       <PanelContainer title="Constellation" testId="analysis-section-constellation">
+        <ConstellationParamsForm value={constellationParams} onChange={setConstellationParams} />
         <Action
           variant="primary"
           status={runStatus['compute-constellation']}
-          onClick={() => engine?.computeConstellation()}
+          disabled={!constellationValid}
+          onClick={() => engine?.computeConstellation(constellationParams)}
           testId="compute-constellation"
         >
           Design Walker constellation
         </Action>
+        {!constellationValid ? (
+          <p className="bessel-loader-hint" data-testid="constellation-invalid">
+            Total sats (T) must be a positive multiple of the number of planes (P).
+          </p>
+        ) : null}
         <StatResult
           show={!!constellation}
           resultTestId="constellation-result"
-          hint="Generate a Walker Delta constellation pattern."
+          hint="Generate a Walker constellation pattern."
+          csv={
+            constellation
+              ? {
+                  testId: 'constellation-csv',
+                  filename: 'constellation.csv',
+                  build: () =>
+                    scalarCsv([
+                      ['pattern', constellation.pattern],
+                      ['total_sats', constellation.totalSats],
+                      ['planes', constellation.planes],
+                      ['phasing', constellation.phasing],
+                      ['per_plane', constellation.perPlane],
+                      ['inclination_deg', constellation.inclinationDeg],
+                      ['altitude_km', constellation.altitudeKm],
+                    ]),
+                }
+              : undefined
+          }
         >
           {constellation && (
             <>
-              Walker {constellation.pattern} {constellation.totalSats}/{constellation.planes}/1:
+              Walker {constellation.pattern} {constellation.totalSats}/{constellation.planes}/{constellation.phasing}:
               {' '}{constellation.perPlane} sats x {constellation.planes} planes at {fmt(constellation.altitudeKm, 0)} km,
               {' '}{fmt(constellation.inclinationDeg, 0)} deg
             </>
@@ -394,10 +522,18 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
       </PanelContainer>
 
       <PanelContainer title="Maneuver" testId="analysis-section-maneuver">
+        <SlewParamsForm value={slew} onChange={setSlew} />
         <Action
           variant="primary"
           status={runStatus['compute-slew']}
-          onClick={() => void engine?.computeSlew()}
+          onClick={() =>
+            void engine?.computeSlew({
+              fromMode: slew.fromMode,
+              toMode: slew.toMode,
+              maxRateDeg: slew.maxRateDeg,
+              maxAccelDeg: slew.maxAccelDeg,
+            })
+          }
           testId="compute-slew"
         >
           Compute attitude slew
@@ -406,7 +542,12 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
           series={slewSeries}
           resultTestId="slew-result"
           chartTestId="slew-chart"
-          hint="Eigen-axis slew from nadir to Sun pointing."
+          hint="Eigen-axis slew between two pointing references."
+          csv={{
+            testId: 'slew-csv',
+            filename: 'slew.csv',
+            build: (s) => seriesToCsv(s.et, [s.value], ['slew_deg'], { epochHeader: 't_s', meta: runMeta }),
+          }}
         />
         <RunStatusNote status={runStatus['compute-slew']} id="compute-slew" />
         <Action
@@ -420,6 +561,20 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
           show={!!transfer}
           resultTestId="transfer-result"
           hint="Lambert arc departure delta-v over a 2 h transfer."
+          csv={
+            transfer
+              ? {
+                  testId: 'transfer-csv',
+                  filename: 'transfer.csv',
+                  build: () =>
+                    scalarCsv([
+                      ['arc', transfer.label],
+                      ['delta_v_km_s', transfer.deltaVKmS],
+                      ['tof_hours', transfer.tofHours],
+                    ]),
+                }
+              : undefined
+          }
         >
           {transfer && (
             <>
