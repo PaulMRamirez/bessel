@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createSpiceEngine, type CartesianState, type SpiceEngine } from '@bessel/spice';
 import { integrateDense } from './dense.ts';
-import { OutOfDomainError } from './errors.ts';
+import { IntegrationError, OutOfDomainError } from './errors.ts';
 import { createForceModel } from './force/model.ts';
 import { pointMass } from './force/point-mass.ts';
 import type { Rhs } from './integrator.ts';
@@ -89,5 +89,40 @@ describe('Dense DOPRI5 continuous extension', () => {
   it('rejects a non-positive span', () => {
     const y0 = stateOf(ECCENTRIC);
     expect(() => integrateDense(pointMassRhs(EARTH.gm), y0, 0, 0)).toThrow(/tf > t0/);
+  });
+
+  it('rejects a legal but sub-step window that accepts no segment (no segments[-1] TypeError)', () => {
+    const y0 = stateOf(ECCENTRIC);
+    // tf = t0 + 1e-10 passes the tf > t0 guard, but the t < tf - 1e-9 loop never runs and no
+    // segment is accepted. Must throw a typed IntegrationError naming the too-small window, not
+    // a raw TypeError from dereferencing the empty segment list.
+    let caught: unknown;
+    try {
+      integrateDense(pointMassRhs(EARTH.gm), y0, 0, 1e-10);
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(IntegrationError);
+    expect((caught as Error).message).toMatch(/too small/);
+    expect((caught as Error)).not.toBeInstanceOf(TypeError);
+  });
+
+  it('caps the solution domain at a terminal-event tEnd (no interpolation past the stop)', () => {
+    const y0 = stateOf(ECCENTRIC);
+    // A terminal event that fires partway through the arc: g = t - 1234.5 (crosses zero once,
+    // rising), terminal. The root finder stops the arc at tEnd ~ 1234.5. The Solution domain must
+    // be capped there, so interpolating past tEnd throws OutOfDomainError (no stale state).
+    const tStop = 1234.5;
+    const { solution, stopped, tEnd } = integrateDense(pointMassRhs(EARTH.gm), y0, 0, 6000, {
+      rtol: 1e-12,
+      atol: 1e-12,
+      events: [{ name: 'stop', g: (t) => t - tStop, direction: 1, terminal: true }],
+    });
+    expect(stopped).toBe(true);
+    expect(tEnd).toBeCloseTo(tStop, 4);
+    expect(solution.tf).toBeCloseTo(tStop, 4);
+    // Sampling at tEnd works; sampling clearly past it (toward the original tf) is out of domain.
+    expect(() => solution.interpolate(tEnd)).not.toThrow();
+    expect(() => solution.interpolate(tEnd + 100)).toThrow(OutOfDomainError);
   });
 });

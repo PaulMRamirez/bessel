@@ -40,6 +40,13 @@ export interface OptimizerReport {
   readonly projectedGradientNorm: number;
   /** Total extra residual propagations spent across all sweeps. */
   readonly extraRuns: number;
+  /**
+   * True if optimization stopped on a line-search stall (no feasible cost decrease found) rather
+   * than on the stationarity test. A stall means the reported point is feasible but NOT certified
+   * first-order optimal: `converged` is false. Distinct from convergence so a caller can tell a
+   * true optimum from a stuck iterate.
+   */
+  readonly stalled: boolean;
 }
 
 const norm2 = (v: Float64Array): number => Math.sqrt(v.reduce((s, x) => s + x * x, 0));
@@ -74,6 +81,14 @@ export function runOptimizer(
   const initialCost = evaluateObjective(objective, c, controls).cost;
 
   let projNorm = Infinity;
+  let stalled = false;
+  // The finite-difference cost/constraint gradients cannot resolve the reduced gradient below their
+  // own noise floor (~sqrt of the relative perturbation, the textbook FD-gradient accuracy limit).
+  // Stationarity is certified at the smaller of the requested tolerance and this achievable floor,
+  // so a genuine optimum (reduced gradient at the FD floor) is recognized while a premature stall
+  // (reduced gradient orders of magnitude larger) is not. Set from the last sweep's gradient scale.
+  const fdFloor = Math.sqrt(settings.perturbationRel);
+  let stationarityThreshold = settings.optimizerTolerance;
   let iter = 0;
   for (iter = 0; iter < settings.optimizerMaxIterations; iter++) {
     const base = evaluateResidual(c, controls, ctx, settings.useStm);
@@ -87,6 +102,7 @@ export function runOptimizer(
 
     const proj = projectOntoNullSpace(jac.J, m, n, gradNondim);
     projNorm = norm2(proj);
+    stationarityThreshold = Math.max(settings.optimizerTolerance, fdFloor * Math.max(norm2(gradNondim), 1));
     if (projNorm <= settings.optimizerTolerance) break;
 
     // Descent direction in nondim space is -proj; back to physical control units.
@@ -110,17 +126,30 @@ export function runOptimizer(
       }
       step /= 2;
     }
-    if (!accepted) break; // no further cost reduction available: stationary
+    if (!accepted) {
+      // The line search exhausted its backtracks without a feasible cost decrease. This is a STALL,
+      // not a certified optimum: the projected-gradient norm may still exceed the tolerance. Record
+      // it and stop; convergence is decided solely by the stationarity test below.
+      stalled = true;
+      break;
+    }
   }
 
   const finalRaw = evaluateResidual(c, controls, ctx, false).residualRaw;
   if (!goalsMet(goals, finalRaw)) {
     throw new OptimizerNotConvergedError(segmentPath, iter, c, 'final point is infeasible');
   }
-  const converged = projNorm <= settings.optimizerTolerance || iter < settings.optimizerMaxIterations;
+  // Convergence is the first-order KKT stationarity test ALONE: the projected (reduced) gradient
+  // norm at or below the stationarity threshold (the requested tolerance, or the FD-gradient noise
+  // floor when that is larger). Reaching the iteration cap or stalling in the line search is NOT by
+  // itself convergence: a stall counts only when the reduced gradient is genuinely stationary. The
+  // old `|| iter < maxIterations` reported converged:true for ANY early break, so a stall far from
+  // the optimum (large reduced gradient) was a false success.
+  const converged = projNorm <= stationarityThreshold;
   return {
     report: {
       converged,
+      stalled,
       outerIterations: iter,
       controls: Float64Array.from(c),
       cost: evaluateObjective(objective, c, controls).cost,

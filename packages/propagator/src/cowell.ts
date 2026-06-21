@@ -142,8 +142,10 @@ export function propagateCowellEx(opts: CowellOptions): CowellResult {
   });
 
   // Sample only the grid epochs that lie within the integrated domain (a terminal stop
-  // shortens it). Interpolate the state (first six components) from the dense solution.
-  const usable = Array.from(etGrid).filter((t) => t >= epoch - 1e-9 && t <= solution.tf + 1e-9);
+  // shortens it). Clamp to tEnd, not solution.tf: on a terminal event the arc must not emit
+  // states past the event epoch (a sample in (tEnd, solution.tf] would be physically stale,
+  // e.g. below the surface after impact). The dense Solution domain is itself capped at tEnd.
+  const usable = Array.from(etGrid).filter((t) => t >= epoch - 1e-9 && t <= tEnd + 1e-9);
   const grid = Float64Array.from(usable);
   const table = emptyTable(frame, grid);
   const buf = new Float64Array(dim);

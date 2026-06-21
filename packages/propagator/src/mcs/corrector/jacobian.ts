@@ -5,6 +5,7 @@
 // column is finite-differenced by re-running the residual. (STK_PARITY_SPEC §4.3.)
 
 import type { DcSettings, PropagateSegment, Segment, StopCondition } from '../segments.ts';
+import type { MissionState } from '../state.ts';
 import type { ControlBinding, GoalBinding } from './refs.ts';
 import { evaluateResidual, type DcEvalContext, type ResidualEval } from './residual.ts';
 import { vnbAxisToInertial } from '../frames.ts';
@@ -29,6 +30,52 @@ export function mayRetargetStop(children: readonly Segment[], _control: ControlB
       return false;
     });
   return scan(children);
+}
+
+/** Tolerance (s) for matching the coast STM's reference epoch to a control's injection epoch. */
+const STM_EPOCH_TOL = 1e-6;
+
+/**
+ * The epoch at which a control injects its seed perturbation: a delta-v control injects at its
+ * maneuver's epoch (the pre-burn state captured in `burnStates`), an initial-state r/v control at
+ * the arc input epoch. Returns undefined when the epoch cannot be resolved (then the analytic STM
+ * path is not safe and the caller falls back to finite difference).
+ */
+function injectionEpochOf(base: ResidualEval, ctrl: ControlBinding, input: MissionState): number | undefined {
+  const a = ctrl.seedAxis;
+  if (!a) return undefined;
+  if (a.kind === 'dv') return base.burnStates.get(a.segment)?.epoch;
+  return input.epoch; // initial-state r/v: referenced to the arc start
+}
+
+/**
+ * The base coast STM is referenced to ONE epoch (`base.stmEpoch`). The analytic column propagates a
+ * control's seed through it as Phi(eval, stmEpoch) * seed, which is only correct when the STM starts
+ * exactly at the control's INJECTION epoch and nothing (a Maneuver or a nested Target) lies between
+ * the injection and the STM start to break the linear map. A multi-segment Target whose control sits
+ * upstream of a later burn leaves stmEpoch at the post-burn coast, so the seed would be pushed
+ * through the wrong STM. Gate on (a) stmEpoch present and matching the injection epoch within
+ * tolerance, and (b) no Maneuver/Target segment between the injection and the STM start; otherwise
+ * the caller finite-differences (and `extraRuns` reflects it).
+ */
+function stmServesInjection(base: ResidualEval, ctrl: ControlBinding, input: MissionState): boolean {
+  if (base.stmEpoch === undefined) return false;
+  const inj = injectionEpochOf(base, ctrl, input);
+  if (inj === undefined) return false;
+  if (Math.abs(base.stmEpoch - inj) > STM_EPOCH_TOL) return false;
+  // Structural guard: even if the epochs coincide numerically, reject if a Maneuver or Target
+  // segment whose effect falls in (injection, stmEpoch] would have shifted the linear map.
+  return !hasManeuverOrTargetBetween(base, inj, base.stmEpoch);
+}
+
+/** True if any evaluated Maneuver/Target segment ends in the open-closed interval (lo, hi]. */
+function hasManeuverOrTargetBetween(base: ResidualEval, lo: number, hi: number): boolean {
+  if (hi <= lo + STM_EPOCH_TOL) return false; // empty interval: nothing can lie strictly between
+  for (const [, st] of base.evalStates) {
+    const e = st.epoch;
+    if (e > lo + STM_EPOCH_TOL && e <= hi + STM_EPOCH_TOL) return true;
+  }
+  return false;
 }
 
 /** Multiply a row-major 6x6 STM by a 6-vector seed. */
@@ -60,7 +107,17 @@ export function assembleJacobian(
 
   for (let j = 0; j < n; j++) {
     const ctrl = controls[j]!;
-    const stmOk = settings.useStm && ctrl.stmServed && !!base.stmAt && !retarget(ctrl) && allGoalsAnalytic && !!ctrl.seedAxis;
+    // The coast STM is referenced to base.stmEpoch; the analytic column is only valid when that
+    // epoch is the control's injection epoch with no burn/Target shifting the map in between. A
+    // multi-segment Target with an upstream control across a later burn fails this and must FD.
+    const stmOk =
+      settings.useStm &&
+      ctrl.stmServed &&
+      !!base.stmAt &&
+      !retarget(ctrl) &&
+      allGoalsAnalytic &&
+      !!ctrl.seedAxis &&
+      stmServesInjection(base, ctrl, ctx.input);
 
     if (stmOk) {
       const seed = seedVector(base, ctrl);

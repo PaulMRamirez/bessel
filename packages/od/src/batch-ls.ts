@@ -108,8 +108,19 @@ export function batchLeastSquares(
   let lastUpdateRms = Number.POSITIVE_INFINITY;
   let lastResidualRms = Number.POSITIVE_INFINITY;
   let prevResidualRms = Number.POSITIVE_INFINITY;
+  let bestResidualRms = Number.POSITIVE_INFINITY;
   let bestState = Float64Array.from(x0);
   let converged = false;
+  // Divergence guard. The residual RMS is measured against the BEST fit found so far, not just the
+  // previous step, so the genuine weak-geometry case (where the residual oscillates within a small
+  // factor of its floor as the step wanders in the unobservable subspace) is NOT mistaken for
+  // divergence. A step counts as "blowing up" only when its residual exceeds the best by more than
+  // DIVERGENCE_FACTOR; a sustained run of such steps (the Gauss-Newton step marching away from the
+  // minimum, residual climbing by orders of magnitude) is real divergence and throws loudly,
+  // instead of the old rule that read any residual increase as a (false) convergence.
+  let blowupStreak = 0;
+  const MAX_BLOWUP_STREAK = 3;
+  const DIVERGENCE_FACTOR = 4;
   let lambda: Mat = mat(6, 6);
   let bestLambda: Mat = mat(6, 6);
   let iter = 0;
@@ -157,15 +168,46 @@ export function batchLeastSquares(
     // and it handles weak-geometry cases (e.g. range-only), where dx never reaches the
     // raw `tol` because it wanders in the unobservable, integrator-noise floor.
     const relResidualChange = (prevResidualRms - residualRms) / Math.max(prevResidualRms, 1e-300);
-    if (iter > 1 && relResidualChange <= tol) {
-      // No meaningful reduction: keep the prior (best) state and its information matrix.
-      converged = true;
-      lastResidualRms = prevResidualRms;
-      break;
+    if (iter > 1) {
+      if (residualRms > bestResidualRms * DIVERGENCE_FACTOR) {
+        // This step's residual is well above the best fit so far: the iterate is blowing up, not
+        // bottoming out. Count the run; a sustained blow-up is divergence (the Gauss-Newton step
+        // marching away from the minimum), which must fail loudly rather than report a false
+        // convergence on the unimproved state.
+        blowupStreak += 1;
+        if (blowupStreak >= MAX_BLOWUP_STREAK) {
+          throw new ConvergenceError(
+            iter,
+            residualRms,
+            tol,
+            `residual RMS grew beyond ${DIVERGENCE_FACTOR}x the best fit on ${blowupStreak} consecutive iterations`,
+          );
+        }
+        // Tolerated transient blow-up: take another step (the streak may still recover).
+      } else {
+        // Within DIVERGENCE_FACTOR of the best fit: not diverging. Clear the streak.
+        blowupStreak = 0;
+        // Bottomed-out test: the residual stopped improving on the best (a negligible reduction, or
+        // it failed to beat the best while staying near it, the weak-geometry noise-floor case).
+        // Either way the cost has bottomed; keep the best state and its information matrix. The old
+        // rule converged on ANY residual increase (relResidualChange <= tol), which a divergent
+        // step also satisfied; restricting "bottomed" to the near-best regime closes that hole.
+        const improvedOnBest = residualRms < bestResidualRms * (1 - tol);
+        if (!improvedOnBest && relResidualChange <= tol) {
+          converged = true;
+          lastResidualRms = bestResidualRms;
+          break;
+        }
+      }
     }
-    // This step improved the fit: record it as the running best, then take the step.
-    bestState = Float64Array.from(x0);
-    bestLambda = lambda;
+    // Record the running best only on a genuine improvement (so a transient worsening step that the
+    // streak guard tolerates does not overwrite the best state with an inferior fit). Always
+    // advance prevResidualRms so the next iteration's relative change is measured against THIS step.
+    if (residualRms < bestResidualRms) {
+      bestResidualRms = residualRms;
+      bestState = Float64Array.from(x0);
+      bestLambda = lambda;
+    }
     prevResidualRms = residualRms;
     lastResidualRms = residualRms;
 

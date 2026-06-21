@@ -121,4 +121,27 @@ describe('Terminal events truncate the arc (propagateCowellEx)', () => {
     expect(res.tEnd).toBeGreaterThan(2300);
     expect(res.tEnd).toBeLessThan(2750);
   });
+
+  it('emits no grid sample past a terminal-event tEnd (clamps to tEnd, not solution.tf)', () => {
+    // A terminal event at exactly t = 1250 s. The grid carries an epoch (1300) that lies between
+    // tEnd and the end of the segment that bracketed the root: with the old solution.tf filter it
+    // would emit a physically-stale state past the stop. Every emitted epoch must be <= tEnd.
+    const tStop = 1250;
+    const grid = Float64Array.from({ length: 52 }, (_, k) => k * 50); // 0..2550 s, includes 1300
+    const res = propagateCowellEx({
+      state: ECCENTRIC,
+      epoch: 0,
+      etGrid: grid,
+      forceModel: createForceModel([pointMass(EARTH.gm)]),
+      tolerances: { rtol: 1e-12, atol: 1e-12 },
+      events: [{ name: 'fixedStop', g: (t) => t - tStop, direction: 1, terminal: true }],
+    });
+    expect(res.stopped).toBe(true);
+    expect(res.tEnd).toBeCloseTo(tStop, 4);
+    for (const t of res.table.et) {
+      expect(t).toBeLessThanOrEqual(res.tEnd + 1e-9);
+    }
+    // The first grid epoch strictly past the stop (1300) must NOT appear in the table.
+    expect(Array.from(res.table.et).some((t) => t > tStop + 1e-9)).toBe(false);
+  });
 });

@@ -7,6 +7,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { batchLeastSquares } from './batch-ls.ts';
+import { ConvergenceError } from './errors.ts';
 import { isPositiveDefinite, mat } from './linalg.ts';
 import {
   earthForceModel,
@@ -75,6 +76,32 @@ describe('batch least squares', () => {
     const result = batchLeastSquares({ x: guess, epoch: T0 }, measurements, { forceModel: FM });
     for (let i = 0; i < 3; i++) expect(Math.abs(result.state.x[i]! - truth[i]!)).toBeLessThan(1e-2);
     expect(result.residualRms).toBeLessThan(1e-3);
+  });
+
+  it('surfaces divergence loudly instead of reporting a false convergence', () => {
+    // A guess thousands of km and km/s off truth makes the Gauss-Newton linearization invalid:
+    // the step overshoots and the residual RMS GROWS on a sustained run. The old stopping rule
+    // (relResidualChange <= tol fires for a NEGATIVE change too) would report converged:true with
+    // the unimproved, wrong state. It must now throw a ConvergenceError naming the divergence.
+    const truth = truthState();
+    const truthByEpoch = sampleTruth(truth, T0, EPOCHS, FM);
+    const measurements: Measurement[] = EPOCHS.map((e, k) => makeRange(truthByEpoch[k]!, OBS, e, 1e-3));
+
+    const guess = Float64Array.from(truth);
+    guess[0]! += 6000;
+    guess[1]! += 6000;
+    guess[3]! += 5;
+    guess[4]! += 5;
+
+    let caught: unknown;
+    try {
+      batchLeastSquares({ x: guess, epoch: T0 }, measurements, { forceModel: FM, maxIterations: 30 });
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(ConvergenceError);
+    expect((caught as Error).message).toMatch(/diverged/);
+    expect((caught as Error).message).toMatch(/consecutive/);
   });
 
   it('produces a near-truth estimate within a few sigma under noisy measurements', () => {
