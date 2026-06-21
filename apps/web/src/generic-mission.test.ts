@@ -194,6 +194,26 @@ describe('buildCatalogMissionScene (orchestration with a mock SPICE)', () => {
     expect(mission.instrument?.name).toBe('WAC');
   });
 
+  it('fails loudly when two instruments share an id (would make one unreachable)', async () => {
+    const dupes: BesselCatalog = {
+      version: '1.0',
+      bodies: [{ id: 'Saturn', name: 'Saturn' }],
+      spacecraft: [
+        {
+          id: 'Probe',
+          name: 'Probe',
+          trajectory: { type: 'Spice', center: 'Saturn' },
+          arcs: [{ timeRange: { start: '2000-01-01', stop: '2010-01-01' }, trajectory: { type: 'Spice' } }],
+        },
+      ],
+      instruments: [
+        { id: 'CAM', parent: 'Probe', sensor: '-82361', targets: ['Saturn'] },
+        { id: 'CAM', parent: 'Probe', sensor: '-82360', targets: ['Saturn'] },
+      ],
+    };
+    await expect(buildCatalogMissionScene(mockSpice(), dupes)).rejects.toThrow(/declared more than once/);
+  });
+
   it('resolves a UniformRotation orientation into a uniform attitude spec', async () => {
     const spun: BesselCatalog = {
       version: '1.0',

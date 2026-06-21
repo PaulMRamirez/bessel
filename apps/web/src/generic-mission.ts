@@ -592,7 +592,15 @@ function resolveInstruments(
   // frame, else the IAU convention (never null here since centerBody is never the Sun).
   const targetFrame = resolveBodyFrame(centerBody, bodyFrames) ?? `IAU_${centerBody.toUpperCase()}`;
   const out: InstrumentDescriptor[] = [];
+  const seen = new Set<string>();
   for (const inst of catalog.instruments ?? []) {
+    // Instrument ids name the selector entry and resolve the active sensor, so they
+    // must be unique; a duplicate would make one sensor permanently unreachable.
+    // Fail loud (per the bad-catalog-reference convention) rather than silently drop it.
+    if (seen.has(inst.id)) {
+      throw new Error(`Catalog instrument id "${inst.id}" is declared more than once; ids must be unique`);
+    }
+    seen.add(inst.id);
     const sensorId = Number(inst.sensor);
     const targetId = inst.targets[0];
     if (!Number.isFinite(sensorId) || !targetId) continue;

@@ -78,6 +78,9 @@ export function pushBodyState(
     return;
   }
   void computeBodyState(spice, target, center, frame, et, mu).then((s) => {
-    if (!isDisposed()) store.setState({ bodyState: s });
+    // Drop a result whose frame the user has since switched away from: a late
+    // in-flight computation from a prior tick must not flash old-frame numbers under
+    // the new frame label (setStateFrame clears bodyState for the same reason).
+    if (!isDisposed() && store.getState().stateFrame === frame) store.setState({ bodyState: s });
   });
 }

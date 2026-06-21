@@ -316,9 +316,15 @@ export class BesselEngine {
       // or Measure mode is active); otherwise the SPICE work would feed nothing.
       if (s.selection.length > 0 || s.measureMode) {
         const center = focus === e.identity.centerBody ? 'Sun' : e.identity.centerBody;
-        void this.centerMuCached(center).then((mu) => {
-          if (!this.disposed) pushBodyState(e.spice, this.store, focus, center, s.stateFrame, now, mu, this.isDisposed);
-        });
+        // Recompute only when an input changed: while paused on a fixed focus and frame
+        // this skips the spkezr + element work that would otherwise repeat every tick.
+        const stateKey = `${focus}|${center}|${s.stateFrame}|${now}`;
+        if (stateKey !== this.lastStateKey) {
+          this.lastStateKey = stateKey;
+          void this.centerMuCached(center).then((mu) => {
+            if (!this.disposed) pushBodyState(e.spice, this.store, focus, center, s.stateFrame, now, mu, this.isDisposed);
+          });
+        }
       }
       this.updateMeasurement(now);
     }
@@ -1227,6 +1233,9 @@ export class BesselEngine {
   // state readout caches it rather than re-querying the kernel pool (a worker
   // round-trip) every tick. Cleared when a new mission loads.
   private readonly muCache = new Map<string, number | null>();
+  // The last (focus|center|frame|et) the body-state readout computed for, so an
+  // unchanged tick (e.g. paused) skips the spkezr + element recompute.
+  private lastStateKey = '';
 
   private async centerMuCached(center: string): Promise<number | null> {
     const cached = this.muCache.get(center);

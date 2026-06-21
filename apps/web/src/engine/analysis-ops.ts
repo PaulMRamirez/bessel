@@ -279,12 +279,22 @@ export async function computeInstrumentFovWindows(
   const sc = e.identity.spacecraftName;
   const center = e.identity.centerBody;
   const target = opts.target ?? 'Sun';
-  if (!inst || !sc || !center || !e.table.byBody.has(target) || !e.table.byBody.has(sc)) {
-    store.setState({ fovWindow: null, fovSpan: null, fovFom: null });
+  if (
+    !inst ||
+    !sc ||
+    !center ||
+    !e.table.byBody.has(target) ||
+    !e.table.byBody.has(sc) ||
+    !e.table.byBody.has(center)
+  ) {
+    store.setState({ fovWindow: null, fovSpan: null, fovLabel: '', fovFom: null });
     return;
   }
+  // Clamp the sweep to the sampled ephemeris window: positionAt clamps out-of-range
+  // epochs to the table edge, so a span running past the data would freeze every body
+  // and fabricate a static in/out result rather than reflecting real geometry.
   const t0 = e.clock.state.et;
-  const span: [number, number] = [t0, t0 + (opts.spanSec ?? 86400)];
+  const span: [number, number] = [t0, Math.min(t0 + (opts.spanSec ?? 86400), e.table.et1)];
   const step = opts.stepSec ?? 120;
   try {
     const halfAngle = fovHalfAngleRad(inst.fov.boresight, inst.fov.bounds);
@@ -314,7 +324,7 @@ export async function computeInstrumentFovWindows(
       });
     }
   } catch (err) {
-    if (!isDisposed()) store.setState({ fovWindow: null, fovSpan: span, fovFom: null });
+    if (!isDisposed()) store.setState({ fovWindow: null, fovSpan: span, fovLabel: '', fovFom: null });
     console.error('instrument FOV analysis failed', err);
     throw err;
   }

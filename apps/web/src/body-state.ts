@@ -1,39 +1,15 @@
 // Pure state-vector + osculating-element computation for the focused body, mirroring
-// readouts.ts: a worker round-trip to spkezr (Cartesian state in a chosen frame) and
-// oscelt (osculating elements about the center body), assembled into a BodyState the
-// State panel renders. Returns null when the body is its own center or SPICE rejects,
-// so the panel falls back to n/a rather than showing a wrong value.
+// readouts.ts: a worker round-trip to spkezr (Cartesian state in a chosen frame),
+// then the validated classical-element math from @bessel/propagator (rv2coe, Vallado).
+// Returns null when the body is its own center or the orbit is degenerate (parabolic/
+// rectilinear, which rv2coe rejects loudly), so the panel falls back to n/a rather than
+// showing a wrong value.
 
 import type { BodyState } from '@bessel/ui';
-import type { SpiceEngine, CartesianState } from '@bessel/spice';
+import type { SpiceEngine } from '@bessel/spice';
+import { rv2coe } from '@bessel/propagator';
 
 const RAD2DEG = 180 / Math.PI;
-
-/** True anomaly (radians) from the mean anomaly and eccentricity. Elliptic uses a
- *  bounded Newton solve of Kepler's equation; hyperbolic uses its sinh form. */
-function trueAnomaly(m0: number, ecc: number): number {
-  if (ecc < 1) {
-    let e = ecc < 0.8 ? m0 : Math.PI; // initial guess
-    for (let i = 0; i < 32; i++) {
-      const f = e - ecc * Math.sin(e) - m0;
-      const fp = 1 - ecc * Math.cos(e);
-      const d = f / fp;
-      e -= d;
-      if (Math.abs(d) < 1e-12) break;
-    }
-    return 2 * Math.atan2(Math.sqrt(1 + ecc) * Math.sin(e / 2), Math.sqrt(1 - ecc) * Math.cos(e / 2));
-  }
-  // Hyperbolic: M = ecc * sinh(H) - H.
-  let h = m0;
-  for (let i = 0; i < 64; i++) {
-    const f = ecc * Math.sinh(h) - h - m0;
-    const fp = ecc * Math.cosh(h) - 1;
-    const d = f / fp;
-    h -= d;
-    if (Math.abs(d) < 1e-12) break;
-  }
-  return 2 * Math.atan2(Math.sqrt(ecc + 1) * Math.sinh(h / 2), Math.sqrt(ecc - 1) * Math.cosh(h / 2));
-}
 
 export async function computeBodyState(
   spice: SpiceEngine,
@@ -51,24 +27,25 @@ export async function computeBodyState(
   } catch {
     return null;
   }
-  const state: CartesianState = { position: sv.position, velocity: sv.velocity };
-  let elts;
+  // Classical elements straight from the state vector. rv2coe is the same tested path
+  // the mission tooling uses, and it throws on a degenerate (parabolic/rectilinear)
+  // orbit, which we surface as n/a instead of a fabricated semi-major axis or anomaly.
+  let el;
   try {
-    elts = await spice.oscelt(state, et, mu);
+    el = rv2coe(mu, sv.position, sv.velocity);
   } catch {
     return null;
   }
-  const semiMajorKm = elts.ecc === 1 ? Infinity : elts.rp / (1 - elts.ecc);
   return {
     target,
     center,
     r: [sv.position.x, sv.position.y, sv.position.z],
     v: [sv.velocity.x, sv.velocity.y, sv.velocity.z],
-    semiMajorKm,
-    ecc: elts.ecc,
-    incDeg: elts.inc * RAD2DEG,
-    raanDeg: elts.lnode * RAD2DEG,
-    argpDeg: elts.argp * RAD2DEG,
-    trueAnomalyDeg: trueAnomaly(elts.m0, elts.ecc) * RAD2DEG,
+    semiMajorKm: el.sma,
+    ecc: el.ecc,
+    incDeg: el.inc * RAD2DEG,
+    raanDeg: el.raan * RAD2DEG,
+    argpDeg: el.argp * RAD2DEG,
+    trueAnomalyDeg: el.trueAnomaly * RAD2DEG,
   };
 }
