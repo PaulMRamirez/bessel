@@ -23,12 +23,49 @@ import {
 const KERNEL_DIR = '/kernels';
 
 export class SpiceBindings {
+  // The stack of active per-call allocation scopes. str() (and any scratch()
+  // allocation) registers its pointer in the innermost scope, and scope() frees
+  // every registered pointer in a finally when the call returns or throws, so the
+  // Emscripten heap does not grow monotonically (the C strings and scratch blocks
+  // each SPICE call allocates are reclaimed deterministically, leak-free).
+  private readonly scopes: number[][] = [];
+
   constructor(private readonly mod: CSpiceModule) {
-    // Route SPICE errors to return-mode so failures surface as typed errors
-    // rather than aborting the WASM runtime.
-    this.call('erract_c', this.str('SET'), 0, this.str('RETURN'));
-    this.call('errprt_c', this.str('SET'), 0, this.str('NONE'));
-    if (!this.mod.FS.analyzePath(KERNEL_DIR).exists) this.mod.FS.mkdir(KERNEL_DIR);
+    this.scope(() => {
+      // Route SPICE errors to return-mode so failures surface as typed errors
+      // rather than aborting the WASM runtime.
+      this.call('erract_c', this.str('SET'), 0, this.str('RETURN'));
+      this.call('errprt_c', this.str('SET'), 0, this.str('NONE'));
+      if (!this.mod.FS.analyzePath(KERNEL_DIR).exists) this.mod.FS.mkdir(KERNEL_DIR);
+    });
+  }
+
+  /**
+   * Run `fn` inside a fresh allocation scope: every pointer str()/scratch() hands
+   * out while it runs is freed when fn returns or throws. Scopes nest, so a public
+   * method that calls another stays balanced.
+   */
+  private scope<T>(fn: () => T): T {
+    const allocs: number[] = [];
+    this.scopes.push(allocs);
+    try {
+      return fn();
+    } finally {
+      this.scopes.pop();
+      for (const ptr of allocs) this.mod._free(ptr);
+    }
+  }
+
+  /** Register a heap pointer in the innermost active scope so it is freed on exit. */
+  private track(ptr: number): number {
+    const top = this.scopes[this.scopes.length - 1];
+    if (top) top.push(ptr);
+    return ptr;
+  }
+
+  /** Allocate `size` scratch bytes whose lifetime is the current call scope. */
+  private scratch(size: number): number {
+    return this.track(this.mod._malloc(size));
   }
 
   private call(name: string, ...args: number[]): number {
@@ -37,10 +74,10 @@ export class SpiceBindings {
     return fn(...args);
   }
 
-  /** Allocate a NUL-terminated C string; caller frees via the scope helper. */
+  /** Allocate a NUL-terminated C string; freed when the current scope() exits. */
   private str(s: string): number {
     const n = this.mod.lengthBytesUTF8(s) + 1;
-    const ptr = this.mod._malloc(n);
+    const ptr = this.track(this.mod._malloc(n));
     this.mod.stringToUTF8(s, ptr, n);
     return ptr;
   }
@@ -56,35 +93,41 @@ export class SpiceBindings {
   /** Throw a typed SpiceError if the last SPICE call failed; reset the engine. */
   private checkFailed(): void {
     if (this.call('failed_c') === 0) return;
-    const shortPtr = this.mod._malloc(64);
-    const longPtr = this.mod._malloc(1841);
-    this.call('getmsg_c', this.str('SHORT'), 64, shortPtr);
-    this.call('getmsg_c', this.str('LONG'), 1841, longPtr);
-    const short = this.mod.UTF8ToString(shortPtr);
-    const long = this.mod.UTF8ToString(longPtr);
-    this.mod._free(shortPtr);
-    this.mod._free(longPtr);
-    this.call('reset_c');
-    throw new SpiceError(long || short || 'SPICE call failed', short || undefined);
+    this.scope(() => {
+      const shortPtr = this.scratch(64);
+      const longPtr = this.scratch(1841);
+      this.call('getmsg_c', this.str('SHORT'), 64, shortPtr);
+      this.call('getmsg_c', this.str('LONG'), 1841, longPtr);
+      const short = this.mod.UTF8ToString(shortPtr);
+      const long = this.mod.UTF8ToString(longPtr);
+      this.call('reset_c');
+      throw new SpiceError(long || short || 'SPICE call failed', short || undefined);
+    });
   }
 
   tkvrsn(): string {
-    const ptr = this.call('tkvrsn_c', this.str('TOOLKIT'));
-    return this.mod.UTF8ToString(ptr);
+    return this.scope(() => {
+      const ptr = this.call('tkvrsn_c', this.str('TOOLKIT'));
+      return this.mod.UTF8ToString(ptr);
+    });
   }
 
   furnsh(name: string, bytes: Uint8Array): void {
-    const path = `${KERNEL_DIR}/${name}`;
-    this.mod.FS.writeFile(path, bytes);
-    this.call('furnsh_c', this.str(path));
-    this.checkFailed();
+    this.scope(() => {
+      const path = `${KERNEL_DIR}/${name}`;
+      this.mod.FS.writeFile(path, bytes);
+      this.call('furnsh_c', this.str(path));
+      this.checkFailed();
+    });
   }
 
   unload(name: string): void {
-    const path = `${KERNEL_DIR}/${name}`;
-    this.call('unload_c', this.str(path));
-    this.checkFailed();
-    if (this.mod.FS.analyzePath(path).exists) this.mod.FS.unlink(path);
+    this.scope(() => {
+      const path = `${KERNEL_DIR}/${name}`;
+      this.call('unload_c', this.str(path));
+      this.checkFailed();
+      if (this.mod.FS.analyzePath(path).exists) this.mod.FS.unlink(path);
+    });
   }
 
   kclear(): void {
@@ -93,65 +136,69 @@ export class SpiceBindings {
   }
 
   ktotal(kind = 'ALL'): number {
-    const out = this.mod._malloc(4);
-    this.call('ktotal_c', this.str(kind), out);
-    this.checkFailed();
-    const n = this.readInt(out);
-    this.mod._free(out);
-    return n;
+    return this.scope(() => {
+      const out = this.scratch(4);
+      this.call('ktotal_c', this.str(kind), out);
+      this.checkFailed();
+      return this.readInt(out);
+    });
   }
 
   str2et(utc: string): number {
-    const out = this.mod._malloc(8);
-    this.call('str2et_c', this.str(utc), out);
-    this.checkFailed();
-    const et = this.readDouble(out);
-    this.mod._free(out);
-    return et;
+    return this.scope(() => {
+      const out = this.scratch(8);
+      this.call('str2et_c', this.str(utc), out);
+      this.checkFailed();
+      return this.readDouble(out);
+    });
   }
 
   utc2et(utc: string): number {
-    const out = this.mod._malloc(8);
-    this.call('utc2et_c', this.str(utc), out);
-    this.checkFailed();
-    const et = this.readDouble(out);
-    this.mod._free(out);
-    return et;
+    return this.scope(() => {
+      const out = this.scratch(8);
+      this.call('utc2et_c', this.str(utc), out);
+      this.checkFailed();
+      return this.readDouble(out);
+    });
   }
 
   et2utc(et: number, format: string, precision: number): string {
-    const len = 64;
-    const out = this.mod._malloc(len);
-    this.call('et2utc_c', et, this.str(format), precision, len, out);
-    this.checkFailed();
-    return this.mod.UTF8ToString(out);
+    return this.scope(() => {
+      const len = 64;
+      const out = this.scratch(len);
+      this.call('et2utc_c', et, this.str(format), precision, len, out);
+      this.checkFailed();
+      return this.mod.UTF8ToString(out);
+    });
   }
 
   // Ephemeris time to a TDB ISO calendar string via timout_c with a ::TDB picture, so
   // the displayed epoch can carry its actual time system rather than implying UTC.
   et2tdb(et: number, precision: number): string {
-    const len = 64;
-    const frac = Math.max(0, Math.min(9, Math.trunc(precision)));
-    const pic =
-      frac > 0 ? `YYYY-MM-DDTHR:MN:SC.${'#'.repeat(frac)} ::TDB` : 'YYYY-MM-DDTHR:MN:SC ::TDB';
-    const out = this.mod._malloc(len);
-    this.call('timout_c', et, this.str(pic), len, out);
-    this.checkFailed();
-    return this.mod.UTF8ToString(out);
+    return this.scope(() => {
+      const len = 64;
+      const frac = Math.max(0, Math.min(9, Math.trunc(precision)));
+      const pic =
+        frac > 0 ? `YYYY-MM-DDTHR:MN:SC.${'#'.repeat(frac)} ::TDB` : 'YYYY-MM-DDTHR:MN:SC ::TDB';
+      const out = this.scratch(len);
+      this.call('timout_c', et, this.str(pic), len, out);
+      this.checkFailed();
+      return this.mod.UTF8ToString(out);
+    });
   }
 
   /** Rectangular (body-fixed km) to geodetic longitude/latitude (rad) and altitude (km). */
   recgeo(rectan: Vec3, re: number, f: number): { lon: number; lat: number; alt: number } {
-    const r = this.mod._malloc(24);
-    const lon = this.mod._malloc(8);
-    const lat = this.mod._malloc(8);
-    const alt = this.mod._malloc(8);
-    this.writeVec3(r, rectan);
-    this.call('recgeo_c', r, re, f, lon, lat, alt);
-    this.checkFailed();
-    const result = { lon: this.readDouble(lon), lat: this.readDouble(lat), alt: this.readDouble(alt) };
-    [r, lon, lat, alt].forEach((p) => this.mod._free(p));
-    return result;
+    return this.scope(() => {
+      const r = this.scratch(24);
+      const lon = this.scratch(8);
+      const lat = this.scratch(8);
+      const alt = this.scratch(8);
+      this.writeVec3(r, rectan);
+      this.call('recgeo_c', r, re, f, lon, lat, alt);
+      this.checkFailed();
+      return { lon: this.readDouble(lon), lat: this.readDouble(lat), alt: this.readDouble(alt) };
+    });
   }
 
   /** Local solar time at a body-fixed longitude (rad): hour/min/sec and formatted strings. */
@@ -161,23 +208,23 @@ export class SpiceBindings {
     lon: number,
     type: string,
   ): { hr: number; mn: number; sc: number; time: string; ampm: string } {
-    const len = 64;
-    const hr = this.mod._malloc(4);
-    const mn = this.mod._malloc(4);
-    const sc = this.mod._malloc(4);
-    const time = this.mod._malloc(len);
-    const ampm = this.mod._malloc(len);
-    this.call('et2lst_c', et, body, lon, this.str(type), len, len, hr, mn, sc, time, ampm);
-    this.checkFailed();
-    const result = {
-      hr: this.readInt(hr),
-      mn: this.readInt(mn),
-      sc: this.readInt(sc),
-      time: this.mod.UTF8ToString(time),
-      ampm: this.mod.UTF8ToString(ampm),
-    };
-    [hr, mn, sc, time, ampm].forEach((p) => this.mod._free(p));
-    return result;
+    return this.scope(() => {
+      const len = 64;
+      const hr = this.scratch(4);
+      const mn = this.scratch(4);
+      const sc = this.scratch(4);
+      const time = this.scratch(len);
+      const ampm = this.scratch(len);
+      this.call('et2lst_c', et, body, lon, this.str(type), len, len, hr, mn, sc, time, ampm);
+      this.checkFailed();
+      return {
+        hr: this.readInt(hr),
+        mn: this.readInt(mn),
+        sc: this.readInt(sc),
+        time: this.mod.UTF8ToString(time),
+        ampm: this.mod.UTF8ToString(ampm),
+      };
+    });
   }
 
   spkpos(
@@ -187,30 +234,29 @@ export class SpiceBindings {
     abcorr: AberrationCorrection,
     observer: string,
   ): PositionResult {
-    const pos = this.mod._malloc(3 * 8);
-    const lt = this.mod._malloc(8);
-    this.call(
-      'spkpos_c',
-      this.str(target),
-      et,
-      this.str(frame),
-      this.str(abcorr),
-      this.str(observer),
-      pos,
-      lt,
-    );
-    this.checkFailed();
-    const result: PositionResult = {
-      position: {
-        x: this.readDouble(pos),
-        y: this.readDouble(pos + 8),
-        z: this.readDouble(pos + 16),
-      },
-      lightTime: this.readDouble(lt),
-    };
-    this.mod._free(pos);
-    this.mod._free(lt);
-    return result;
+    return this.scope(() => {
+      const pos = this.scratch(3 * 8);
+      const lt = this.scratch(8);
+      this.call(
+        'spkpos_c',
+        this.str(target),
+        et,
+        this.str(frame),
+        this.str(abcorr),
+        this.str(observer),
+        pos,
+        lt,
+      );
+      this.checkFailed();
+      return {
+        position: {
+          x: this.readDouble(pos),
+          y: this.readDouble(pos + 8),
+          z: this.readDouble(pos + 16),
+        },
+        lightTime: this.readDouble(lt),
+      };
+    });
   }
 
   spkezr(
@@ -220,35 +266,34 @@ export class SpiceBindings {
     abcorr: AberrationCorrection,
     observer: string,
   ): StateVector {
-    const state = this.mod._malloc(6 * 8);
-    const lt = this.mod._malloc(8);
-    this.call(
-      'spkezr_c',
-      this.str(target),
-      et,
-      this.str(frame),
-      this.str(abcorr),
-      this.str(observer),
-      state,
-      lt,
-    );
-    this.checkFailed();
-    const result: StateVector = {
-      position: {
-        x: this.readDouble(state),
-        y: this.readDouble(state + 8),
-        z: this.readDouble(state + 16),
-      },
-      velocity: {
-        x: this.readDouble(state + 24),
-        y: this.readDouble(state + 32),
-        z: this.readDouble(state + 40),
-      },
-      lightTime: this.readDouble(lt),
-    };
-    this.mod._free(state);
-    this.mod._free(lt);
-    return result;
+    return this.scope(() => {
+      const state = this.scratch(6 * 8);
+      const lt = this.scratch(8);
+      this.call(
+        'spkezr_c',
+        this.str(target),
+        et,
+        this.str(frame),
+        this.str(abcorr),
+        this.str(observer),
+        state,
+        lt,
+      );
+      this.checkFailed();
+      return {
+        position: {
+          x: this.readDouble(state),
+          y: this.readDouble(state + 8),
+          z: this.readDouble(state + 16),
+        },
+        velocity: {
+          x: this.readDouble(state + 24),
+          y: this.readDouble(state + 32),
+          z: this.readDouble(state + 40),
+        },
+        lightTime: this.readDouble(lt),
+      };
+    });
   }
 
   private readVec3(ptr: number): Vec3 {
@@ -267,24 +312,24 @@ export class SpiceBindings {
     abcorr: AberrationCorrection,
     observer: string,
   ): Float64Array {
-    const n = etArray.length;
-    const out = new Float64Array(n * 3);
-    const t = this.str(target);
-    const f = this.str(frame);
-    const a = this.str(abcorr);
-    const o = this.str(observer);
-    const pos = this.mod._malloc(24);
-    const lt = this.mod._malloc(8);
-    for (let k = 0; k < n; k++) {
-      this.call('spkpos_c', t, etArray[k]!, f, a, o, pos, lt);
-      this.checkFailed();
-      out[k * 3] = this.readDouble(pos);
-      out[k * 3 + 1] = this.readDouble(pos + 8);
-      out[k * 3 + 2] = this.readDouble(pos + 16);
-    }
-    this.mod._free(pos);
-    this.mod._free(lt);
-    return out;
+    return this.scope(() => {
+      const n = etArray.length;
+      const out = new Float64Array(n * 3);
+      const t = this.str(target);
+      const f = this.str(frame);
+      const a = this.str(abcorr);
+      const o = this.str(observer);
+      const pos = this.scratch(24);
+      const lt = this.scratch(8);
+      for (let k = 0; k < n; k++) {
+        this.call('spkpos_c', t, etArray[k]!, f, a, o, pos, lt);
+        this.checkFailed();
+        out[k * 3] = this.readDouble(pos);
+        out[k * 3 + 1] = this.readDouble(pos + 8);
+        out[k * 3 + 2] = this.readDouble(pos + 16);
+      }
+      return out;
+    });
   }
 
   private writeState(ptr: number, s: CartesianState): void {
@@ -319,104 +364,99 @@ export class SpiceBindings {
   /** Two-vector attitude (twovec): the rotation whose axis `indexa` aligns with
    * `axdef` and whose axis `indexp` lies in the axdef-plndef plane (indices 1..3). */
   twovec(axdef: Vec3, indexa: number, plndef: Vec3, indexp: number): number[] {
-    const ax = this.mod._malloc(24);
-    const pl = this.mod._malloc(24);
-    const out = this.mod._malloc(72);
-    this.writeVec3(ax, axdef);
-    this.writeVec3(pl, plndef);
-    this.call('twovec_c', ax, indexa, pl, indexp, out);
-    this.checkFailed();
-    const m = this.readMat3(out);
-    [ax, pl, out].forEach((p) => this.mod._free(p));
-    return m;
+    return this.scope(() => {
+      const ax = this.scratch(24);
+      const pl = this.scratch(24);
+      const out = this.scratch(72);
+      this.writeVec3(ax, axdef);
+      this.writeVec3(pl, plndef);
+      this.call('twovec_c', ax, indexa, pl, indexp, out);
+      this.checkFailed();
+      return this.readMat3(out);
+    });
   }
 
   /** Rotation matrix -> SPICE quaternion [w, x, y, z] (m2q). */
   m2q(matrix: readonly number[]): number[] {
-    const r = this.mod._malloc(72);
-    const q = this.mod._malloc(32);
-    this.writeMat3(r, matrix);
-    this.call('m2q_c', r, q);
-    this.checkFailed();
-    const out = [0, 1, 2, 3].map((i) => this.readDouble(q + i * 8));
-    this.mod._free(r);
-    this.mod._free(q);
-    return out;
+    return this.scope(() => {
+      const r = this.scratch(72);
+      const q = this.scratch(32);
+      this.writeMat3(r, matrix);
+      this.call('m2q_c', r, q);
+      this.checkFailed();
+      return [0, 1, 2, 3].map((i) => this.readDouble(q + i * 8));
+    });
   }
 
   /** SPICE quaternion [w, x, y, z] -> rotation matrix (q2m). */
   q2m(quat: readonly number[]): number[] {
-    const q = this.mod._malloc(32);
-    const r = this.mod._malloc(72);
-    for (let i = 0; i < 4; i++) this.mod.setValue(q + i * 8, quat[i]!, 'double');
-    this.call('q2m_c', q, r);
-    this.checkFailed();
-    const m = this.readMat3(r);
-    this.mod._free(q);
-    this.mod._free(r);
-    return m;
+    return this.scope(() => {
+      const q = this.scratch(32);
+      const r = this.scratch(72);
+      for (let i = 0; i < 4; i++) this.mod.setValue(q + i * 8, quat[i]!, 'double');
+      this.call('q2m_c', q, r);
+      this.checkFailed();
+      return this.readMat3(r);
+    });
   }
 
   /** Rotation axis and angle of a rotation matrix (raxisa). */
   raxisa(matrix: readonly number[]): { axis: Vec3; angle: number } {
-    const r = this.mod._malloc(72);
-    const axis = this.mod._malloc(24);
-    const angle = this.mod._malloc(8);
-    this.writeMat3(r, matrix);
-    this.call('raxisa_c', r, axis, angle);
-    this.checkFailed();
-    const result = { axis: this.readVec3(axis), angle: this.readDouble(angle) };
-    [r, axis, angle].forEach((p) => this.mod._free(p));
-    return result;
+    return this.scope(() => {
+      const r = this.scratch(72);
+      const axis = this.scratch(24);
+      const angle = this.scratch(8);
+      this.writeMat3(r, matrix);
+      this.call('raxisa_c', r, axis, angle);
+      this.checkFailed();
+      return { axis: this.readVec3(axis), angle: this.readDouble(angle) };
+    });
   }
 
   /** Osculating elements (RP,ECC,INC,LNODE,ARGP,M0,T0,MU) of a state about mu. */
   oscelt(state: CartesianState, et: number, mu: number): OsculatingElements {
-    const st = this.mod._malloc(48);
-    this.writeState(st, state);
-    const elts = this.mod._malloc(64);
-    this.call('oscelt_c', st, et, mu, elts);
-    this.checkFailed();
-    const e: OsculatingElements = {
-      rp: this.readDouble(elts),
-      ecc: this.readDouble(elts + 8),
-      inc: this.readDouble(elts + 16),
-      lnode: this.readDouble(elts + 24),
-      argp: this.readDouble(elts + 32),
-      m0: this.readDouble(elts + 40),
-      t0: this.readDouble(elts + 48),
-      mu: this.readDouble(elts + 56),
-    };
-    this.mod._free(st);
-    this.mod._free(elts);
-    return e;
+    return this.scope(() => {
+      const st = this.scratch(48);
+      this.writeState(st, state);
+      const elts = this.scratch(64);
+      this.call('oscelt_c', st, et, mu, elts);
+      this.checkFailed();
+      return {
+        rp: this.readDouble(elts),
+        ecc: this.readDouble(elts + 8),
+        inc: this.readDouble(elts + 16),
+        lnode: this.readDouble(elts + 24),
+        argp: this.readDouble(elts + 32),
+        m0: this.readDouble(elts + 40),
+        t0: this.readDouble(elts + 48),
+        mu: this.readDouble(elts + 56),
+      };
+    });
   }
 
   /** Cartesian state from osculating elements, propagated to et. */
   conics(el: OsculatingElements, et: number): CartesianState {
-    const elts = this.mod._malloc(64);
-    const values = [el.rp, el.ecc, el.inc, el.lnode, el.argp, el.m0, el.t0, el.mu];
-    values.forEach((v, i) => this.mod.setValue(elts + i * 8, v, 'double'));
-    const st = this.mod._malloc(48);
-    this.call('conics_c', elts, et, st);
-    this.checkFailed();
-    const state = this.readState(st);
-    this.mod._free(elts);
-    this.mod._free(st);
-    return state;
+    return this.scope(() => {
+      const elts = this.scratch(64);
+      const values = [el.rp, el.ecc, el.inc, el.lnode, el.argp, el.m0, el.t0, el.mu];
+      values.forEach((v, i) => this.mod.setValue(elts + i * 8, v, 'double'));
+      const st = this.scratch(48);
+      this.call('conics_c', elts, et, st);
+      this.checkFailed();
+      return this.readState(st);
+    });
   }
 
   /** Two-body propagation of a state by dt seconds about gravitational parameter mu. */
   prop2b(mu: number, state: CartesianState, dt: number): CartesianState {
-    const pv = this.mod._malloc(48);
-    this.writeState(pv, state);
-    const out = this.mod._malloc(48);
-    this.call('prop2b_c', mu, pv, dt, out);
-    this.checkFailed();
-    const result = this.readState(out);
-    this.mod._free(pv);
-    this.mod._free(out);
-    return result;
+    return this.scope(() => {
+      const pv = this.scratch(48);
+      this.writeState(pv, state);
+      const out = this.scratch(48);
+      this.call('prop2b_c', mu, pv, dt, out);
+      this.checkFailed();
+      return this.readState(out);
+    });
   }
 
   /**
@@ -435,63 +475,64 @@ export class SpiceBindings {
     et: Float64Array,
     states: Float64Array,
   ): void {
-    const path = `${KERNEL_DIR}/${name}`;
-    if (this.mod.FS.analyzePath(path).exists) this.mod.FS.unlink(path);
-    const n = et.length;
-    if (n < 2 || states.length !== n * 6) {
-      throw new SpiceError(`writeSpkType13: need >=2 epochs and states of length 6n (n=${n})`);
-    }
-    const handlePtr = this.mod._malloc(4);
-    this.call('spkopn_c', this.str(path), this.str(segid.slice(0, 60) || 'BESSEL'), 0, handlePtr);
-    this.checkFailed();
-    const handle = this.readInt(handlePtr);
+    this.scope(() => {
+      const path = `${KERNEL_DIR}/${name}`;
+      if (this.mod.FS.analyzePath(path).exists) this.mod.FS.unlink(path);
+      const n = et.length;
+      if (n < 2 || states.length !== n * 6) {
+        throw new SpiceError(`writeSpkType13: need >=2 epochs and states of length 6n (n=${n})`);
+      }
+      const handlePtr = this.scratch(4);
+      this.call('spkopn_c', this.str(path), this.str(segid.slice(0, 60) || 'BESSEL'), 0, handlePtr);
+      this.checkFailed();
+      const handle = this.readInt(handlePtr);
 
-    const statesPtr = this.mod._malloc(n * 6 * 8);
-    for (let i = 0; i < n * 6; i++) this.mod.setValue(statesPtr + i * 8, states[i]!, 'double');
-    const epochsPtr = this.mod._malloc(n * 8);
-    for (let k = 0; k < n; k++) this.mod.setValue(epochsPtr + k * 8, et[k]!, 'double');
+      const statesPtr = this.scratch(n * 6 * 8);
+      for (let i = 0; i < n * 6; i++) this.mod.setValue(statesPtr + i * 8, states[i]!, 'double');
+      const epochsPtr = this.scratch(n * 8);
+      for (let k = 0; k < n; k++) this.mod.setValue(epochsPtr + k * 8, et[k]!, 'double');
 
-    this.call(
-      'spkw13_c',
-      handle,
-      body,
-      center,
-      this.str(frame),
-      et[0]!,
-      et[n - 1]!,
-      this.str(segid),
-      degree,
-      n,
-      statesPtr,
-      epochsPtr,
-    );
-    this.checkFailed();
-    this.call('spkcls_c', handle);
-    this.checkFailed();
-    [handlePtr, statesPtr, epochsPtr].forEach((p) => this.mod._free(p));
+      this.call(
+        'spkw13_c',
+        handle,
+        body,
+        center,
+        this.str(frame),
+        et[0]!,
+        et[n - 1]!,
+        this.str(segid),
+        degree,
+        n,
+        statesPtr,
+        epochsPtr,
+      );
+      this.checkFailed();
+      this.call('spkcls_c', handle);
+      this.checkFailed();
 
-    this.call('furnsh_c', this.str(path));
-    this.checkFailed();
+      this.call('furnsh_c', this.str(path));
+      this.checkFailed();
+    });
   }
 
   /** Ephemeris seconds past J2000 (ET) to continuous encoded SCLK ticks (sce2c). */
   sce2c(sc: number, et: number): number {
-    const out = this.mod._malloc(8);
-    this.call('sce2c_c', sc, et, out);
-    this.checkFailed();
-    const ticks = this.readDouble(out);
-    this.mod._free(out);
-    return ticks;
+    return this.scope(() => {
+      const out = this.scratch(8);
+      this.call('sce2c_c', sc, et, out);
+      this.checkFailed();
+      return this.readDouble(out);
+    });
   }
 
   /** Continuous encoded SCLK ticks to ephemeris seconds past J2000 (ET) (sct2e). */
   sct2e(sc: number, sclkdp: number): number {
-    const out = this.mod._malloc(8);
-    this.call('sct2e_c', sc, sclkdp, out);
-    this.checkFailed();
-    const et = this.readDouble(out);
-    this.mod._free(out);
-    return et;
+    return this.scope(() => {
+      const out = this.scratch(8);
+      this.call('sct2e_c', sc, sclkdp, out);
+      this.checkFailed();
+      return this.readDouble(out);
+    });
   }
 
   /**
@@ -505,18 +546,18 @@ export class SpiceBindings {
     cmat: number[];
     clkout: number;
   } {
-    const cmat = this.mod._malloc(72);
-    const clkout = this.mod._malloc(8);
-    const found = this.mod._malloc(4);
-    this.call('ckgp_c', inst, sclkdp, tol, this.str(ref), cmat, clkout, found);
-    this.checkFailed();
-    const result = {
-      found: this.readInt(found) !== 0,
-      cmat: this.readMat3(cmat),
-      clkout: this.readDouble(clkout),
-    };
-    [cmat, clkout, found].forEach((p) => this.mod._free(p));
-    return result;
+    return this.scope(() => {
+      const cmat = this.scratch(72);
+      const clkout = this.scratch(8);
+      const found = this.scratch(4);
+      this.call('ckgp_c', inst, sclkdp, tol, this.str(ref), cmat, clkout, found);
+      this.checkFailed();
+      return {
+        found: this.readInt(found) !== 0,
+        cmat: this.readMat3(cmat),
+        clkout: this.readDouble(clkout),
+      };
+    });
   }
 
   /**
@@ -539,58 +580,61 @@ export class SpiceBindings {
     avvs: Float64Array | null,
     starts: Float64Array,
   ): void {
-    const path = `${KERNEL_DIR}/${name}`;
-    if (this.mod.FS.analyzePath(path).exists) this.mod.FS.unlink(path);
-    const n = sclkdp.length;
-    if (n < 1 || quats.length !== n * 4) {
-      throw new SpiceError(`writeCk03: need >=1 record and quats of length 4n (n=${n})`);
-    }
-    const avflag = avvs !== null;
-    if (avflag && avvs.length !== n * 3) {
-      throw new SpiceError(`writeCk03: avvs must be length 3n when present (n=${n})`);
-    }
-    const nints = starts.length;
-    if (nints < 1) throw new SpiceError('writeCk03: need at least one interpolation interval start');
+    this.scope(() => {
+      const path = `${KERNEL_DIR}/${name}`;
+      if (this.mod.FS.analyzePath(path).exists) this.mod.FS.unlink(path);
+      const n = sclkdp.length;
+      if (n < 1 || quats.length !== n * 4) {
+        throw new SpiceError(`writeCk03: need >=1 record and quats of length 4n (n=${n})`);
+      }
+      const avflag = avvs !== null;
+      if (avvs !== null && avvs.length !== n * 3) {
+        throw new SpiceError(`writeCk03: avvs must be length 3n when present (n=${n})`);
+      }
+      const nints = starts.length;
+      if (nints < 1) throw new SpiceError('writeCk03: need at least one interpolation interval start');
 
-    const handlePtr = this.mod._malloc(4);
-    // ckopn reserves comment space (ncomch); 0 is fine for a generated segment.
-    this.call('ckopn_c', this.str(path), this.str(segid.slice(0, 60) || 'BESSEL_CK'), 0, handlePtr);
-    this.checkFailed();
-    const handle = this.readInt(handlePtr);
+      const handlePtr = this.scratch(4);
+      // ckopn reserves comment space (ncomch); 0 is fine for a generated segment.
+      this.call('ckopn_c', this.str(path), this.str(segid.slice(0, 60) || 'BESSEL_CK'), 0, handlePtr);
+      this.checkFailed();
+      const handle = this.readInt(handlePtr);
 
-    const sclkPtr = this.mod._malloc(n * 8);
-    for (let k = 0; k < n; k++) this.mod.setValue(sclkPtr + k * 8, sclkdp[k]!, 'double');
-    const quatPtr = this.mod._malloc(n * 4 * 8);
-    for (let i = 0; i < n * 4; i++) this.mod.setValue(quatPtr + i * 8, quats[i]!, 'double');
-    // ckw03 always reads the avvs argument; pass a zero buffer when avflag is false.
-    const avPtr = this.mod._malloc(n * 3 * 8);
-    for (let i = 0; i < n * 3; i++) this.mod.setValue(avPtr + i * 8, avflag ? avvs[i]! : 0, 'double');
-    const startPtr = this.mod._malloc(nints * 8);
-    for (let k = 0; k < nints; k++) this.mod.setValue(startPtr + k * 8, starts[k]!, 'double');
+      const sclkPtr = this.scratch(n * 8);
+      for (let k = 0; k < n; k++) this.mod.setValue(sclkPtr + k * 8, sclkdp[k]!, 'double');
+      const quatPtr = this.scratch(n * 4 * 8);
+      for (let i = 0; i < n * 4; i++) this.mod.setValue(quatPtr + i * 8, quats[i]!, 'double');
+      // ckw03 always reads the avvs argument; pass a zero buffer when avflag is false.
+      const avPtr = this.scratch(n * 3 * 8);
+      for (let i = 0; i < n * 3; i++) {
+        this.mod.setValue(avPtr + i * 8, avvs !== null ? avvs[i]! : 0, 'double');
+      }
+      const startPtr = this.scratch(nints * 8);
+      for (let k = 0; k < nints; k++) this.mod.setValue(startPtr + k * 8, starts[k]!, 'double');
 
-    this.call(
-      'ckw03_c',
-      handle,
-      sclkdp[0]!,
-      sclkdp[n - 1]!,
-      inst,
-      this.str(ref),
-      avflag ? 1 : 0,
-      this.str(segid),
-      n,
-      sclkPtr,
-      quatPtr,
-      avPtr,
-      nints,
-      startPtr,
-    );
-    this.checkFailed();
-    this.call('ckcls_c', handle);
-    this.checkFailed();
-    [handlePtr, sclkPtr, quatPtr, avPtr, startPtr].forEach((p) => this.mod._free(p));
+      this.call(
+        'ckw03_c',
+        handle,
+        sclkdp[0]!,
+        sclkdp[n - 1]!,
+        inst,
+        this.str(ref),
+        avflag ? 1 : 0,
+        this.str(segid),
+        n,
+        sclkPtr,
+        quatPtr,
+        avPtr,
+        nints,
+        startPtr,
+      );
+      this.checkFailed();
+      this.call('ckcls_c', handle);
+      this.checkFailed();
 
-    this.call('furnsh_c', this.str(path));
-    this.checkFailed();
+      this.call('furnsh_c', this.str(path));
+      this.checkFailed();
+    });
   }
 
   // --- SpiceCell windows (geometry-finder confinement and result cells) ---------
@@ -600,12 +644,16 @@ export class SpiceBindings {
   private static readonly CELL_CTRLSZ = 6;
   private static readonly CELL_BYTES = 36;
 
-  /** Allocate a double window cell holding up to `size` endpoints (size/2 intervals). */
+  /**
+   * Allocate a double window cell holding up to `size` endpoints (size/2 intervals).
+   * Both blocks are tracked in the active scope, so the enclosing finder call frees
+   * them when it returns or throws.
+   */
   private makeWindowCell(size: number): { cell: number; data: number } {
     const ctrl = SpiceBindings.CELL_CTRLSZ;
-    const data = this.mod._malloc((ctrl + size) * 8);
+    const data = this.scratch((ctrl + size) * 8);
     for (let i = 0; i < ctrl; i++) this.mod.setValue(data + i * 8, 0, 'double'); // zero control area
-    const cell = this.mod._malloc(SpiceBindings.CELL_BYTES);
+    const cell = this.scratch(SpiceBindings.CELL_BYTES);
     this.mod.setValue(cell + 0, 1, 'i32'); // dtype = SPICE_DP
     this.mod.setValue(cell + 4, 0, 'i32'); // length (strings only)
     this.mod.setValue(cell + 8, size, 'i32'); // size (max elements)
@@ -629,11 +677,6 @@ export class SpiceBindings {
     return out;
   }
 
-  private freeCell(c: { cell: number; data: number }): void {
-    this.mod._free(c.data);
-    this.mod._free(c.cell);
-  }
-
   /**
    * Occultation/eclipse interval finder (gfoclt): intervals over [start,stop] in
    * which `back` is occulted by `front` as seen from the observer. Returns [s,e]
@@ -654,30 +697,29 @@ export class SpiceBindings {
     stop: number,
     maxIntervals = 1000,
   ): [number, number][] {
-    const cnfine = this.makeWindowCell(2);
-    this.call('wninsd_c', start, stop, cnfine.cell);
-    this.checkFailed();
-    const result = this.makeWindowCell(2 * maxIntervals);
-    this.call(
-      'gfoclt_c',
-      this.str(occtyp),
-      this.str(front),
-      this.str(fshape),
-      this.str(fframe),
-      this.str(back),
-      this.str(bshape),
-      this.str(bframe),
-      this.str(abcorr),
-      this.str(observer),
-      step,
-      cnfine.cell,
-      result.cell,
-    );
-    this.checkFailed();
-    const intervals = this.readWindowCell(result.cell);
-    this.freeCell(cnfine);
-    this.freeCell(result);
-    return intervals;
+    return this.scope(() => {
+      const cnfine = this.makeWindowCell(2);
+      this.call('wninsd_c', start, stop, cnfine.cell);
+      this.checkFailed();
+      const result = this.makeWindowCell(2 * maxIntervals);
+      this.call(
+        'gfoclt_c',
+        this.str(occtyp),
+        this.str(front),
+        this.str(fshape),
+        this.str(fframe),
+        this.str(back),
+        this.str(bshape),
+        this.str(bframe),
+        this.str(abcorr),
+        this.str(observer),
+        step,
+        cnfine.cell,
+        result.cell,
+      );
+      this.checkFailed();
+      return this.readWindowCell(result.cell);
+    });
   }
 
   /**
@@ -696,28 +738,27 @@ export class SpiceBindings {
     stop: number,
     maxIntervals = 1000,
   ): [number, number][] {
-    const cnfine = this.makeWindowCell(2);
-    this.call('wninsd_c', start, stop, cnfine.cell);
-    this.checkFailed();
-    const result = this.makeWindowCell(2 * maxIntervals);
-    this.call(
-      'gfdist_c',
-      this.str(target),
-      this.str(abcorr),
-      this.str(observer),
-      this.str(relate),
-      refval,
-      0, // adjust (used only by ABSMAX/ABSMIN/LOCMAX/LOCMIN)
-      step,
-      maxIntervals,
-      cnfine.cell,
-      result.cell,
-    );
-    this.checkFailed();
-    const intervals = this.readWindowCell(result.cell);
-    this.freeCell(cnfine);
-    this.freeCell(result);
-    return intervals;
+    return this.scope(() => {
+      const cnfine = this.makeWindowCell(2);
+      this.call('wninsd_c', start, stop, cnfine.cell);
+      this.checkFailed();
+      const result = this.makeWindowCell(2 * maxIntervals);
+      this.call(
+        'gfdist_c',
+        this.str(target),
+        this.str(abcorr),
+        this.str(observer),
+        this.str(relate),
+        refval,
+        0, // adjust (used only by ABSMAX/ABSMIN/LOCMAX/LOCMIN)
+        step,
+        maxIntervals,
+        cnfine.cell,
+        result.cell,
+      );
+      this.checkFailed();
+      return this.readWindowCell(result.cell);
+    });
   }
 
   /**
@@ -736,61 +777,61 @@ export class SpiceBindings {
     observer: string,
     et: number,
   ): number {
-    const out = this.mod._malloc(4);
-    this.call(
-      'occult_c',
-      this.str(targ1),
-      this.str(shape1),
-      this.str(frame1),
-      this.str(targ2),
-      this.str(shape2),
-      this.str(frame2),
-      this.str(abcorr),
-      this.str(observer),
-      et,
-      out,
-    );
-    this.checkFailed();
-    const code = this.readInt(out);
-    this.mod._free(out);
-    return code;
+    return this.scope(() => {
+      const out = this.scratch(4);
+      this.call(
+        'occult_c',
+        this.str(targ1),
+        this.str(shape1),
+        this.str(frame1),
+        this.str(targ2),
+        this.str(shape2),
+        this.str(frame2),
+        this.str(abcorr),
+        this.str(observer),
+        et,
+        out,
+      );
+      this.checkFailed();
+      return this.readInt(out);
+    });
   }
 
   getfov(instId: number, room = 16): FovResult {
-    const shapeLen = 64;
-    const frameLen = 64;
-    const shape = this.mod._malloc(shapeLen);
-    const frame = this.mod._malloc(frameLen);
-    const bsight = this.mod._malloc(24);
-    const nPtr = this.mod._malloc(4);
-    const bounds = this.mod._malloc(room * 24);
-    this.call('getfov_c', instId, room, shapeLen, frameLen, shape, frame, bsight, nPtr, bounds);
-    this.checkFailed();
-    const n = this.readInt(nPtr);
-    const boundsArr: Vec3[] = [];
-    for (let i = 0; i < n; i++) boundsArr.push(this.readVec3(bounds + i * 24));
-    const result: FovResult = {
-      shape: this.mod.UTF8ToString(shape),
-      frame: this.mod.UTF8ToString(frame),
-      boresight: this.readVec3(bsight),
-      bounds: boundsArr,
-    };
-    [shape, frame, bsight, nPtr, bounds].forEach((p) => this.mod._free(p));
-    return result;
+    return this.scope(() => {
+      const shapeLen = 64;
+      const frameLen = 64;
+      const shape = this.scratch(shapeLen);
+      const frame = this.scratch(frameLen);
+      const bsight = this.scratch(24);
+      const nPtr = this.scratch(4);
+      const bounds = this.scratch(room * 24);
+      this.call('getfov_c', instId, room, shapeLen, frameLen, shape, frame, bsight, nPtr, bounds);
+      this.checkFailed();
+      const n = this.readInt(nPtr);
+      const boundsArr: Vec3[] = [];
+      for (let i = 0; i < n; i++) boundsArr.push(this.readVec3(bounds + i * 24));
+      return {
+        shape: this.mod.UTF8ToString(shape),
+        frame: this.mod.UTF8ToString(frame),
+        boresight: this.readVec3(bsight),
+        bounds: boundsArr,
+      };
+    });
   }
 
   private readDoubles(item: string, dim: number, fill: (valuesPtr: number, dimPtr: number) => void): number[] {
-    const maxn = Math.max(1, dim);
-    const dimPtr = this.mod._malloc(4);
-    const values = this.mod._malloc(maxn * 8);
-    fill(values, dimPtr);
-    this.checkFailed();
-    const out: number[] = [];
-    const got = this.readInt(dimPtr);
-    for (let i = 0; i < got; i++) out.push(this.readDouble(values + i * 8));
-    this.mod._free(dimPtr);
-    this.mod._free(values);
-    return out;
+    return this.scope(() => {
+      const maxn = Math.max(1, dim);
+      const dimPtr = this.scratch(4);
+      const values = this.scratch(maxn * 8);
+      fill(values, dimPtr);
+      this.checkFailed();
+      const out: number[] = [];
+      const got = this.readInt(dimPtr);
+      for (let i = 0; i < got; i++) out.push(this.readDouble(values + i * 8));
+      return out;
+    });
   }
 
   bodvrd(body: string, item: string, maxn = 3): number[] {
@@ -806,23 +847,25 @@ export class SpiceBindings {
   }
 
   pxform(from: string, to: string, et: number): number[] {
-    const rot = this.mod._malloc(9 * 8);
-    this.call('pxform_c', this.str(from), this.str(to), et, rot);
-    this.checkFailed();
-    const out: number[] = [];
-    for (let i = 0; i < 9; i++) out.push(this.readDouble(rot + i * 8));
-    this.mod._free(rot);
-    return out;
+    return this.scope(() => {
+      const rot = this.scratch(9 * 8);
+      this.call('pxform_c', this.str(from), this.str(to), et, rot);
+      this.checkFailed();
+      const out: number[] = [];
+      for (let i = 0; i < 9; i++) out.push(this.readDouble(rot + i * 8));
+      return out;
+    });
   }
 
   sxform(from: string, to: string, et: number): number[] {
-    const xf = this.mod._malloc(36 * 8);
-    this.call('sxform_c', this.str(from), this.str(to), et, xf);
-    this.checkFailed();
-    const out: number[] = [];
-    for (let i = 0; i < 36; i++) out.push(this.readDouble(xf + i * 8));
-    this.mod._free(xf);
-    return out;
+    return this.scope(() => {
+      const xf = this.scratch(36 * 8);
+      this.call('sxform_c', this.str(from), this.str(to), et, xf);
+      this.checkFailed();
+      const out: number[] = [];
+      for (let i = 0; i < 36; i++) out.push(this.readDouble(xf + i * 8));
+      return out;
+    });
   }
 
   sincpt(
@@ -835,38 +878,38 @@ export class SpiceBindings {
     dref: string,
     dvec: Vec3,
   ): InterceptResult {
-    const dvecPtr = this.mod._malloc(24);
-    this.mod.setValue(dvecPtr, dvec.x, 'double');
-    this.mod.setValue(dvecPtr + 8, dvec.y, 'double');
-    this.mod.setValue(dvecPtr + 16, dvec.z, 'double');
-    const spoint = this.mod._malloc(24);
-    const trgepc = this.mod._malloc(8);
-    const srfvec = this.mod._malloc(24);
-    const found = this.mod._malloc(4);
-    this.call(
-      'sincpt_c',
-      this.str(method),
-      this.str(target),
-      et,
-      this.str(fixref),
-      this.str(abcorr),
-      this.str(observer),
-      this.str(dref),
-      dvecPtr,
-      spoint,
-      trgepc,
-      srfvec,
-      found,
-    );
-    this.checkFailed();
-    const result: InterceptResult = {
-      found: this.readInt(found) !== 0,
-      point: this.readVec3(spoint),
-      trgepc: this.readDouble(trgepc),
-      srfvec: this.readVec3(srfvec),
-    };
-    [dvecPtr, spoint, trgepc, srfvec, found].forEach((p) => this.mod._free(p));
-    return result;
+    return this.scope(() => {
+      const dvecPtr = this.scratch(24);
+      this.mod.setValue(dvecPtr, dvec.x, 'double');
+      this.mod.setValue(dvecPtr + 8, dvec.y, 'double');
+      this.mod.setValue(dvecPtr + 16, dvec.z, 'double');
+      const spoint = this.scratch(24);
+      const trgepc = this.scratch(8);
+      const srfvec = this.scratch(24);
+      const found = this.scratch(4);
+      this.call(
+        'sincpt_c',
+        this.str(method),
+        this.str(target),
+        et,
+        this.str(fixref),
+        this.str(abcorr),
+        this.str(observer),
+        this.str(dref),
+        dvecPtr,
+        spoint,
+        trgepc,
+        srfvec,
+        found,
+      );
+      this.checkFailed();
+      return {
+        found: this.readInt(found) !== 0,
+        point: this.readVec3(spoint),
+        trgepc: this.readDouble(trgepc),
+        srfvec: this.readVec3(srfvec),
+      };
+    });
   }
 
   ilumin(
@@ -878,81 +921,82 @@ export class SpiceBindings {
     observer: string,
     point: Vec3,
   ): IluminResult {
-    const spoint = this.mod._malloc(24);
-    this.mod.setValue(spoint, point.x, 'double');
-    this.mod.setValue(spoint + 8, point.y, 'double');
-    this.mod.setValue(spoint + 16, point.z, 'double');
-    const trgepc = this.mod._malloc(8);
-    const srfvec = this.mod._malloc(24);
-    const phase = this.mod._malloc(8);
-    const incdnc = this.mod._malloc(8);
-    const emissn = this.mod._malloc(8);
-    this.call(
-      'ilumin_c',
-      this.str(method),
-      this.str(target),
-      et,
-      this.str(fixref),
-      this.str(abcorr),
-      this.str(observer),
-      spoint,
-      trgepc,
-      srfvec,
-      phase,
-      incdnc,
-      emissn,
-    );
-    this.checkFailed();
-    const result: IluminResult = {
-      phase: this.readDouble(phase),
-      incidence: this.readDouble(incdnc),
-      emission: this.readDouble(emissn),
-      trgepc: this.readDouble(trgepc),
-      srfvec: this.readVec3(srfvec),
-    };
-    [spoint, trgepc, srfvec, phase, incdnc, emissn].forEach((p) => this.mod._free(p));
-    return result;
+    return this.scope(() => {
+      const spoint = this.scratch(24);
+      this.mod.setValue(spoint, point.x, 'double');
+      this.mod.setValue(spoint + 8, point.y, 'double');
+      this.mod.setValue(spoint + 16, point.z, 'double');
+      const trgepc = this.scratch(8);
+      const srfvec = this.scratch(24);
+      const phase = this.scratch(8);
+      const incdnc = this.scratch(8);
+      const emissn = this.scratch(8);
+      this.call(
+        'ilumin_c',
+        this.str(method),
+        this.str(target),
+        et,
+        this.str(fixref),
+        this.str(abcorr),
+        this.str(observer),
+        spoint,
+        trgepc,
+        srfvec,
+        phase,
+        incdnc,
+        emissn,
+      );
+      this.checkFailed();
+      return {
+        phase: this.readDouble(phase),
+        incidence: this.readDouble(incdnc),
+        emission: this.readDouble(emissn),
+        trgepc: this.readDouble(trgepc),
+        srfvec: this.readVec3(srfvec),
+      };
+    });
   }
 
   /** Read a DSK type-2 shape model by staging bytes and using DAS-level readers. */
   readDsk(name: string, bytes: Uint8Array): DskShape {
-    const path = `${KERNEL_DIR}/${name}`;
-    this.mod.FS.writeFile(path, bytes);
-    const handlePtr = this.mod._malloc(4);
-    this.call('dasopr_c', this.str(path), handlePtr);
-    this.checkFailed();
-    const handle = this.readInt(handlePtr);
+    return this.scope(() => {
+      const path = `${KERNEL_DIR}/${name}`;
+      this.mod.FS.writeFile(path, bytes);
+      const handlePtr = this.scratch(4);
+      this.call('dasopr_c', this.str(path), handlePtr);
+      this.checkFailed();
+      const handle = this.readInt(handlePtr);
 
-    const descr = this.mod._malloc(8 * 4); // SpiceDLADescr: 8 ints
-    const found = this.mod._malloc(4);
-    this.call('dlabfs_c', handle, descr, found);
-    this.checkFailed();
-    if (this.readInt(found) === 0) {
+      const descr = this.scratch(8 * 4); // SpiceDLADescr: 8 ints
+      const found = this.scratch(4);
+      this.call('dlabfs_c', handle, descr, found);
+      this.checkFailed();
+      if (this.readInt(found) === 0) {
+        this.call('dascls_c', handle);
+        throw new SpiceError(`DSK "${name}" has no segments`);
+      }
+
+      const nvPtr = this.scratch(4);
+      const npPtr = this.scratch(4);
+      this.call('dskz02_c', handle, descr, nvPtr, npPtr);
+      this.checkFailed();
+      const nv = this.readInt(nvPtr);
+      const np = this.readInt(npPtr);
+
+      const vertices = this.readDskChunked(nv, 3, 8, (start, room, nPtr, buf) =>
+        this.call('dskv02_c', handle, descr, start, room, nPtr, buf),
+      );
+      const platesRaw = this.readDskChunked(np, 3, 4, (start, room, nPtr, buf) =>
+        this.call('dskp02_c', handle, descr, start, room, nPtr, buf),
+      );
+
       this.call('dascls_c', handle);
-      throw new SpiceError(`DSK "${name}" has no segments`);
-    }
+      this.checkFailed();
 
-    const nvPtr = this.mod._malloc(4);
-    const npPtr = this.mod._malloc(4);
-    this.call('dskz02_c', handle, descr, nvPtr, npPtr);
-    this.checkFailed();
-    const nv = this.readInt(nvPtr);
-    const np = this.readInt(npPtr);
-
-    const vertices = this.readDskChunked(nv, 3, 8, (start, room, nPtr, buf) =>
-      this.call('dskv02_c', handle, descr, start, room, nPtr, buf),
-    );
-    const platesRaw = this.readDskChunked(np, 3, 4, (start, room, nPtr, buf) =>
-      this.call('dskp02_c', handle, descr, start, room, nPtr, buf),
-    );
-
-    this.call('dascls_c', handle);
-    this.checkFailed();
-    [handlePtr, descr, found, nvPtr, npPtr].forEach((p) => this.mod._free(p));
-
-    // Plate vertex indices are 1-based in CSPICE; convert to 0-based.
-    const plates = platesRaw.map((i) => i - 1);
-    return { vertices, plates };
+      // Plate vertex indices are 1-based in CSPICE; convert to 0-based.
+      const plates = platesRaw.map((i) => i - 1);
+      return { vertices, plates };
+    });
   }
 
   /** Read count rows of `cols` values (`bytes` each: 8 double, 4 int) in chunks. */
@@ -962,9 +1006,18 @@ export class SpiceBindings {
     bytes: number,
     fetch: (start: number, room: number, nPtr: number, buf: number) => number,
   ): number[] {
+    return this.scope(() => this.readDskChunkedInner(count, cols, bytes, fetch));
+  }
+
+  private readDskChunkedInner(
+    count: number,
+    cols: number,
+    bytes: number,
+    fetch: (start: number, room: number, nPtr: number, buf: number) => number,
+  ): number[] {
     const CHUNK = 1000;
-    const nPtr = this.mod._malloc(4);
-    const buf = this.mod._malloc(CHUNK * cols * bytes);
+    const nPtr = this.scratch(4);
+    const buf = this.scratch(CHUNK * cols * bytes);
     const out: number[] = [];
     const isDouble = bytes === 8;
     let start = 1;
@@ -979,8 +1032,6 @@ export class SpiceBindings {
       }
       start += n;
     }
-    this.mod._free(nPtr);
-    this.mod._free(buf);
     return out;
   }
 
@@ -992,28 +1043,28 @@ export class SpiceBindings {
     abcorr: AberrationCorrection,
     observer: string,
   ): SubPointResult {
-    const spoint = this.mod._malloc(24);
-    const trgepc = this.mod._malloc(8);
-    const srfvec = this.mod._malloc(24);
-    this.call(
-      'subpnt_c',
-      this.str(method),
-      this.str(target),
-      et,
-      this.str(fixref),
-      this.str(abcorr),
-      this.str(observer),
-      spoint,
-      trgepc,
-      srfvec,
-    );
-    this.checkFailed();
-    const result: SubPointResult = {
-      point: this.readVec3(spoint),
-      trgepc: this.readDouble(trgepc),
-      srfvec: this.readVec3(srfvec),
-    };
-    [spoint, trgepc, srfvec].forEach((p) => this.mod._free(p));
-    return result;
+    return this.scope(() => {
+      const spoint = this.scratch(24);
+      const trgepc = this.scratch(8);
+      const srfvec = this.scratch(24);
+      this.call(
+        'subpnt_c',
+        this.str(method),
+        this.str(target),
+        et,
+        this.str(fixref),
+        this.str(abcorr),
+        this.str(observer),
+        spoint,
+        trgepc,
+        srfvec,
+      );
+      this.checkFailed();
+      return {
+        point: this.readVec3(spoint),
+        trgepc: this.readDouble(trgepc),
+        srfvec: this.readVec3(srfvec),
+      };
+    });
   }
 }

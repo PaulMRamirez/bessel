@@ -9,6 +9,7 @@ import {
   AmbientLight,
   BufferGeometry,
   Color,
+  type DirectionalLight,
   DoubleSide,
   Float32BufferAttribute,
   Group,
@@ -61,17 +62,69 @@ import {
 
 export type { Km3 };
 
-// Recursively free GPU resources for an object subtree (geometries and
-// materials), so a scene rebuild does not leak buffers.
-function disposeDeep(root: Object3D): void {
+// The standard MeshStandardMaterial / MeshBasicMaterial texture slots a body,
+// cloud, ring, or atmosphere material can own; each is a GPU texture that
+// material.dispose() does NOT free, so a rebuild leaks VRAM unless we dispose
+// them explicitly.
+const MATERIAL_TEXTURE_SLOTS = [
+  'map',
+  'emissiveMap',
+  'normalMap',
+  'bumpMap',
+  'roughnessMap',
+  'metalnessMap',
+  'alphaMap',
+  'aoMap',
+  'specularMap',
+  'displacementMap',
+  'envMap',
+  'lightMap',
+] as const;
+
+function isTexture(value: unknown): value is Texture {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { isTexture?: unknown }).isTexture === 'boolean' &&
+    (value as { isTexture: boolean }).isTexture &&
+    typeof (value as { dispose?: unknown }).dispose === 'function'
+  );
+}
+
+// Free every GPU texture a material owns: the standard named slots plus any
+// ShaderMaterial uniform whose value is a Texture (atmosphere, custom shells).
+// material.dispose() alone leaves these allocated, so they must be walked here.
+function disposeMaterialTextures(material: unknown): void {
+  const mat = material as Record<string, unknown> & { uniforms?: Record<string, { value?: unknown }> };
+  for (const slot of MATERIAL_TEXTURE_SLOTS) {
+    const tex = mat[slot];
+    if (isTexture(tex)) tex.dispose();
+  }
+  const uniforms = mat.uniforms;
+  if (uniforms) {
+    for (const key of Object.keys(uniforms)) {
+      const value = uniforms[key]?.value;
+      if (isTexture(value)) value.dispose();
+    }
+  }
+}
+
+// Recursively free GPU resources for an object subtree (geometries, materials,
+// and the textures the materials own), so a scene rebuild does not leak buffers.
+// Textures are disposed explicitly because material.dispose() does not free them.
+export function disposeDeep(root: Object3D): void {
   root.traverse((child) => {
     const mesh = child as Partial<Mesh> & Partial<Line>;
     mesh.geometry?.dispose?.();
     const material = (mesh as { material?: unknown }).material;
     if (Array.isArray(material)) {
-      for (const m of material) (m as { dispose?: () => void }).dispose?.();
-    } else {
-      (material as { dispose?: () => void } | undefined)?.dispose?.();
+      for (const m of material) {
+        disposeMaterialTextures(m);
+        (m as { dispose?: () => void }).dispose?.();
+      }
+    } else if (material) {
+      disposeMaterialTextures(material);
+      (material as { dispose?: () => void }).dispose?.();
     }
   });
 }
@@ -136,6 +189,11 @@ export class SolarSystemScene {
   private readonly axes = new Map<string, Object3D>();
   private axesVisible = true;
   private starField: Object3D | null = null;
+  // The star field is parented here, not to the camera. The group's rotation
+  // stays identity (J2000) and only the camera position is copied into it each
+  // frame, so stars stay at infinity without inheriting the camera rotation
+  // (which would screen-lock the sky to the view).
+  private readonly starFieldGroup = new Group();
   private starFieldVisible = true;
   private dskMesh: Mesh | null = null;
   private rings: Object3D | null = null;
@@ -150,6 +208,9 @@ export class SolarSystemScene {
   private directionVectors: Object3D | null = null;
   private atmosphere: Object3D | null = null;
   private spacecraftModel: Object3D | null = null;
+  // The single sun shadow light (and its target), held so a re-enable removes and
+  // disposes the prior one instead of stacking shadow passes; reset/disable free it.
+  private sunLight: DirectionalLight | null = null;
   // The inner model object that CK attitude rotates (the wrapper keeps position).
   private spacecraftAttitudeTarget: Object3D | null = null;
   // Objects that track a body each frame (rings, axes, DSK mesh, direction vectors).
@@ -580,15 +641,22 @@ export class SolarSystemScene {
     this.atmosphere = mesh;
   }
 
-  /** Render a star field on the celestial sphere (parented to the camera). */
+  /**
+   * Render a star field on the celestial sphere. The points are parented to a
+   * fixed group (identity rotation, J2000), not to the camera, so render() can
+   * copy only the camera position into the group: the sky stays at infinity but
+   * does not inherit the camera rotation (which would screen-lock the stars).
+   */
   setStarField(stars: readonly Star[]): void {
-    if (this.starField) this.camera.remove(this.starField);
+    if (this.starField) {
+      this.starFieldGroup.remove(this.starField);
+      disposeDeep(this.starField);
+    }
     const points = buildStarField(stars);
     points.visible = this.starFieldVisible;
     this.starField = points;
-    // Parent to the camera so stars stay at infinity regardless of the focus shift.
-    this.camera.add(points);
-    if (!this.scene.children.includes(this.camera)) this.scene.add(this.camera);
+    this.starFieldGroup.add(points);
+    if (!this.scene.children.includes(this.starFieldGroup)) this.scene.add(this.starFieldGroup);
   }
 
   /**
@@ -598,15 +666,24 @@ export class SolarSystemScene {
    */
   setSpacecraftModel(object: Object3D): void {
     if (!this.spacecraft) return;
-    if (this.spacecraftModel) this.world.remove(this.spacecraftModel);
-    this.world.remove(this.spacecraft.mesh);
+    const previous = this.spacecraft.mesh;
     const wrapper = new Group();
     wrapper.add(object);
-    wrapper.position.copy(this.spacecraft.mesh.position);
+    wrapper.position.copy(previous.position);
+    this.world.add(wrapper);
+    // Remove and free the prior marker or wrapper (geometry, material, textures)
+    // before swapping; previous is the marker mesh on first load or the old
+    // wrapper on a re-set, and spacecraftModel mirrors it, so disposing it once
+    // covers both (and avoids the old reset() double-drop).
+    if (this.spacecraftModel && this.spacecraftModel !== previous) {
+      this.world.remove(this.spacecraftModel);
+      disposeDeep(this.spacecraftModel);
+    }
+    this.world.remove(previous);
+    disposeDeep(previous);
     this.spacecraftModel = wrapper;
     this.spacecraftAttitudeTarget = object;
     this.spacecraft = { ...this.spacecraft, mesh: wrapper };
-    this.world.add(wrapper);
   }
 
   /**
@@ -628,11 +705,40 @@ export class SolarSystemScene {
     return this.bodies.get(this.focus)?.def.radiusKm ?? 1000;
   }
 
-  /** Enable sun-cast shadow mapping (replaces the ambient point light). */
+  /**
+   * Enable sun-cast shadow mapping (replaces the ambient point light). Idempotent:
+   * a second call removes and disposes the prior light first, so shadow passes and
+   * their 1024x1024 maps do not accumulate. The light is aimed along the Sun ->
+   * focused-body direction (the Sun sits at the world origin), with its target on
+   * the focused body, so the shadow direction is defined rather than the zero vector.
+   */
   enableShadows(bodyRadiusKm: number): void {
     this.renderer.shadowMap.enabled = true;
-    const light = buildSunLight(bodyRadiusKm * SCALE, 2000);
+    if (this.sunLight) {
+      this.world.remove(this.sunLight);
+      this.world.remove(this.sunLight.target);
+      this.sunLight.dispose();
+    }
+    const frustumDistance = 2000;
+    const light = buildSunLight(bodyRadiusKm * SCALE, frustumDistance);
+    // Aim the light: Sun is at the heliocentric world origin, so the Sun -> body
+    // direction is just the focused body's normalized position. Place the light at
+    // bodyPos - sunDir * frustumDistance with its target on the body.
+    const focusPos = this.positions.get(this.focus) ?? [0, 0, 0];
+    const bx = focusPos[0] * SCALE;
+    const by = focusPos[1] * SCALE;
+    const bz = focusPos[2] * SCALE;
+    const mag = Math.hypot(bx, by, bz);
+    // Fall back to +X when the body sits at the Sun (mag 0) so the direction is
+    // never the zero vector.
+    const ux = mag > 1e-9 ? bx / mag : 1;
+    const uy = mag > 1e-9 ? by / mag : 0;
+    const uz = mag > 1e-9 ? bz / mag : 0;
+    light.position.set(bx - ux * frustumDistance, by - uy * frustumDistance, bz - uz * frustumDistance);
+    light.target.position.set(bx, by, bz);
     this.world.add(light);
+    this.world.add(light.target);
+    this.sunLight = light;
     for (const node of this.bodies.values()) {
       node.mesh.castShadow = true;
       node.mesh.receiveShadow = true;
@@ -640,6 +746,25 @@ export class SolarSystemScene {
     if (this.dskMesh) {
       this.dskMesh.castShadow = true;
       this.dskMesh.receiveShadow = true;
+    }
+  }
+
+  /** Disable sun-cast shadow mapping: remove and dispose the shadow light. */
+  disableShadows(): void {
+    this.renderer.shadowMap.enabled = false;
+    if (this.sunLight) {
+      this.world.remove(this.sunLight);
+      this.world.remove(this.sunLight.target);
+      this.sunLight.dispose();
+      this.sunLight = null;
+    }
+    for (const node of this.bodies.values()) {
+      node.mesh.castShadow = false;
+      node.mesh.receiveShadow = false;
+    }
+    if (this.dskMesh) {
+      this.dskMesh.castShadow = false;
+      this.dskMesh.receiveShadow = false;
     }
   }
 
@@ -875,6 +1000,10 @@ export class SolarSystemScene {
     this.camera.position.set(pose.position[0], pose.position[1], pose.position[2]);
     this.camera.up.set(pose.up[0], pose.up[1], pose.up[2]);
     this.camera.lookAt(new Vector3(pose.target[0], pose.target[1], pose.target[2]));
+    // Keep the star sphere centered on the camera (so stars stay at infinity)
+    // without inheriting the camera rotation: copy only the position, leave the
+    // group's rotation at identity (J2000), so the sky stays inertially fixed.
+    this.starFieldGroup.position.copy(this.camera.position);
     if (Math.abs(this.camera.fov - pose.fov) > 1e-3) {
       this.camera.fov = pose.fov;
       this.camera.updateProjectionMatrix();
@@ -930,9 +1059,12 @@ export class SolarSystemScene {
     for (const node of this.bodies.values()) drop(node.mesh);
     this.bodies.clear();
     this.positions.clear();
-    drop(this.spacecraft?.mesh ?? null);
+    // When a model is loaded, spacecraft.mesh IS the wrapper held in
+    // spacecraftModel, so drop each distinct object once (no double-dispose).
+    const craftMesh = this.spacecraft?.mesh ?? null;
+    drop(craftMesh);
+    if (this.spacecraftModel && this.spacecraftModel !== craftMesh) drop(this.spacecraftModel);
     this.spacecraft = null;
-    drop(this.spacecraftModel);
     this.spacecraftModel = null;
     this.spacecraftAttitudeTarget = null;
     drop(this.trajectory);
@@ -943,8 +1075,11 @@ export class SolarSystemScene {
     this.fovCone = null;
     drop(this.footprint);
     this.footprint = null;
-    drop(this.starField);
-    this.starField = null;
+    if (this.starField) {
+      this.starFieldGroup.remove(this.starField);
+      disposeDeep(this.starField);
+      this.starField = null;
+    }
     drop(this.dskMesh);
     this.dskMesh = null;
     drop(this.rings);
@@ -961,6 +1096,12 @@ export class SolarSystemScene {
     this.swarms.clear();
     for (const entry of this.timeSwitched.values()) drop(entry.group);
     this.timeSwitched.clear();
+    if (this.sunLight) {
+      this.world.remove(this.sunLight);
+      this.world.remove(this.sunLight.target);
+      this.sunLight.dispose();
+      this.sunLight = null;
+    }
     this.anchored.clear();
     this.labelLayer.setLabels([]);
   }
