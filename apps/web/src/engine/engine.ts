@@ -687,6 +687,17 @@ export class BesselEngine {
     });
   }
 
+  /** Instrument-target visibility: windows when a target is within the active sensor's
+   *  nadir-pointed field of view over a day. */
+  async computeInstrumentFov(opts: AnalysisTargetSpan = {}): Promise<void> {
+    const e = this.core;
+    if (!e) return;
+    await this.runTool('compute-fov', async () => {
+      const ops = await import('./analysis-ops.ts');
+      await ops.computeInstrumentFovWindows(e, this.store, this.isDisposed, opts);
+    });
+  }
+
   /** Conjunction analysis: closest approach plus a 2D Pc on the loaded pair. */
   async computeConjunction(opts: { secondary?: string } = {}): Promise<void> {
     const e = this.core;

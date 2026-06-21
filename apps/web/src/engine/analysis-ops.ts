@@ -31,6 +31,8 @@ import { buildHpopForceModel, HPOP_FORCE_MODEL_LABELS, type HpopForceModel } fro
 import { runMcsDesign as runMcsDesignCore, type McsDesign } from './mcs.ts';
 import { runOdDemo } from './od.ts';
 import { centerMu } from './center-mu.ts';
+import { positionAt } from '../sampler.ts';
+import { fovHalfAngleRad, nadirOffAngleRad, intervalsFromFlags } from '../in-fov.ts';
 
 // Earth gravity constants for the numerical (HPOP) propagation. Published WGS-84/EGM
 // values, caller-injected because a PCK carries no GM or harmonics.
@@ -255,6 +257,65 @@ export async function computeAccessTool(
   } catch (err) {
     if (!isDisposed()) store.setState({ accessWindow: null, accessSpan: span, accessFom: null });
     console.error('access analysis failed', err);
+    throw err;
+  }
+}
+
+/**
+ * Instrument-target-visibility windows (B22): when a target body falls within the
+ * active instrument's field of view, modeling the sensor as nadir-pointed (boresight
+ * toward the center body). The FOV half-angle is read from the loaded sensor's
+ * boundary rays; a target is in view when its off-boresight angle is within it. The
+ * sweep uses the sampled ephemeris table (no extra worker round-trips), so it reuses
+ * the same positions the frame loop already holds.
+ */
+export async function computeInstrumentFovWindows(
+  e: EngineCore,
+  store: AppStore,
+  isDisposed: () => boolean,
+  opts: AnalysisTargetSpan = {},
+): Promise<void> {
+  const inst = e.instrument;
+  const sc = e.identity.spacecraftName;
+  const center = e.identity.centerBody;
+  const target = opts.target ?? 'Sun';
+  if (!inst || !sc || !center || !e.table.byBody.has(target) || !e.table.byBody.has(sc)) {
+    store.setState({ fovWindow: null, fovSpan: null, fovFom: null });
+    return;
+  }
+  const t0 = e.clock.state.et;
+  const span: [number, number] = [t0, t0 + (opts.spanSec ?? 86400)];
+  const step = opts.stepSec ?? 120;
+  try {
+    const halfAngle = fovHalfAngleRad(inst.fov.boresight, inst.fov.bounds);
+    const times: number[] = [];
+    const flags: boolean[] = [];
+    for (let t = span[0]; t <= span[1]; t += step) {
+      const off = nadirOffAngleRad(
+        positionAt(e.table, sc, t),
+        positionAt(e.table, center, t),
+        positionAt(e.table, target, t),
+      );
+      times.push(t);
+      flags.push(off <= halfAngle);
+    }
+    const window = intervalsFromFlags(times, flags);
+    const fom = figureOfMerit(window, span);
+    if (!isDisposed()) {
+      store.setState({
+        fovWindow: window,
+        fovSpan: span,
+        fovLabel: `${inst.descriptor.name} sees ${target}`,
+        fovFom: {
+          percentCoverage: fom.percentCoverage,
+          accessCount: fom.accessCount,
+          maxGapSec: fom.maxGapSec,
+        },
+      });
+    }
+  } catch (err) {
+    if (!isDisposed()) store.setState({ fovWindow: null, fovSpan: span, fovFom: null });
+    console.error('instrument FOV analysis failed', err);
     throw err;
   }
 }

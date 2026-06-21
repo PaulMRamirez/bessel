@@ -88,6 +88,11 @@ export interface AppState {
   accessLabel: string;
   /** Figure-of-merit reduction of the access window (coverage %, gaps), or null. */
   accessFom: AccessFom | null;
+  /** Instrument-target-visibility windows (target within the nadir-pointed FOV). */
+  fovWindow: readonly (readonly [number, number])[] | null;
+  fovSpan: readonly [number, number] | null;
+  fovLabel: string;
+  fovFom: AccessFom | null;
   /** Downlink Eb/N0 (dB) time series (spacecraft to Earth) from the last link run. */
   linkSeries: Series | null;
   /** Closest-approach + collision-probability summary from the last conjunction run. */
@@ -326,6 +331,10 @@ export const initialAppState: AppState = {
   accessSpan: null,
   accessLabel: '',
   accessFom: null,
+  fovWindow: null,
+  fovSpan: null,
+  fovLabel: '',
+  fovFom: null,
   linkSeries: null,
   conjunction: null,
   constellation: null,
