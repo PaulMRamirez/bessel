@@ -53,4 +53,26 @@ export default tseslint.config(
     files: ['**/*.test.ts', '**/*.bench.ts', '**/scripts/**', 'e2e/**'],
     rules: { 'no-console': 'off' },
   },
+  {
+    // Leaf invariant (ADR-0013): @bessel/selene-design is a standalone design system.
+    // @bessel/ui may import it, but it must import nothing from Bessel, so the package
+    // stays publishable and reusable on its own. This makes that one-directional rule
+    // machine-enforced rather than review-only: a `@bessel/*` import from inside selene
+    // is a lint error.
+    files: ['design-system/selene-design/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@bessel/*'],
+              message:
+                'selene-design is a leaf design system: it must not import from any @bessel package (ADR-0013). Keep the dependency one-directional (ui -> selene).',
+            },
+          ],
+        },
+      ],
+    },
+  },
 );
