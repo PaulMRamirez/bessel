@@ -12,15 +12,24 @@ function encodeCamera(c: CameraPose): string {
   return `${c.mode}:${target}:${c.distance},${c.azimuth},${c.elevation}`;
 }
 
+/** A finite number from an untrusted fragment field, or the fallback (URLs are hostile). */
+function finiteOr(raw: string | undefined, fallback: number): number {
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 function decodeCamera(raw: string): CameraPose {
   const [mode, target, pose = ''] = raw.split(':');
   const [d, az, el] = pose.split(',');
   const m = MODES.includes(mode as CameraMode) ? (mode as CameraMode) : 'orbit';
+  // Reject non-finite pose fields: a truncated or hostile fragment must not feed a NaN
+  // distance/azimuth/elevation into the camera-relative renderer (a garbage frame).
+  // Fall back to the default-view scalars, matching the invalid-mode fallback above.
   const camera: CameraPose = {
     mode: m,
-    distance: Number(d),
-    azimuth: Number(az),
-    elevation: Number(el),
+    distance: finiteOr(d, 1),
+    azimuth: finiteOr(az, 0),
+    elevation: finiteOr(el, 0),
   };
   return target ? { ...camera, target: decodeURIComponent(target) } : camera;
 }

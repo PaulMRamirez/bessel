@@ -25,12 +25,27 @@ export interface CzmlOptions {
 
 const KM_TO_M = 1000;
 
+/** Thrown when a CZML export input has a bad time or value. Fail loudly (CLAUDE.md). */
+export class CzmlError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CzmlError';
+  }
+}
+
+/** Parse an ISO time to epoch ms, failing loudly so a NaN never reaches the output. */
+function parseTime(label: string, value: string): number {
+  const ms = Date.parse(value);
+  if (!Number.isFinite(ms)) throw new CzmlError(`exportCzml: ${label} is not a valid time: "${value}"`);
+  return ms;
+}
+
 /** Produce a CZML document array for the given trajectory samples. */
 export function exportCzml(options: CzmlOptions): unknown[] {
-  const epochMs = Date.parse(options.start);
+  const epochMs = parseTime('start', options.start);
   const cartesian: number[] = [];
   for (const s of options.samples) {
-    const dt = (Date.parse(s.t) - epochMs) / 1000;
+    const dt = (parseTime(`sample time "${s.t}"`, s.t) - epochMs) / 1000;
     cartesian.push(dt, s.position[0] * KM_TO_M, s.position[1] * KM_TO_M, s.position[2] * KM_TO_M);
   }
 

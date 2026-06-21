@@ -41,7 +41,7 @@ export { encodeView, decodeView } from './codec.ts';
 // a package would be naming churn with dependency-rule and bundle risk for no
 // behavioral gain. They are grouped here as the suite-contract surface.
 export { buildMmgisUrl, type MmgisHandoff, type MmgisMissionConfig } from './mmgis.ts';
-export { exportCzml, type CzmlOptions, type CzmlSample } from './czml.ts';
+export { exportCzml, CzmlError, type CzmlOptions, type CzmlSample } from './czml.ts';
 
 // Real-time telemetry adapter (Phase 4): predicted-versus-actual overlay from a
 // WebSocket-like source. Pure over the socket and a predictor.

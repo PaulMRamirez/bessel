@@ -808,9 +808,11 @@ export class SpiceBindings {
       const bounds = this.scratch(room * 24);
       this.call('getfov_c', instId, room, shapeLen, frameLen, shape, frame, bsight, nPtr, bounds);
       this.checkFailed();
-      const n = this.readInt(nPtr);
+      // Clamp to room: the bounds buffer holds room*24 bytes, so never read past it
+      // even if getfov_c reports more vectors than were requested.
+      const count = Math.min(this.readInt(nPtr), room);
       const boundsArr: Vec3[] = [];
-      for (let i = 0; i < n; i++) boundsArr.push(this.readVec3(bounds + i * 24));
+      for (let i = 0; i < count; i++) boundsArr.push(this.readVec3(bounds + i * 24));
       return {
         shape: this.mod.UTF8ToString(shape),
         frame: this.mod.UTF8ToString(frame),

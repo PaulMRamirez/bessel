@@ -65,8 +65,14 @@ export function parseOem(text: string): Oem {
       continue;
     }
     if (line.includes('=')) {
-      const [k, v] = line.split('=');
-      metadata[k!.trim()] = v!.trim();
+      // A '=' line is metadata only inside a META block. Outside META it is a header
+      // line (CREATION_DATE, ORIGINATOR) or a data-region label (a COVARIANCE_START
+      // section key, USER_DEFINED_x, ...): skip it so it neither overwrites a segment's
+      // metadata (a second META would clobber the first) nor reaches the data parser.
+      if (inMeta) {
+        const [k, v] = line.split('=');
+        metadata[k!.trim()] = v!.trim();
+      }
       continue;
     }
     if (inMeta) continue;

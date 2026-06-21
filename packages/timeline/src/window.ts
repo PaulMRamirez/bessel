@@ -91,9 +91,19 @@ export function windowIntersect(a: Window, b: Window): Window {
   return out; // already sorted and disjoint
 }
 
-/** Intersection of many windows (constraint AND). The empty list is the full domain. */
-export function windowIntersectAll(windows: readonly Window[]): Window {
-  if (windows.length === 0) return EMPTY;
+/**
+ * Intersection of many windows (constraint AND). The AND identity is the full domain,
+ * so an empty list returns `domain` (an explicit [lo, hi]) rather than EMPTY. Calling
+ * with an empty list and no domain is a programming error (the full domain is undefined
+ * without bounds) and throws loudly. A non-empty list ignores `domain`.
+ */
+export function windowIntersectAll(windows: readonly Window[], domain?: Interval): Window {
+  if (windows.length === 0) {
+    if (domain === undefined) {
+      throw new Error('windowIntersectAll: empty list needs an explicit [lo, hi] domain (AND identity)');
+    }
+    return [domain];
+  }
   return windows.reduce((acc, w) => windowIntersect(acc, w));
 }
 

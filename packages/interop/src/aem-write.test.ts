@@ -60,6 +60,22 @@ describe('writeAem', () => {
     expect(round.records[0]!.quaternion).toEqual([0.5, 0.5, 0.5, 0.5]);
   });
 
+  it('preserves a stored quaternion even when metadata says QUATERNION_TYPE = LAST', () => {
+    // Records are always stored and emitted scalar-first, so the writer must label the
+    // file FIRST regardless of the source metadata. A stored 'LAST' must not flip the
+    // round-trip ([1,0,0,0] must not read back as [0,1,0,0]).
+    const lastLabeled: Aem = {
+      version: '1.0',
+      metadata: { objectName: 'X', quaternionType: 'LAST' },
+      records: [{ epoch: '2026-001T00:00:00', quaternion: [1, 0, 0, 0] }],
+    };
+    const text = writeAem(lastLabeled);
+    expect(text).toContain('QUATERNION_TYPE = FIRST');
+    expect(text).not.toContain('QUATERNION_TYPE = LAST');
+    const round = parseAem(text);
+    expect(round.records[0]!.quaternion).toEqual([1, 0, 0, 0]);
+  });
+
   it('fails loudly on an empty profile', () => {
     expect(() => writeAem({ version: '1.0', metadata: {}, records: [] })).toThrow(AemError);
   });

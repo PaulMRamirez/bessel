@@ -4,7 +4,7 @@
 // heavy sweep is one worker round-trip instead of n. The loop yields periodically and
 // checks a cancellation token, so a long job can be aborted. (STK_PARITY_SPEC F3.)
 
-import type { AberrationCorrection, SpiceEngine } from './index.ts';
+import { SpiceError, type AberrationCorrection, type SpiceEngine } from './index.ts';
 
 /** A uniform time grid [start, stop] with step seconds (stop is included if it lands on a step). */
 export interface UniformGrid {
@@ -134,7 +134,14 @@ async function evalProvider(engine: SpiceEngine, p: ProviderSpec, et: number): P
       // d|r|/dt = (r . v) / |r| in an inertial frame.
       const s = await engine.spkezr(p.target, et, 'J2000', abcorr, p.observer);
       const { position: r, velocity: v } = s;
-      const rm = Math.hypot(r.x, r.y, r.z) || 1;
+      const rm = Math.hypot(r.x, r.y, r.z);
+      // A zero range makes d|r|/dt undefined: throw rather than divide by a faked 1.0,
+      // which would emit a raw dot product (km^2/s) as if it were a range rate (km/s).
+      if (rm === 0) {
+        throw new SpiceError(
+          `rangeRate undefined: ${p.observer}->${p.target} are coincident at et=${et} (|r|=0)`,
+        );
+      }
       return [(r.x * v.x + r.y * v.y + r.z * v.z) / rm];
     }
     case 'position': {
@@ -150,7 +157,13 @@ async function evalProvider(engine: SpiceEngine, p: ProviderSpec, et: number): P
       // ready for @bessel/map-projection.
       const r = await engine.spkpos(p.target, et, p.frame, abcorr, p.observer);
       const { x, y, z } = r.position;
-      const rm = Math.hypot(x, y, z) || 1;
+      const rm = Math.hypot(x, y, z);
+      // A zero range has no sub-point: throw rather than clamp z/1 to a bogus +-90 lat.
+      if (rm === 0) {
+        throw new SpiceError(
+          `subPointLonLat undefined: ${p.observer}->${p.target} are coincident at et=${et} (|r|=0)`,
+        );
+      }
       return [Math.atan2(y, x), Math.asin(Math.max(-1, Math.min(1, z / rm)))];
     }
   }
