@@ -262,6 +262,52 @@ describe('@bessel/ui TimelineControls annotations', () => {
     expect(out).toContain('aria-label="Event: Saturn orbit insertion"');
   });
 
+  it('renders transport controls, disabling the back/forward ends at the bounds', () => {
+    const atStart = html(
+      createElement(TimelineControls, {
+        playing: false,
+        rate: 1,
+        epochLabel: '2004-07-01',
+        timeSystem: 'UTC',
+        min: 0,
+        max: 100,
+        value: 0,
+        onPlayToggle: () => {},
+        onRateChange: () => {},
+        onScrub: () => {},
+        onTimeSystemChange: () => {},
+      }),
+    );
+    // All five transport controls render.
+    for (const id of ['timeline-to-start', 'timeline-step-back', 'timeline-play', 'timeline-step-forward', 'timeline-to-end']) {
+      expect(atStart).toContain(`data-testid="${id}"`);
+    }
+    // At the window start the back/jump-start controls are disabled; forward is live.
+    // (React renders data-testid before the boolean disabled attribute.)
+    expect(atStart).toMatch(/data-testid="timeline-to-start"[^>]*\bdisabled\b/);
+    expect(atStart).toMatch(/data-testid="timeline-step-back"[^>]*\bdisabled\b/);
+    expect(atStart).not.toMatch(/data-testid="timeline-step-forward"[^>]*\bdisabled\b/);
+
+    // At the window end the forward/jump-end controls are disabled instead.
+    const atEnd = html(
+      createElement(TimelineControls, {
+        playing: false,
+        rate: 1,
+        epochLabel: '2004-08-01',
+        timeSystem: 'UTC',
+        min: 0,
+        max: 100,
+        value: 100,
+        onPlayToggle: () => {},
+        onRateChange: () => {},
+        onScrub: () => {},
+        onTimeSystemChange: () => {},
+      }),
+    );
+    expect(atEnd).toMatch(/data-testid="timeline-to-end"[^>]*\bdisabled\b/);
+    expect(atEnd).not.toMatch(/data-testid="timeline-to-start"[^>]*\bdisabled\b/);
+  });
+
   it('suffixes the epoch with its time system and marks the active system pressed', () => {
     const out = html(
       createElement(TimelineControls, {

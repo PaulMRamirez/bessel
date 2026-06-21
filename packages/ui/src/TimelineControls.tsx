@@ -60,11 +60,64 @@ export function TimelineControls(props: TimelineControlsProps): JSX.Element {
     const t = goto.trim();
     if (t) props.onGoToEpoch?.(t);
   };
+  // A step is 1% of the loaded window, so step/jump navigate without reaching for the
+  // slider; seeks clamp to the window bounds.
+  const step = (props.max - props.min) / 100 || 1;
+  const seek = (t: number): void => props.onScrub(Math.min(props.max, Math.max(props.min, t)));
+  const atStart = props.value <= props.min;
+  const atEnd = props.value >= props.max;
   return (
     <div className="bessel-timeline" role="group" aria-label="Timeline controls">
-      <button type="button" onClick={props.onPlayToggle} aria-pressed={props.playing}>
-        {props.playing ? 'Pause' : 'Play'}
-      </button>
+      <div className="bessel-transport" role="group" aria-label="Playback transport">
+        <button
+          type="button"
+          className="bessel-transport-step"
+          aria-label="Jump to mission start"
+          data-testid="timeline-to-start"
+          disabled={atStart}
+          onClick={() => props.onScrub(props.min)}
+        >
+          <span aria-hidden="true">⏮</span>
+        </button>
+        <button
+          type="button"
+          className="bessel-transport-step"
+          aria-label="Step back"
+          data-testid="timeline-step-back"
+          disabled={atStart}
+          onClick={() => seek(props.value - step)}
+        >
+          <span aria-hidden="true">◀</span>
+        </button>
+        <button
+          type="button"
+          onClick={props.onPlayToggle}
+          aria-pressed={props.playing}
+          data-testid="timeline-play"
+        >
+          {props.playing ? 'Pause' : 'Play'}
+        </button>
+        <button
+          type="button"
+          className="bessel-transport-step"
+          aria-label="Step forward"
+          data-testid="timeline-step-forward"
+          disabled={atEnd}
+          onClick={() => seek(props.value + step)}
+        >
+          <span aria-hidden="true">▶</span>
+        </button>
+        <button
+          type="button"
+          className="bessel-transport-step"
+          aria-label="Jump to mission end"
+          data-testid="timeline-to-end"
+          disabled={atEnd}
+          onClick={() => props.onScrub(props.max)}
+        >
+          <span aria-hidden="true">⏭</span>
+        </button>
+      </div>
       <label>
         Rate
         <select

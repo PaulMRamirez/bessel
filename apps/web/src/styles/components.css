@@ -273,6 +273,19 @@
   min-width: 120px;
 }
 
+/* Transport cluster: jump-to-start, step back, play/pause, step forward, jump-to-end. */
+.bessel-transport {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.bessel-transport-step {
+  min-width: 2rem;
+  font-size: 0.7rem;
+  line-height: 1;
+}
+
 /* The scrub input fills its (flex-grown) track wrapper; without this the range input
    keeps its ~120px intrinsic width and leaves the rest of the track empty. */
 .bessel-scrub-track input[type='range'] {
