@@ -39,7 +39,7 @@ import { createAppStore, useStore, type AppStore } from './store/index.ts';
 import { SCRIPT_VERBS } from './script-runner.ts';
 import { useBesselEngine } from './engine/index.ts';
 import { createMissionRegistry } from './missions.ts';
-import { AppShell, resolvePanel, pluginPanelIds, useMediaQuery } from './shell/index.ts';
+import { AppShell, resolvePanel, pluginPanelIds, useMediaQuery, NARROW_MEDIA_QUERY } from './shell/index.ts';
 import { Popover } from './overlays/Popover.tsx';
 // Heavy workbench and menu panels are code-split: each loads on demand the first time
 // its menu opens (the Popover mounts its children only while open), keeping the analysis
@@ -253,7 +253,7 @@ export function BesselViewer(): JSX.Element {
     return future ? { label: future.label, tMinus: formatTMinus(future.et - et) } : null;
   }, [annotations, et]);
 
-  const narrowChrome = useMediaQuery('(max-width: 820px)');
+  const narrowChrome = useMediaQuery(NARROW_MEDIA_QUERY);
 
   const missionMenu = (
       <Popover label="Mission" title="Mission and operations" align="right" testId="mission-menu">

@@ -6,7 +6,7 @@
 
 import { useState, type ReactNode } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
-import { useMediaQuery } from './use-media-query.ts';
+import { useMediaQuery, NARROW_MEDIA_QUERY } from './use-media-query.ts';
 
 export interface DockLayoutProps {
   readonly left: ReactNode;
@@ -51,7 +51,7 @@ function NarrowDock(props: DockLayoutProps): JSX.Element {
 }
 
 export function DockLayout(props: DockLayoutProps): JSX.Element {
-  const narrow = useMediaQuery('(max-width: 820px)');
+  const narrow = useMediaQuery(NARROW_MEDIA_QUERY);
 
   if (narrow) return <NarrowDock {...props} />;
 

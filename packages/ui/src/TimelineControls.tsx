@@ -56,6 +56,31 @@ export interface TimelineControlsProps {
 const RATES = [1, 60, 3600, 86400, 604800];
 const TIME_SYSTEMS: readonly TimeSystem[] = ['UTC', 'TDB'];
 
+/** One step/jump transport button (the controls flanking play/pause). */
+interface StepControl {
+  readonly glyph: string;
+  readonly label: string;
+  readonly testId: string;
+  readonly disabled: boolean;
+  readonly onClick: () => void;
+}
+
+function renderStep(s: StepControl): JSX.Element {
+  return (
+    <button
+      key={s.testId}
+      type="button"
+      className="bessel-transport-step"
+      aria-label={s.label}
+      data-testid={s.testId}
+      disabled={s.disabled}
+      onClick={s.onClick}
+    >
+      <span aria-hidden="true">{s.glyph}</span>
+    </button>
+  );
+}
+
 export function TimelineControls(props: TimelineControlsProps): JSX.Element {
   const annotations = props.annotations ?? [];
   const [goto, setGoto] = useState('');
@@ -69,29 +94,17 @@ export function TimelineControls(props: TimelineControlsProps): JSX.Element {
   const seek = (t: number): void => props.onScrub(Math.min(props.max, Math.max(props.min, t)));
   const atStart = props.value <= props.min;
   const atEnd = props.value >= props.max;
+  // The step/jump controls flanking play/pause: same shape, so render from a table.
+  const steps: readonly StepControl[] = [
+    { glyph: '⏮', label: 'Jump to mission start', testId: 'timeline-to-start', disabled: atStart, onClick: () => props.onScrub(props.min) },
+    { glyph: '◀', label: 'Step back', testId: 'timeline-step-back', disabled: atStart, onClick: () => seek(props.value - step) },
+    { glyph: '▶', label: 'Step forward', testId: 'timeline-step-forward', disabled: atEnd, onClick: () => seek(props.value + step) },
+    { glyph: '⏭', label: 'Jump to mission end', testId: 'timeline-to-end', disabled: atEnd, onClick: () => props.onScrub(props.max) },
+  ];
   return (
     <div className="bessel-timeline" role="group" aria-label="Timeline controls">
       <div className="bessel-transport" role="group" aria-label="Playback transport">
-        <button
-          type="button"
-          className="bessel-transport-step"
-          aria-label="Jump to mission start"
-          data-testid="timeline-to-start"
-          disabled={atStart}
-          onClick={() => props.onScrub(props.min)}
-        >
-          <span aria-hidden="true">⏮</span>
-        </button>
-        <button
-          type="button"
-          className="bessel-transport-step"
-          aria-label="Step back"
-          data-testid="timeline-step-back"
-          disabled={atStart}
-          onClick={() => seek(props.value - step)}
-        >
-          <span aria-hidden="true">◀</span>
-        </button>
+        {steps.slice(0, 2).map(renderStep)}
         <button
           type="button"
           onClick={props.onPlayToggle}
@@ -100,26 +113,7 @@ export function TimelineControls(props: TimelineControlsProps): JSX.Element {
         >
           {props.playing ? 'Pause' : 'Play'}
         </button>
-        <button
-          type="button"
-          className="bessel-transport-step"
-          aria-label="Step forward"
-          data-testid="timeline-step-forward"
-          disabled={atEnd}
-          onClick={() => seek(props.value + step)}
-        >
-          <span aria-hidden="true">▶</span>
-        </button>
-        <button
-          type="button"
-          className="bessel-transport-step"
-          aria-label="Jump to mission end"
-          data-testid="timeline-to-end"
-          disabled={atEnd}
-          onClick={() => props.onScrub(props.max)}
-        >
-          <span aria-hidden="true">⏭</span>
-        </button>
+        {steps.slice(2).map(renderStep)}
       </div>
       <label>
         Rate

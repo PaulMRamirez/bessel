@@ -4,6 +4,11 @@
 
 import { useSyncExternalStore } from 'react';
 
+/** The viewport width below which the chrome collapses: the panel rail becomes a
+ *  drawer and the top-bar menus fold behind a More overflow. One source of truth so
+ *  both collapse decisions agree on what "narrow" means. */
+export const NARROW_MEDIA_QUERY = '(max-width: 820px)';
+
 export function useMediaQuery(query: string): boolean {
   const subscribe = (onChange: () => void): (() => void) => {
     const mql = window.matchMedia(query);

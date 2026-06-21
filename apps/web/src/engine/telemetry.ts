@@ -7,17 +7,21 @@ import { computeReadouts } from '../readouts.ts';
 import { computeBodyState } from '../body-state.ts';
 import type { AppStore } from '../store/index.ts';
 
+/** Format an epoch through SPICE in the store's active time system (never by naive
+ *  arithmetic), so UTC and TDB are both correct. et stays TDB seconds. */
+function formatEpoch(spice: SpiceEngine, store: AppStore, et: number): Promise<string> {
+  return store.getState().timeSystem === 'TDB'
+    ? spice.et2tdb(et, 0)
+    : spice.et2utc(et, 'ISOC', 0);
+}
+
 export function pushEpochLabel(
   spice: SpiceEngine,
   store: AppStore,
   et: number,
   isDisposed: () => boolean,
 ): void {
-  // Display only: et stays TDB seconds. The label is converted through SPICE for the
-  // active time system, never by naive arithmetic, so UTC and TDB are both correct.
-  const label =
-    store.getState().timeSystem === 'TDB' ? spice.et2tdb(et, 0) : spice.et2utc(et, 'ISOC', 0);
-  void label.then((s) => {
+  void formatEpoch(spice, store, et).then((s) => {
     if (!isDisposed()) store.setState({ epochLabel: s });
   });
 }
@@ -29,14 +33,13 @@ export function pushBoundsLabels(
   hi: number,
   isDisposed: () => boolean,
 ): void {
-  // Formats the window ends in the active time system, the same SPICE path as the
-  // epoch label, so the scrub track can show where the loaded window starts and stops.
-  const tdb = store.getState().timeSystem === 'TDB';
-  const fmt = (et: number): Promise<string> =>
-    tdb ? spice.et2tdb(et, 0) : spice.et2utc(et, 'ISOC', 0);
-  void Promise.all([fmt(lo), fmt(hi)]).then(([a, b]) => {
-    if (!isDisposed()) store.setState({ boundsLabel: [a, b] });
-  });
+  // The window ends share the epoch label's formatting, so the scrub track shows
+  // where the loaded window starts and stops in the active time system.
+  void Promise.all([formatEpoch(spice, store, lo), formatEpoch(spice, store, hi)]).then(
+    ([a, b]) => {
+      if (!isDisposed()) store.setState({ boundsLabel: [a, b] });
+    },
+  );
 }
 
 export function pushReadouts(

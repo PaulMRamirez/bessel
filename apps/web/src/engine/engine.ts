@@ -312,11 +312,14 @@ export class BesselEngine {
       pushReadouts(e.spice, this.store, focus, observer, now, e.bodyFrames, this.isDisposed);
       // State vectors and osculating elements: the focused body about its center
       // (the Sun when the focus is itself the mission center), in the chosen frame.
-      const center = focus === e.identity.centerBody ? 'Sun' : e.identity.centerBody;
-      const frame = this.store.getState().stateFrame;
-      void centerMu(e, center).then((mu) => {
-        if (!this.disposed) pushBodyState(e.spice, this.store, focus, center, frame, now, mu, this.isDisposed);
-      });
+      // Only computed when the inspector State panel is on screen (a selection exists,
+      // or Measure mode is active); otherwise the SPICE work would feed nothing.
+      if (s.selection.length > 0 || s.measureMode) {
+        const center = focus === e.identity.centerBody ? 'Sun' : e.identity.centerBody;
+        void this.centerMuCached(center).then((mu) => {
+          if (!this.disposed) pushBodyState(e.spice, this.store, focus, center, s.stateFrame, now, mu, this.isDisposed);
+        });
+      }
       this.updateMeasurement(now);
     }
     // Mock telemetry: emit a synthetic "actual" near the predicted position and
@@ -1220,6 +1223,21 @@ export class BesselEngine {
     this.refreshBoundsLabels();
   }
 
+  // The central-body GM is a physical constant for a given center, so the per-tick
+  // state readout caches it rather than re-querying the kernel pool (a worker
+  // round-trip) every tick. Cleared when a new mission loads.
+  private readonly muCache = new Map<string, number | null>();
+
+  private async centerMuCached(center: string): Promise<number | null> {
+    const cached = this.muCache.get(center);
+    if (cached !== undefined) return cached;
+    const e = this.core;
+    if (!e) return null;
+    const mu = await centerMu(e, center);
+    this.muCache.set(center, mu);
+    return mu;
+  }
+
   /** Re-format the loaded window's start/end labels (active time system) for the scrub
    *  track. Fire-and-forget; reads the current bounds from the store. */
   private refreshBoundsLabels(): void {
@@ -1448,6 +1466,8 @@ export class BesselEngine {
       e.bodyFrames = mission.bodyFrames;
       e.instruments = mission.instruments;
       e.instrument = await loadInstrument(e.spice, mission.instrument ?? null);
+      // A new mission may furnish different GM constants; drop the cached values.
+      this.muCache.clear();
       this.startTelemetry();
       const [et0, et1] = mission.window;
       e.clock.setEpoch(et0);
