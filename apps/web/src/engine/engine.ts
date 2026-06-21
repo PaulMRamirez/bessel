@@ -29,7 +29,7 @@ import { HttpKernelSource } from '@bessel/pal-web';
 import { furnishMissionKernels } from './load-mission.ts';
 import { positionAt, velocityAt, rangeRate } from '../sampler.ts';
 import { fovRim, footprint } from '../instruments.ts';
-import { toggleSelection } from '../selection.ts';
+import { toggleSelection, rollMeasurePair } from '../selection.ts';
 import {
   parseAnyCatalog,
   nativeEntries,
@@ -49,6 +49,7 @@ import {
   newBookmarkId,
   type Bookmark,
 } from '../bookmarks.ts';
+import { loadSavedScripts, persistSavedScripts, upsertScript } from '../scripts.ts';
 import {
   KEPT_SNAPSHOT_LIMIT,
   type AppStore,
@@ -73,7 +74,8 @@ function anglesClose(a: number | null, b: number | null): boolean {
   if (a === null || b === null) return a === b;
   return Math.abs(a - b) < 0.05;
 }
-import { pushEpochLabel, pushReadouts } from './telemetry.ts';
+import { pushEpochLabel, pushReadouts, pushBodyState, pushBoundsLabels } from './telemetry.ts';
+import { centerMu } from './center-mu.ts';
 import { RATE_STEPS } from './constants.ts';
 
 /** IAU body-fixed frame name for a body, for sync-orbit (e.g. Earth -> IAU_EARTH). */
@@ -180,8 +182,10 @@ export class BesselEngine {
       if (cssW > 0 && cssH > 0) this.resize(cssW, cssH);
       this.raf = requestAnimationFrame(this.frame);
       this.store.setState({ status: 'Ready', ready: true });
+      this.refreshBoundsLabels();
       void this.loadBookmarksFromStorage();
       void this.loadWelcomeSeenFromStorage();
+      void this.loadSavedScriptsFromStorage();
     } catch (err) {
       if (!this.disposed) {
         this.store.setState({
@@ -305,7 +309,23 @@ export class BesselEngine {
       this.readoutAccum = 0;
       const focus = e.scene.focusBody;
       const observer = focus === e.identity.spacecraftName ? null : (e.identity.spacecraftId ?? null);
-      pushReadouts(e.spice, this.store, focus, observer, now, this.isDisposed);
+      pushReadouts(e.spice, this.store, focus, observer, now, e.bodyFrames, this.isDisposed);
+      // State vectors and osculating elements: the focused body about its center
+      // (the Sun when the focus is itself the mission center), in the chosen frame.
+      // Only computed when the inspector State panel is on screen (a selection exists,
+      // or Measure mode is active); otherwise the SPICE work would feed nothing.
+      if (s.selection.length > 0 || s.measureMode) {
+        const center = focus === e.identity.centerBody ? 'Sun' : e.identity.centerBody;
+        // Recompute only when an input changed: while paused on a fixed focus and frame
+        // this skips the spkezr + element work that would otherwise repeat every tick.
+        const stateKey = `${focus}|${center}|${s.stateFrame}|${now}`;
+        if (stateKey !== this.lastStateKey) {
+          this.lastStateKey = stateKey;
+          void this.centerMuCached(center).then((mu) => {
+            if (!this.disposed) pushBodyState(e.spice, this.store, focus, center, s.stateFrame, now, mu, this.isDisposed);
+          });
+        }
+      }
       this.updateMeasurement(now);
     }
     // Mock telemetry: emit a synthetic "actual" near the predicted position and
@@ -557,7 +577,27 @@ export class BesselEngine {
     }
     const ndc = pointerToNdc(clientX, clientY, rect);
     const id = core.scene.pickObjectAt(ndc.x, ndc.y);
-    if (id) this.centerOn(id);
+    if (!id) return;
+    // In Measure mode a click builds the measured pair (rolling two picks) rather
+    // than recentering the camera; otherwise it frames the picked body as before.
+    if (this.store.getState().measureMode) this.addToMeasurePair(id);
+    else this.centerOn(id);
+  }
+
+  // Add a picked id to the measured pair, keeping only the most recent two distinct
+  // picks so a third click rolls the oldest body out of the measurement.
+  private addToMeasurePair(id: string): void {
+    this.store.setState((s) => ({ selection: rollMeasurePair(s.selection, id) }));
+  }
+
+  /** Enter or leave Measure mode (canvas clicks build the measured pair). */
+  toggleMeasureMode(): void {
+    this.store.setState((s) => ({ measureMode: !s.measureMode }));
+  }
+
+  /** Clear the current multi-object selection (and so the active measurement). */
+  clearSelection(): void {
+    this.store.setState({ selection: [] });
   }
 
   centerOn(body: string, animate = true): void {
@@ -654,6 +694,17 @@ export class BesselEngine {
     await this.runTool('compute-access', async () => {
       const ops = await import('./analysis-ops.ts');
       await ops.computeAccessTool(e, this.store, this.isDisposed, opts);
+    });
+  }
+
+  /** Instrument-target visibility: windows when a target is within the active sensor's
+   *  nadir-pointed field of view over a day. */
+  async computeInstrumentFov(opts: AnalysisTargetSpan = {}): Promise<void> {
+    const e = this.core;
+    if (!e) return;
+    await this.runTool('compute-fov', async () => {
+      const ops = await import('./analysis-ops.ts');
+      await ops.computeInstrumentFovWindows(e, this.store, this.isDisposed, opts);
     });
   }
 
@@ -1024,6 +1075,31 @@ export class BesselEngine {
     if (!this.disposed) this.store.setState({ bookmarks });
   }
 
+  private async loadSavedScriptsFromStorage(): Promise<void> {
+    const e = this.core;
+    if (!e) return;
+    const savedScripts = await loadSavedScripts(e.storage);
+    if (!this.disposed) this.store.setState({ savedScripts });
+  }
+
+  /** Save (or replace) a named script and persist the list through PAL Storage. */
+  async saveScript(name: string, source: string): Promise<void> {
+    const e = this.core;
+    if (!e || !name.trim()) return;
+    const next = upsertScript(this.store.getState().savedScripts, name.trim(), source);
+    this.store.setState({ savedScripts: next });
+    await persistSavedScripts(e.storage, next);
+  }
+
+  /** Delete a named script and persist the trimmed list. */
+  async deleteScript(name: string): Promise<void> {
+    const e = this.core;
+    if (!e) return;
+    const next = this.store.getState().savedScripts.filter((s) => s.name !== name);
+    this.store.setState({ savedScripts: next });
+    await persistSavedScripts(e.storage, next);
+  }
+
   private async loadWelcomeSeenFromStorage(): Promise<void> {
     const e = this.core;
     if (!e) return;
@@ -1124,6 +1200,18 @@ export class BesselEngine {
     }
   }
 
+  /** Switch the active instrument by name: reload its FOV so the cone, footprint, and
+   *  the in-FOV tool all track the chosen sensor. No-op when the name is unknown. */
+  async setActiveInstrument(name: string): Promise<void> {
+    const e = this.core;
+    if (!e) return;
+    const descriptor = e.instruments.find((i) => i.name === name);
+    if (!descriptor) return;
+    e.instrument = await loadInstrument(e.spice, descriptor);
+    if (this.disposed) return;
+    this.store.setState({ activeInstrumentId: descriptor.name, fovOk: !!e.instrument });
+  }
+
   togglePlay(): void {
     this.store.setState((s) => ({ playing: !s.playing }));
   }
@@ -1137,6 +1225,42 @@ export class BesselEngine {
     this.store.setState({ timeSystem: system });
     const e = this.core;
     if (e) pushEpochLabel(e.spice, this.store, e.clock.state.et, this.isDisposed);
+    // The window-bound labels are in the same time system, so re-format them too.
+    this.refreshBoundsLabels();
+  }
+
+  // The central-body GM is a physical constant for a given center, so the per-tick
+  // state readout caches it rather than re-querying the kernel pool (a worker
+  // round-trip) every tick. Cleared when a new mission loads.
+  private readonly muCache = new Map<string, number | null>();
+  // The last (focus|center|frame|et) the body-state readout computed for, so an
+  // unchanged tick (e.g. paused) skips the spkezr + element recompute.
+  private lastStateKey = '';
+
+  private async centerMuCached(center: string): Promise<number | null> {
+    const cached = this.muCache.get(center);
+    if (cached !== undefined) return cached;
+    const e = this.core;
+    if (!e) return null;
+    const mu = await centerMu(e, center);
+    this.muCache.set(center, mu);
+    return mu;
+  }
+
+  /** Re-format the loaded window's start/end labels (active time system) for the scrub
+   *  track. Fire-and-forget; reads the current bounds from the store. */
+  private refreshBoundsLabels(): void {
+    const e = this.core;
+    if (!e) return;
+    const [lo, hi] = this.store.getState().bounds;
+    pushBoundsLabels(e.spice, this.store, lo, hi, this.isDisposed);
+  }
+
+  /** Set the SPICE frame the State panel reports r/v and elements in. The next
+   *  readout tick recomputes; clear the stale state so the panel does not flash an
+   *  old frame's numbers under the new label. */
+  setStateFrame(frame: string): void {
+    this.store.setState({ stateFrame: frame, bodyState: null });
   }
 
   /** Open or close the consolidated Analyze dock (it does not auto-dismiss). */
@@ -1348,7 +1472,11 @@ export class BesselEngine {
       // Swap the live mission state the frame loop reads each tick.
       e.table = mission.table;
       e.identity = mission.identity;
+      e.bodyFrames = mission.bodyFrames;
+      e.instruments = mission.instruments;
       e.instrument = await loadInstrument(e.spice, mission.instrument ?? null);
+      // A new mission may furnish different GM constants; drop the cached values.
+      this.muCache.clear();
       this.startTelemetry();
       const [et0, et1] = mission.window;
       e.clock.setEpoch(et0);
@@ -1368,6 +1496,8 @@ export class BesselEngine {
         selection: [mission.identity.centerBody],
         footprintPoints: 0,
         fovOk: !!e.instrument,
+        instrumentNames: mission.instruments.map((i) => i.name),
+        activeInstrumentId: e.instrument?.descriptor.name ?? null,
         annotations,
         spacecraftQuat: null,
         telemetryOverlay: [],
@@ -1377,6 +1507,7 @@ export class BesselEngine {
         realImageryApplied: false,
         status: 'Ready',
       });
+      this.refreshBoundsLabels();
       // A scene rebuild creates fresh procedural materials, so re-apply real
       // imagery to the new bodies if the toggle is on (it is otherwise lost).
       if (this.store.getState().settings.realImagery) void this.applyRealImagery();
@@ -1399,12 +1530,20 @@ export class BesselEngine {
     if (e) {
       e.scene.reset();
       e.identity = { ...e.identity, spacecraftName: null };
+      // Drop the unloaded mission's frames and instruments so they cannot leak into
+      // the neutral scene.
+      e.bodyFrames = new Map();
+      e.instruments = [];
+      e.instrument = null;
     }
     this.store.setState({
       objects: [...DEFAULT_OBJECT_ENTRIES],
       loadedName: null,
       loadError: null,
       telemetryResidualKm: null,
+      instrumentNames: [],
+      activeInstrumentId: null,
+      fovOk: false,
       status: 'Ready',
     });
   }

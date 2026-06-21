@@ -144,6 +144,76 @@ describe('buildCatalogMissionScene (orchestration with a mock SPICE)', () => {
     expect(mission.table.byBody.has('Probe')).toBe(true);
   });
 
+  it('populates bodyFrames from each body that declares a Spice orientation frame', async () => {
+    const framed: BesselCatalog = {
+      version: '1.0',
+      bodies: [
+        { id: '699', name: 'Saturn', orientation: { type: 'Spice', frame: 'IAU_SATURN' } },
+        { id: '606', name: 'Titan', orientation: { type: 'Spice', frame: 'CASSINI_TITAN' } },
+        // No orientation: must be absent from the map (IAU fallback covers it instead).
+        { id: 'belt', name: 'Belt', geometry: { type: 'KeplerianSwarm', color: '#fa0' } },
+      ],
+      spacecraft: [
+        {
+          id: 'Probe',
+          name: 'Probe',
+          trajectory: { type: 'Spice', center: 'Saturn' },
+          arcs: [{ timeRange: { start: '2000-01-01', stop: '2010-01-01' }, trajectory: { type: 'Spice' } }],
+        },
+      ],
+    };
+    const mission = await buildCatalogMissionScene(mockSpice(), framed);
+    expect(mission.bodyFrames.get('Titan')).toBe('CASSINI_TITAN');
+    expect(mission.bodyFrames.get('606')).toBe('CASSINI_TITAN');
+    expect(mission.bodyFrames.get('Saturn')).toBe('IAU_SATURN');
+    expect(mission.bodyFrames.has('Belt')).toBe(false);
+  });
+
+  it('resolves every catalog instrument, with the first as the active one', async () => {
+    const withInstruments: BesselCatalog = {
+      version: '1.0',
+      bodies: [{ id: 'Saturn', name: 'Saturn' }],
+      spacecraft: [
+        {
+          id: 'Probe',
+          name: 'Probe',
+          trajectory: { type: 'Spice', center: 'Saturn' },
+          arcs: [{ timeRange: { start: '2000-01-01', stop: '2010-01-01' }, trajectory: { type: 'Spice' } }],
+        },
+      ],
+      instruments: [
+        { id: 'WAC', parent: 'Probe', sensor: '-82361', targets: ['Saturn'] },
+        { id: 'NAC', parent: 'Probe', sensor: '-82360', targets: ['Saturn'] },
+        // Malformed: a non-numeric sensor is skipped, not resolved.
+        { id: 'BAD', parent: 'Probe', sensor: 'nope', targets: ['Saturn'] },
+      ],
+    };
+    const mission = await buildCatalogMissionScene(mockSpice(), withInstruments);
+    expect(mission.instruments.map((i) => i.name)).toEqual(['WAC', 'NAC']);
+    expect(mission.instruments[0]?.sensorId).toBe(-82361);
+    expect(mission.instrument?.name).toBe('WAC');
+  });
+
+  it('fails loudly when two instruments share an id (would make one unreachable)', async () => {
+    const dupes: BesselCatalog = {
+      version: '1.0',
+      bodies: [{ id: 'Saturn', name: 'Saturn' }],
+      spacecraft: [
+        {
+          id: 'Probe',
+          name: 'Probe',
+          trajectory: { type: 'Spice', center: 'Saturn' },
+          arcs: [{ timeRange: { start: '2000-01-01', stop: '2010-01-01' }, trajectory: { type: 'Spice' } }],
+        },
+      ],
+      instruments: [
+        { id: 'CAM', parent: 'Probe', sensor: '-82361', targets: ['Saturn'] },
+        { id: 'CAM', parent: 'Probe', sensor: '-82360', targets: ['Saturn'] },
+      ],
+    };
+    await expect(buildCatalogMissionScene(mockSpice(), dupes)).rejects.toThrow(/declared more than once/);
+  });
+
   it('resolves a UniformRotation orientation into a uniform attitude spec', async () => {
     const spun: BesselCatalog = {
       version: '1.0',

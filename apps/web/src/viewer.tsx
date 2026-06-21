@@ -17,6 +17,7 @@ import {
   KeyboardHelp,
   LiveGeometryReadout,
   MeasurePanel,
+  StateVectorPanel,
   ObjectBrowser,
   ObjectInspector,
   OpsPanel,
@@ -35,9 +36,10 @@ import {
   type KeyboardAction,
 } from '@bessel/ui';
 import { createAppStore, useStore, type AppStore } from './store/index.ts';
+import { SCRIPT_VERBS } from './script-runner.ts';
 import { useBesselEngine } from './engine/index.ts';
 import { createMissionRegistry } from './missions.ts';
-import { AppShell, resolvePanel, pluginPanelIds } from './shell/index.ts';
+import { AppShell, resolvePanel, pluginPanelIds, useMediaQuery, NARROW_MEDIA_QUERY } from './shell/index.ts';
 import { Popover } from './overlays/Popover.tsx';
 // Heavy workbench and menu panels are code-split: each loads on demand the first time
 // its menu opens (the Popover mounts its children only while open), keeping the analysis
@@ -129,8 +131,19 @@ export function BesselViewer(): JSX.Element {
     const result = engine.runScript(scriptSource);
     const lines = [...result.echoLines];
     if (result.error) lines.push(`error on line ${result.error.line}: ${result.error.message}`);
-    setScriptLog(lines.length ? lines : ['(no verbs to run)']);
+    const run = lines.length ? lines : ['(no verbs to run)'];
+    // Accumulate a run-log: a divider then this run's echo, keeping the tail bounded
+    // so a long session does not grow the DOM without limit.
+    setScriptLog((prev) => [...prev, '--- run ---', ...run].slice(-200));
   }, [engine, scriptSource]);
+
+  const loadSavedScript = useCallback(
+    (name: string): void => {
+      const found = store.getState().savedScripts.find((s) => s.name === name);
+      if (found) setScriptSource(found.source);
+    },
+    [store],
+  );
 
   const status = useStore(store, (s) => s.status);
   const ready = useStore(store, (s) => s.ready);
@@ -139,12 +152,15 @@ export function BesselViewer(): JSX.Element {
   const et = useStore(store, (s) => s.et);
   const bounds = useStore(store, (s) => s.bounds);
   const epochLabel = useStore(store, (s) => s.epochLabel);
+  const boundsLabel = useStore(store, (s) => s.boundsLabel);
   const timeSystem = useStore(store, (s) => s.timeSystem);
   const analyzeOpen = useStore(store, (s) => s.analyzeOpen);
   const analyzeTab = useStore(store, (s) => s.analyzeTab);
   const timelineError = useStore(store, (s) => s.timelineError);
   const focus = useStore(store, (s) => s.focus);
   const instruments = useStore(store, (s) => s.instruments);
+  const instrumentNames = useStore(store, (s) => s.instrumentNames);
+  const activeInstrumentId = useStore(store, (s) => s.activeInstrumentId);
   const footprintPoints = useStore(store, (s) => s.footprintPoints);
   const fovOk = useStore(store, (s) => s.fovOk);
   const ringTextured = useStore(store, (s) => s.ringTextured);
@@ -157,6 +173,8 @@ export function BesselViewer(): JSX.Element {
   const settings = useStore(store, (s) => s.settings);
   const visibility = useStore(store, (s) => s.visibility);
   const readouts = useStore(store, (s) => s.readouts);
+  const bodyState = useStore(store, (s) => s.bodyState);
+  const stateFrame = useStore(store, (s) => s.stateFrame);
   const helpOpen = useStore(store, (s) => s.helpOpen);
   const recording = useStore(store, (s) => s.recording);
   const theme = useStore(store, (s) => s.theme);
@@ -172,7 +190,9 @@ export function BesselViewer(): JSX.Element {
   const loadError = useStore(store, (s) => s.loadError);
   const welcomeSeen = useStore(store, (s) => s.welcomeSeen);
   const measurement = useStore(store, (s) => s.measurement);
+  const measureMode = useStore(store, (s) => s.measureMode);
   const bookmarks = useStore(store, (s) => s.bookmarks);
+  const savedScripts = useStore(store, (s) => s.savedScripts);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -233,8 +253,9 @@ export function BesselViewer(): JSX.Element {
     return future ? { label: future.label, tMinus: formatTMinus(future.et - et) } : null;
   }, [annotations, et]);
 
-  const actions = (
-    <>
+  const narrowChrome = useMediaQuery(NARROW_MEDIA_QUERY);
+
+  const missionMenu = (
       <Popover label="Mission" title="Mission and operations" align="right" testId="mission-menu">
         <CatalogLoader
           onLoad={(file) => void engine?.loadCatalog(file)}
@@ -252,62 +273,112 @@ export function BesselViewer(): JSX.Element {
           />
         </div>
       </Popover>
-      {PluginPanel ? (
-        <Popover label="Plugins" title="Mission plugins" align="right" testId="plugins-menu">
-          <PanelSuspense>
-            <PluginPanel engine={engine} store={store} registry={registryRef.current} />
-          </PanelSuspense>
-        </Popover>
-      ) : null}
-      <Popover label="Capture" title="Capture" align="right" testId="capture-menu">
-        <CaptureControls
-          recording={recording}
-          onCaptureStill={() => engine?.captureStill()}
-          onToggleRecording={() => engine?.toggleRecording()}
+  );
+
+  const pluginsMenu = PluginPanel ? (
+    <Popover label="Plugins" title="Mission plugins" align="right" testId="plugins-menu">
+      <PanelSuspense>
+        <PluginPanel engine={engine} store={store} registry={registryRef.current} />
+      </PanelSuspense>
+    </Popover>
+  ) : null;
+
+  const captureMenu = (
+    <Popover label="Capture" title="Capture" align="right" testId="capture-menu">
+      <CaptureControls
+        recording={recording}
+        onCaptureStill={() => engine?.captureStill()}
+        onToggleRecording={() => engine?.toggleRecording()}
+      />
+    </Popover>
+  );
+
+  const scriptMenu = (
+    <Popover label="Script" title="Scripting console" align="right" testId="script-menu">
+      <PanelSuspense>
+        <ScriptConsole
+          source={scriptSource}
+          onChange={setScriptSource}
+          onRun={runScript}
+          log={scriptLog}
+          onClearLog={() => setScriptLog([])}
+          verbs={SCRIPT_VERBS}
+          savedScriptNames={savedScripts.map((s) => s.name)}
+          onSave={(name) => void engine?.saveScript(name, scriptSource)}
+          onLoadSaved={loadSavedScript}
+          onDeleteSaved={(name) => void engine?.deleteScript(name)}
         />
+      </PanelSuspense>
+    </Popover>
+  );
+
+  const analyzeButton = (
+    <button
+      type="button"
+      className="bessel-popover-trigger"
+      data-testid="analyze-toggle"
+      aria-expanded={analyzeOpen}
+      aria-pressed={analyzeOpen}
+      onClick={() => engine?.toggleAnalyze()}
+    >
+      Analyze
+    </button>
+  );
+
+  const viewsMenu = (
+    <Popover label="Views" title="Saved views" align="right" testId="views-menu">
+      <BookmarksPanel
+        bookmarks={bookmarks}
+        onSave={(name) => void engine?.saveBookmark(name)}
+        onApply={(id) => void engine?.applyBookmark(id)}
+        onDelete={(id) => void engine?.deleteBookmark(id)}
+        onCopyLink={(id) => void engine?.copyBookmarkLink(id).then(showShare)}
+        onExport={() => engine?.exportBookmarks()}
+        onImport={(text) => {
+          setBookmarkImportError(null);
+          void Promise.resolve()
+            .then(() => engine?.importBookmarks(text))
+            .catch((err: unknown) =>
+              setBookmarkImportError(err instanceof Error ? err.message : String(err)),
+            );
+        }}
+        importError={bookmarkImportError}
+      />
+    </Popover>
+  );
+
+  const themeToggle = (
+    <Tooltip label="Toggle light / dark theme">
+      <ThemeToggle theme={theme} onToggle={toggleTheme} />
+    </Tooltip>
+  );
+
+  // On a narrow viewport the menu-heavy actions collapse behind a single "More"
+  // overflow popover, keeping the bar from clipping; Analyze and the theme toggle
+  // (the two most-reached controls) stay inline. Desktop renders them flat as before.
+  const actions = narrowChrome ? (
+    <>
+      {analyzeButton}
+      <Popover label="More" title="More actions" align="right" testId="more-menu">
+        <div className="bessel-appbar-overflow">
+          {missionMenu}
+          {pluginsMenu}
+          {captureMenu}
+          {scriptMenu}
+          {viewsMenu}
+        </div>
       </Popover>
-      <Popover label="Script" title="Scripting console" align="right" testId="script-menu">
-        <PanelSuspense>
-          <ScriptConsole
-            source={scriptSource}
-            onChange={setScriptSource}
-            onRun={runScript}
-            log={scriptLog}
-          />
-        </PanelSuspense>
-      </Popover>
-      <button
-        type="button"
-        className="bessel-popover-trigger"
-        data-testid="analyze-toggle"
-        aria-expanded={analyzeOpen}
-        aria-pressed={analyzeOpen}
-        onClick={() => engine?.toggleAnalyze()}
-      >
-        Analyze
-      </button>
-      <Popover label="Views" title="Saved views" align="right" testId="views-menu">
-        <BookmarksPanel
-          bookmarks={bookmarks}
-          onSave={(name) => void engine?.saveBookmark(name)}
-          onApply={(id) => void engine?.applyBookmark(id)}
-          onDelete={(id) => void engine?.deleteBookmark(id)}
-          onCopyLink={(id) => void engine?.copyBookmarkLink(id).then(showShare)}
-          onExport={() => engine?.exportBookmarks()}
-          onImport={(text) => {
-            setBookmarkImportError(null);
-            void Promise.resolve()
-              .then(() => engine?.importBookmarks(text))
-              .catch((err: unknown) =>
-                setBookmarkImportError(err instanceof Error ? err.message : String(err)),
-              );
-          }}
-          importError={bookmarkImportError}
-        />
-      </Popover>
-      <Tooltip label="Toggle light / dark theme">
-        <ThemeToggle theme={theme} onToggle={toggleTheme} />
-      </Tooltip>
+      {themeToggle}
+    </>
+  ) : (
+    <>
+      {missionMenu}
+      {pluginsMenu}
+      {captureMenu}
+      {scriptMenu}
+      {analyzeButton}
+      {viewsMenu}
+      {themeToggle}
     </>
   );
 
@@ -420,6 +491,23 @@ export function BesselViewer(): JSX.Element {
             >
               {track ? 'Stop tracking' : 'Track spacecraft'}
             </button>
+            {instruments && instrumentNames.length > 1 ? (
+              <label className="bessel-instrument-select">
+                <span className="bessel-visually-hidden">Active instrument</span>
+                <select
+                  value={activeInstrumentId ?? ''}
+                  onChange={(e) => void engine?.setActiveInstrument(e.target.value)}
+                  data-testid="instrument-select"
+                  aria-label="Active instrument"
+                >
+                  {instrumentNames.map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
             {instruments ? (
               <span
                 className="bessel-viewcontrols__layers"
@@ -489,7 +577,7 @@ export function BesselViewer(): JSX.Element {
       {/* Always-visible geometry, bound to the tracked/focused object, so a canvas
           click that clears the selection does not blank the live numbers. */}
       {showLiveReadout ? <LiveGeometryReadout target={focus} readouts={readouts} /> : null}
-      {selection.length > 0 ? (
+      {selection.length > 0 || measureMode ? (
         <aside
           className="bessel-inspector-card"
           aria-label="Selection details"
@@ -503,6 +591,16 @@ export function BesselViewer(): JSX.Element {
             distanceKm={measurement?.distanceKm ?? null}
             relativeSpeedKmS={measurement?.relativeSpeedKmS ?? null}
             angleDeg={measurement?.angleDeg ?? null}
+            measureMode={measureMode}
+            onToggleMode={() => engine?.toggleMeasureMode()}
+            onClear={() => engine?.clearSelection()}
+            hasSelection={selection.length > 0}
+          />
+          <StateVectorPanel
+            target={focus}
+            state={bodyState}
+            frame={stateFrame}
+            onFrameChange={(f) => engine?.setStateFrame(f)}
           />
         </aside>
       ) : null}
@@ -529,6 +627,8 @@ export function BesselViewer(): JSX.Element {
       min={bounds[0]}
       max={bounds[1]}
       value={et}
+      minLabel={boundsLabel?.[0] ?? null}
+      maxLabel={boundsLabel?.[1] ?? null}
       annotations={annotations}
       nextEventLabel={nextEvent?.label ?? null}
       nextEventTMinus={nextEvent?.tMinus ?? null}

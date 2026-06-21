@@ -5,6 +5,7 @@ import { CatalogLoader } from './CatalogLoader.tsx';
 import { LiveGeometryReadout } from './LiveGeometryReadout.tsx';
 import { ObjectBrowser } from './ObjectBrowser.tsx';
 import { ReadoutPanel } from './ReadoutPanel.tsx';
+import { StateVectorPanel, type BodyState } from './StateVectorPanel.tsx';
 import { SettingsPanel } from './SettingsPanel.tsx';
 import { TimelineControls, humanizeRate } from './TimelineControls.tsx';
 import { CameraFrameControls } from './CameraFrameControls.tsx';
@@ -81,6 +82,55 @@ describe('@bessel/ui ReadoutPanel', () => {
     expect(out).toContain('42.3 deg');
     expect(out).toContain('n/a');
     expect(out).toContain('aria-label="Geometry readouts for Saturn"');
+  });
+});
+
+describe('@bessel/ui StateVectorPanel', () => {
+  const state: BodyState = {
+    target: 'Cassini',
+    center: 'Saturn',
+    r: [1000.5, -2000.25, 300],
+    v: [1.5, -2.25, 0.5],
+    semiMajorKm: 120000,
+    ecc: 0.3,
+    incDeg: 28.5,
+    raanDeg: 120,
+    argpDeg: 45,
+    trueAnomalyDeg: 90,
+  };
+
+  it('renders r/v vectors, elements, the frame select, and a copy button', () => {
+    const out = html(
+      createElement(StateVectorPanel, {
+        target: 'Cassini',
+        state,
+        frame: 'J2000',
+        onFrameChange: () => {},
+      }),
+    );
+    expect(out).toContain('data-testid="state-r"');
+    expect(out).toContain('[1000.500, -2000.250, 300.000] km');
+    expect(out).toContain('data-testid="state-v"');
+    expect(out).toContain('120,000 km'); // semi-major
+    expect(out).toContain('28.50 deg'); // inclination
+    expect(out).toContain('data-testid="state-copy"');
+    // The selected frame is reflected in the option set.
+    expect(out).toContain('data-testid="state-frame-select"');
+  });
+
+  it('carries a non-standard frame into the option list', () => {
+    const out = html(
+      createElement(StateVectorPanel, { target: 'Cassini', state, frame: 'IAU_TITAN', onFrameChange: () => {} }),
+    );
+    expect(out).toContain('value="IAU_TITAN"');
+  });
+
+  it('shows n/a and no copy button when the state is null', () => {
+    const out = html(
+      createElement(StateVectorPanel, { target: 'Cassini', state: null, frame: 'J2000', onFrameChange: () => {} }),
+    );
+    expect(out).toContain('data-testid="state-empty"');
+    expect(out).not.toContain('data-testid="state-copy"');
   });
 });
 
@@ -210,6 +260,75 @@ describe('@bessel/ui TimelineControls annotations', () => {
     expect(out).toContain('data-testid="marker-soi"');
     expect(out).toContain('left:50%');
     expect(out).toContain('aria-label="Event: Saturn orbit insertion"');
+  });
+
+  it('labels the scrub track ends with the formatted window start and end', () => {
+    const out = html(
+      createElement(TimelineControls, {
+        playing: false,
+        rate: 1,
+        epochLabel: '2004-07-01',
+        timeSystem: 'UTC',
+        min: 0,
+        max: 100,
+        value: 50,
+        minLabel: '2004-06-22T00:00:00',
+        maxLabel: '2004-08-22T00:00:00',
+        onPlayToggle: () => {},
+        onRateChange: () => {},
+        onScrub: () => {},
+        onTimeSystemChange: () => {},
+      }),
+    );
+    expect(out).toContain('data-testid="scrub-bounds"');
+    expect(out).toContain('2004-06-22T00:00:00');
+    expect(out).toContain('2004-08-22T00:00:00');
+  });
+
+  it('renders transport controls, disabling the back/forward ends at the bounds', () => {
+    const atStart = html(
+      createElement(TimelineControls, {
+        playing: false,
+        rate: 1,
+        epochLabel: '2004-07-01',
+        timeSystem: 'UTC',
+        min: 0,
+        max: 100,
+        value: 0,
+        onPlayToggle: () => {},
+        onRateChange: () => {},
+        onScrub: () => {},
+        onTimeSystemChange: () => {},
+      }),
+    );
+    // All five transport controls render.
+    for (const id of ['timeline-to-start', 'timeline-step-back', 'timeline-play', 'timeline-step-forward', 'timeline-to-end']) {
+      expect(atStart).toContain(`data-testid="${id}"`);
+    }
+    // At the window start the back/jump-start controls are disabled; forward is live.
+    // (React renders data-testid before the boolean disabled attribute.)
+    expect(atStart).toMatch(/data-testid="timeline-to-start"[^>]*\bdisabled\b/);
+    expect(atStart).toMatch(/data-testid="timeline-step-back"[^>]*\bdisabled\b/);
+    expect(atStart).not.toMatch(/data-testid="timeline-step-forward"[^>]*\bdisabled\b/);
+
+    // At the window end the forward/jump-end controls are disabled instead.
+    const atEnd = html(
+      createElement(TimelineControls, {
+        playing: false,
+        rate: 1,
+        epochLabel: '2004-08-01',
+        timeSystem: 'UTC',
+        min: 0,
+        max: 100,
+        value: 100,
+        onPlayToggle: () => {},
+        onRateChange: () => {},
+        onScrub: () => {},
+        onTimeSystemChange: () => {},
+      }),
+    );
+    expect(atEnd).toMatch(/data-testid="timeline-to-end"[^>]*\bdisabled\b/);
+    expect(atEnd).not.toMatch(/data-testid="timeline-to-start"[^>]*\bdisabled\b/);
   });
 
   it('suffixes the epoch with its time system and marks the active system pressed', () => {

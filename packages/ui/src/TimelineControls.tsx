@@ -35,6 +35,9 @@ export interface TimelineControlsProps {
   readonly min: number;
   readonly max: number;
   readonly value: number;
+  /** Formatted window start/end, shown at the scrub track ends, or null when unknown. */
+  readonly minLabel?: string | null;
+  readonly maxLabel?: string | null;
   readonly annotations?: readonly TimelineAnnotation[];
   /** The next upcoming event label + its T-minus (derived by the viewer), or null. */
   readonly nextEventLabel?: string | null;
@@ -53,6 +56,31 @@ export interface TimelineControlsProps {
 const RATES = [1, 60, 3600, 86400, 604800];
 const TIME_SYSTEMS: readonly TimeSystem[] = ['UTC', 'TDB'];
 
+/** One step/jump transport button (the controls flanking play/pause). */
+interface StepControl {
+  readonly glyph: string;
+  readonly label: string;
+  readonly testId: string;
+  readonly disabled: boolean;
+  readonly onClick: () => void;
+}
+
+function renderStep(s: StepControl): JSX.Element {
+  return (
+    <button
+      key={s.testId}
+      type="button"
+      className="bessel-transport-step"
+      aria-label={s.label}
+      data-testid={s.testId}
+      disabled={s.disabled}
+      onClick={s.onClick}
+    >
+      <span aria-hidden="true">{s.glyph}</span>
+    </button>
+  );
+}
+
 export function TimelineControls(props: TimelineControlsProps): JSX.Element {
   const annotations = props.annotations ?? [];
   const [goto, setGoto] = useState('');
@@ -60,11 +88,33 @@ export function TimelineControls(props: TimelineControlsProps): JSX.Element {
     const t = goto.trim();
     if (t) props.onGoToEpoch?.(t);
   };
+  // A step is 1% of the loaded window, so step/jump navigate without reaching for the
+  // slider; seeks clamp to the window bounds.
+  const step = (props.max - props.min) / 100 || 1;
+  const seek = (t: number): void => props.onScrub(Math.min(props.max, Math.max(props.min, t)));
+  const atStart = props.value <= props.min;
+  const atEnd = props.value >= props.max;
+  // The step/jump controls flanking play/pause: same shape, so render from a table.
+  const steps: readonly StepControl[] = [
+    { glyph: '⏮', label: 'Jump to mission start', testId: 'timeline-to-start', disabled: atStart, onClick: () => props.onScrub(props.min) },
+    { glyph: '◀', label: 'Step back', testId: 'timeline-step-back', disabled: atStart, onClick: () => seek(props.value - step) },
+    { glyph: '▶', label: 'Step forward', testId: 'timeline-step-forward', disabled: atEnd, onClick: () => seek(props.value + step) },
+    { glyph: '⏭', label: 'Jump to mission end', testId: 'timeline-to-end', disabled: atEnd, onClick: () => props.onScrub(props.max) },
+  ];
   return (
     <div className="bessel-timeline" role="group" aria-label="Timeline controls">
-      <button type="button" onClick={props.onPlayToggle} aria-pressed={props.playing}>
-        {props.playing ? 'Pause' : 'Play'}
-      </button>
+      <div className="bessel-transport" role="group" aria-label="Playback transport">
+        {steps.slice(0, 2).map(renderStep)}
+        <button
+          type="button"
+          onClick={props.onPlayToggle}
+          aria-pressed={props.playing}
+          data-testid="timeline-play"
+        >
+          {props.playing ? 'Pause' : 'Play'}
+        </button>
+        {steps.slice(2).map(renderStep)}
+      </div>
       <label>
         Rate
         <select
@@ -113,6 +163,12 @@ export function TimelineControls(props: TimelineControlsProps): JSX.Element {
             })}
           </div>
         )}
+        {props.minLabel || props.maxLabel ? (
+          <div className="bessel-scrub-bounds" aria-hidden="true" data-testid="scrub-bounds">
+            <span>{props.minLabel}</span>
+            <span>{props.maxLabel}</span>
+          </div>
+        ) : null}
       </div>
       <span data-testid="epoch" className="bessel-epoch">
         {props.epochLabel}

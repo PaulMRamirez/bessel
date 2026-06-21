@@ -37,11 +37,16 @@ export interface EngineCore {
   // The active mission's instrument, or null for a neutral or instrument-less
   // mission. Mutable so loading a new catalog re-points FOV and footprint.
   instrument: LoadedInstrument | null;
+  // Every resolved instrument descriptor for the active mission, for the selector.
+  instruments: readonly InstrumentDescriptor[];
   storage: Storage;
   fs: FileSystem;
   // The active mission's spacecraft and center body. Mutable so loading a new
   // catalog re-points the frame loop (track, FOV, footprint) without a hardcode.
   identity: MissionIdentity;
+  // Body-name/id -> declared body-fixed frame, for illumination readouts. Mutable
+  // so loading a new catalog re-points the frames; reset to empty on unload.
+  bodyFrames: ReadonlyMap<string, string>;
 }
 
 /** The neutral boot scene: the inner solar system, no spacecraft or instrument. */
@@ -87,6 +92,8 @@ export async function bootScene(
     storage: platform.storage,
     fs: platform.fs,
     identity: mission.identity,
+    instruments: mission.instruments,
+    bodyFrames: mission.bodyFrames,
   };
 }
 

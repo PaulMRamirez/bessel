@@ -34,7 +34,6 @@ import { tokenValues } from '@bessel/selene-design/tokens';
 import type {
   BesselCatalog,
   CatalogBody,
-  CatalogInstrument,
   CatalogSpacecraft,
   CssColor,
   Geometry,
@@ -42,6 +41,7 @@ import type {
 import type { SpiceEngine } from '@bessel/spice';
 import type { Object3D } from 'three';
 import brightStars from './assets/bright-stars.json';
+import { buildBodyFrameMap, resolveBodyFrame } from './readouts.ts';
 import { sampleEphemeris, positionAt, trajectoryOf, type EphemerisTable } from './sampler.ts';
 import { missionWindow } from './mission/duration.ts';
 import { STEPS, FOCUS_DISTANCE, DEFAULT_FOCUS_DISTANCE } from './engine/constants.ts';
@@ -76,6 +76,8 @@ export interface MissionIdentity {
 
 /** A catalog-declared instrument resolved to the ids the FOV/footprint code needs. */
 export interface InstrumentDescriptor {
+  /** The catalog instrument id, shown in the instrument selector. */
+  readonly name: string;
   /** Sensor SPICE id for getfov, e.g. -82361. */
   readonly sensorId: number;
   /** Observer (spacecraft) SPICE id for sincpt, e.g. "-82". */
@@ -95,8 +97,13 @@ export interface MissionScene {
   readonly identity: MissionIdentity;
   /** Loaded glTF spacecraft model, if the spacecraft declares a Mesh geometry. */
   readonly spacecraftModel?: Object3D | null;
-  /** The first catalog instrument, resolved, or null if the mission has none. */
+  /** The active (first) catalog instrument, resolved, or null if the mission has none. */
   readonly instrument?: InstrumentDescriptor | null;
+  /** Every resolved catalog instrument, for the instrument selector. */
+  readonly instruments: readonly InstrumentDescriptor[];
+  /** Body-name/id -> declared body-fixed frame, for illumination readouts and the
+   *  instrument target frame. Empty when no body declares a Spice orientation. */
+  readonly bodyFrames: ReadonlyMap<string, string>;
 }
 
 const INNER_BY_NAME = new Map(SOLAR_SYSTEM.map((p) => [p.name.toLowerCase(), p]));
@@ -398,7 +405,10 @@ export async function buildCatalogMissionScene(
   });
 
   const spacecraftModel = spacecraft ? await loadMeshModel(spacecraft) : null;
-  const instrument = resolveInstrument(catalog, spacecraft, centerBody, bodies);
+  // One source of truth for body-fixed frames: illumination readouts and the
+  // instrument target frame both resolve through this map.
+  const bodyFrames = buildBodyFrameMap(catalog);
+  const instruments = resolveInstruments(catalog, spacecraft, centerBody, bodyFrames);
   const attitude = await resolveAttitude(spice, spacecraft, et0);
   return {
     spec,
@@ -411,7 +421,9 @@ export async function buildCatalogMissionScene(
       ...(attitude ? { attitude } : {}),
     },
     spacecraftModel,
-    instrument,
+    instrument: instruments[0] ?? null,
+    instruments,
+    bodyFrames,
   };
 }
 
@@ -567,26 +579,41 @@ async function loadMeshModel(spacecraft: CatalogSpacecraft): Promise<Object3D | 
   }
 }
 
-/** Resolve the first catalog instrument to the ids the FOV/footprint code needs. */
-function resolveInstrument(
+/** Resolve every catalog instrument to the ids the FOV/footprint code needs. The
+ *  first valid one is the active instrument; the rest populate the selector. */
+function resolveInstruments(
   catalog: BesselCatalog,
   spacecraft: CatalogSpacecraft | null,
   centerBody: string,
-  bodies: readonly PlanetDef[],
-): InstrumentDescriptor | null {
-  const inst: CatalogInstrument | undefined = catalog.instruments?.[0];
-  if (!inst || !spacecraft) return null;
-  const sensorId = Number(inst.sensor);
-  const targetId = inst.targets[0];
-  if (!Number.isFinite(sensorId) || !targetId) return null;
-  // Prefer the center body's declared orientation frame, else the IAU convention.
-  const centerCat = (catalog.bodies ?? []).find((b) => (b.name ?? b.id) === centerBody);
-  const targetFrame =
-    centerCat?.orientation?.type === 'Spice' && centerCat.orientation.frame
-      ? centerCat.orientation.frame
-      : `IAU_${centerBody.toUpperCase()}`;
-  void bodies;
-  return { sensorId, observerId: spacecraft.id, targetId, targetFrame, anchorName: centerBody };
+  bodyFrames: ReadonlyMap<string, string>,
+): InstrumentDescriptor[] {
+  if (!spacecraft) return [];
+  // Same source of truth as the illumination readouts: the declared body-fixed
+  // frame, else the IAU convention (never null here since centerBody is never the Sun).
+  const targetFrame = resolveBodyFrame(centerBody, bodyFrames) ?? `IAU_${centerBody.toUpperCase()}`;
+  const out: InstrumentDescriptor[] = [];
+  const seen = new Set<string>();
+  for (const inst of catalog.instruments ?? []) {
+    // Instrument ids name the selector entry and resolve the active sensor, so they
+    // must be unique; a duplicate would make one sensor permanently unreachable.
+    // Fail loud (per the bad-catalog-reference convention) rather than silently drop it.
+    if (seen.has(inst.id)) {
+      throw new Error(`Catalog instrument id "${inst.id}" is declared more than once; ids must be unique`);
+    }
+    seen.add(inst.id);
+    const sensorId = Number(inst.sensor);
+    const targetId = inst.targets[0];
+    if (!Number.isFinite(sensorId) || !targetId) continue;
+    out.push({
+      name: inst.id,
+      sensorId,
+      observerId: spacecraft.id,
+      targetId,
+      targetFrame,
+      anchorName: centerBody,
+    });
+  }
+  return out;
 }
 
 function timeSwitchedFromGeometry(

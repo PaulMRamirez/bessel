@@ -61,6 +61,12 @@ export {
   type CatalogSample,
 } from './CatalogLoader.tsx';
 export { MeasurePanel, type MeasurePanelProps } from './MeasurePanel.tsx';
+export {
+  StateVectorPanel,
+  STATE_FRAMES,
+  type StateVectorPanelProps,
+  type BodyState,
+} from './StateVectorPanel.tsx';
 export { OpsPanel, type OpsPanelProps, type MissionOption } from './OpsPanel.tsx';
 export {
   TelemetryOverlay,

@@ -31,6 +31,7 @@ function Action(props: {
   children: ReactNode;
   variant?: 'primary' | 'secondary';
   status?: RunStatus;
+  disabled?: boolean;
 }): JSX.Element {
   const busy = props.status === 'running';
   return (
@@ -38,7 +39,7 @@ function Action(props: {
       variant={props.variant ?? 'secondary'}
       full
       testId={props.testId}
-      disabled={busy}
+      disabled={busy || !!props.disabled}
       onClick={props.onClick}
     >
       {busy ? 'Computing...' : props.children}
@@ -101,6 +102,11 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
   const accessSpan = useStore(store, (s) => s.accessSpan);
   const accessLabel = useStore(store, (s) => s.accessLabel);
   const accessFom = useStore(store, (s) => s.accessFom);
+  const fovWindow = useStore(store, (s) => s.fovWindow);
+  const fovSpan = useStore(store, (s) => s.fovSpan);
+  const fovLabel = useStore(store, (s) => s.fovLabel);
+  const fovFom = useStore(store, (s) => s.fovFom);
+  const fovOk = useStore(store, (s) => s.fovOk);
   const linkSeries = useStore(store, (s) => s.linkSeries);
   const conjunction = useStore(store, (s) => s.conjunction);
   const constellation = useStore(store, (s) => s.constellation);
@@ -258,6 +264,37 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
         />
         <RunStatusNote status={runStatus['compute-access']} id="compute-access" />
         <Keep tool="access" disabled={!accessFom || trayFull} onKeep={() => engine?.keepSnapshot('access')} />
+        <Action
+          status={runStatus['compute-fov']}
+          disabled={!fovOk}
+          onClick={() => void engine?.computeInstrumentFov(targetSpan)}
+          testId="compute-fov"
+        >
+          Compute in-FOV
+        </Action>
+        <IntervalResult
+          intervals={fovWindow}
+          span={fovSpan}
+          title={`${fovLabel || 'Instrument'} in-FOV`}
+          label={`${fovLabel || 'Instrument'} in-FOV`}
+          resultTestId="fov-result"
+          timelineTestId="fov-timeline"
+          hint="Find when the target falls within the active sensor's nadir-pointed FOV."
+          csv={{
+            testId: 'fov-csv',
+            filename: 'in-fov.csv',
+            build: (i) => intervalsToCsv(i, { meta: runMeta }),
+          }}
+          extra={
+            fovFom ? (
+              <p className="bessel-analysis-stat" data-testid="fov-fom">
+                In view {fmt(fovFom.percentCoverage * 100, 1)}%, {fovFom.accessCount} window
+                {fovFom.accessCount === 1 ? '' : 's'}, max gap {fmt(fovFom.maxGapSec / 60, 1)} min
+              </p>
+            ) : null
+          }
+        />
+        <RunStatusNote status={runStatus['compute-fov']} id="compute-fov" />
         <Action
           status={runStatus['compute-eclipse']}
           onClick={() => void engine?.computeEclipse(span)}

@@ -3,11 +3,12 @@
 // mirror refs) into one object that both React (via useStore) and the imperative
 // BesselEngine (via getState/setState) share.
 
-import type { CatalogEntry, Readouts, TimeSystem, VisualizationSettings } from '@bessel/ui';
+import type { BodyState, CatalogEntry, Readouts, TimeSystem, VisualizationSettings } from '@bessel/ui';
 import type { PredictedVsActual } from '@bessel/state';
 import type { TimelineAnnotation } from '@bessel/timeline';
 import { DEFAULT_OBJECT_ENTRIES } from '../catalog-load.ts';
 import type { Bookmark } from '../bookmarks.ts';
+import type { SavedScript } from '../scripts.ts';
 import { createStore, type Store } from './create-store.ts';
 
 /** The active tab in the consolidated Analyze dock. */
@@ -52,6 +53,9 @@ export interface AppState {
   et: number;
   bounds: readonly [number, number];
   epochLabel: string;
+  /** Formatted [start, end] of the loaded window (active time system), for the scrub
+   *  track end labels; null until first computed. */
+  boundsLabel: readonly [string, string] | null;
   /** Time system the epoch label is displayed in (display only; et stays TDB seconds). */
   timeSystem: TimeSystem;
   /** Whether the consolidated Analyze dock (right panel) is open. */
@@ -87,6 +91,11 @@ export interface AppState {
   accessLabel: string;
   /** Figure-of-merit reduction of the access window (coverage %, gaps), or null. */
   accessFom: AccessFom | null;
+  /** Instrument-target-visibility windows (target within the nadir-pointed FOV). */
+  fovWindow: readonly (readonly [number, number])[] | null;
+  fovSpan: readonly [number, number] | null;
+  fovLabel: string;
+  fovFom: AccessFom | null;
   /** Downlink Eb/N0 (dB) time series (spacecraft to Earth) from the last link run. */
   linkSeries: Series | null;
   /** Closest-approach + collision-probability summary from the last conjunction run. */
@@ -115,6 +124,10 @@ export interface AppState {
   instruments: boolean;
   footprintPoints: number;
   fovOk: boolean;
+  /** Names of every resolved instrument, for the selector (empty or single hides it). */
+  instrumentNames: readonly string[];
+  /** The active instrument name driving FOV/footprint, or null when none. */
+  activeInstrumentId: string | null;
   /** True when the rendered scene drew at least one image-textured ring. */
   ringTextured: boolean;
   /** True when the rendered scene built at least one translucent cloud shell. */
@@ -126,6 +139,10 @@ export interface AppState {
   visibility: Readonly<Record<string, boolean>>;
   // Readouts and chrome.
   readouts: Readouts;
+  // State vectors and osculating elements for the focused body (null when n/a), in
+  // the selected SPICE frame.
+  bodyState: BodyState | null;
+  stateFrame: string;
   helpOpen: boolean;
   recording: boolean;
   // Theme: persisted to the document via data-theme.
@@ -136,6 +153,9 @@ export interface AppState {
   loadError: string | null;
   // Measurement: distance between the first two selected objects.
   measurement: Measurement | null;
+  // Measure mode: when on, a canvas click adds to the measured pair (rolling two)
+  // instead of recentering, so two clicks measure between two bodies.
+  measureMode: boolean;
   // Telemetry: latest predicted-versus-actual residual (km), or null.
   telemetryResidualKm: number | null;
   /** Full predicted-versus-actual series for the on-screen telemetry overlay. */
@@ -148,6 +168,8 @@ export interface AppState {
   spacecraftQuat: readonly [number, number, number, number] | null;
   // Saved views.
   bookmarks: readonly Bookmark[];
+  // Named scripts persisted through PAL Storage, for the scripting console.
+  savedScripts: readonly SavedScript[];
 }
 
 export interface Series {
@@ -290,6 +312,7 @@ export const initialAppState: AppState = {
   et: 0,
   bounds: [0, 1],
   epochLabel: '',
+  boundsLabel: null,
   timeSystem: 'UTC',
   analyzeOpen: false,
   analyzeTab: 'access',
@@ -312,6 +335,10 @@ export const initialAppState: AppState = {
   accessSpan: null,
   accessLabel: '',
   accessFom: null,
+  fovWindow: null,
+  fovSpan: null,
+  fovLabel: '',
+  fovFom: null,
   linkSeries: null,
   conjunction: null,
   constellation: null,
@@ -327,6 +354,8 @@ export const initialAppState: AppState = {
   instruments: false,
   footprintPoints: 0,
   fovOk: false,
+  instrumentNames: [],
+  activeInstrumentId: null,
   ringTextured: false,
   cloudShell: false,
   realImageryApplied: false,
@@ -350,6 +379,8 @@ export const initialAppState: AppState = {
     incidenceDeg: null,
     emissionDeg: null,
   },
+  bodyState: null,
+  stateFrame: 'J2000',
   helpOpen: false,
   recording: false,
   theme: 'dark',
@@ -357,12 +388,14 @@ export const initialAppState: AppState = {
   loadedName: null,
   loadError: null,
   measurement: null,
+  measureMode: false,
   telemetryResidualKm: null,
   telemetryOverlay: [],
   telemetryFault: null,
   annotations: [],
   spacecraftQuat: null,
   bookmarks: [],
+  savedScripts: [],
 };
 
 export type AppStore = Store<AppState>;

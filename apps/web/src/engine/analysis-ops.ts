@@ -30,29 +30,15 @@ import type { EngineCore } from './bootstrap.ts';
 import { buildHpopForceModel, HPOP_FORCE_MODEL_LABELS, type HpopForceModel } from './hpop-model.ts';
 import { runMcsDesign as runMcsDesignCore, type McsDesign } from './mcs.ts';
 import { runOdDemo } from './od.ts';
+import { centerMu } from './center-mu.ts';
+import { positionAt } from '../sampler.ts';
+import { fovHalfAngleRad, nadirOffAngleRad, intervalsFromFlags } from '../in-fov.ts';
 
 // Earth gravity constants for the numerical (HPOP) propagation. Published WGS-84/EGM
 // values, caller-injected because a PCK carries no GM or harmonics.
 const EARTH_GM = 398600.4418;
 const EARTH_RE = 6378.137;
 const EARTH_J2 = 1.08262668e-3;
-
-// Gravitational parameters (km^3/s^2) for the common central bodies, used by the
-// maneuver-design solver only when the loaded kernels carry no GM in the pool. These
-// are published physical constants (NAIF/DE440), not mission kernel data.
-const CENTER_GM: Readonly<Record<string, number>> = {
-  SUN: 1.32712440018e11,
-  MERCURY: 2.2032e4,
-  VENUS: 3.24859e5,
-  EARTH: 3.986004418e5,
-  MOON: 4.9028e3,
-  MARS: 4.282837e4,
-  JUPITER: 1.26686534e8,
-  SATURN: 3.7931187e7,
-  URANUS: 5.793939e6,
-  NEPTUNE: 6.836529e6,
-  PLUTO: 8.71e2,
-};
 
 /** Optional time-span override (seconds) for a span-based analysis tool. */
 export interface AnalysisSpan {
@@ -100,18 +86,6 @@ function providerFromConfig(cfg: ReportConfig): ProviderSpec {
     case 'subPointLonLat':
       return { kind: 'subPointLonLat', observer, target, frame };
   }
-}
-
-/** Gravitational parameter (km^3/s^2) of a central body: from the kernel pool, or a
- * built-in constant for the common bodies when the loaded kernels carry no GM. */
-async function centerMu(e: EngineCore, body: string): Promise<number | null> {
-  try {
-    const gm = await e.spice.bodvrd(body, 'GM');
-    if (gm.length && Number.isFinite(gm[0])) return gm[0]!;
-  } catch {
-    // No GM in the pool; fall through to the constants table.
-  }
-  return CENTER_GM[body.toUpperCase()] ?? null;
 }
 
 /**
@@ -283,6 +257,75 @@ export async function computeAccessTool(
   } catch (err) {
     if (!isDisposed()) store.setState({ accessWindow: null, accessSpan: span, accessFom: null });
     console.error('access analysis failed', err);
+    throw err;
+  }
+}
+
+/**
+ * Instrument-target-visibility windows (B22): when a target body falls within the
+ * active instrument's field of view, modeling the sensor as nadir-pointed (boresight
+ * toward the center body). The FOV half-angle is read from the loaded sensor's
+ * boundary rays; a target is in view when its off-boresight angle is within it. The
+ * sweep uses the sampled ephemeris table (no extra worker round-trips), so it reuses
+ * the same positions the frame loop already holds.
+ */
+export async function computeInstrumentFovWindows(
+  e: EngineCore,
+  store: AppStore,
+  isDisposed: () => boolean,
+  opts: AnalysisTargetSpan = {},
+): Promise<void> {
+  const inst = e.instrument;
+  const sc = e.identity.spacecraftName;
+  const center = e.identity.centerBody;
+  const target = opts.target ?? 'Sun';
+  if (
+    !inst ||
+    !sc ||
+    !center ||
+    !e.table.byBody.has(target) ||
+    !e.table.byBody.has(sc) ||
+    !e.table.byBody.has(center)
+  ) {
+    store.setState({ fovWindow: null, fovSpan: null, fovLabel: '', fovFom: null });
+    return;
+  }
+  // Clamp the sweep to the sampled ephemeris window: positionAt clamps out-of-range
+  // epochs to the table edge, so a span running past the data would freeze every body
+  // and fabricate a static in/out result rather than reflecting real geometry.
+  const t0 = e.clock.state.et;
+  const span: [number, number] = [t0, Math.min(t0 + (opts.spanSec ?? 86400), e.table.et1)];
+  const step = opts.stepSec ?? 120;
+  try {
+    const halfAngle = fovHalfAngleRad(inst.fov.boresight, inst.fov.bounds);
+    const times: number[] = [];
+    const flags: boolean[] = [];
+    for (let t = span[0]; t <= span[1]; t += step) {
+      const off = nadirOffAngleRad(
+        positionAt(e.table, sc, t),
+        positionAt(e.table, center, t),
+        positionAt(e.table, target, t),
+      );
+      times.push(t);
+      flags.push(off <= halfAngle);
+    }
+    const window = intervalsFromFlags(times, flags);
+    const fom = figureOfMerit(window, span);
+    if (!isDisposed()) {
+      store.setState({
+        fovWindow: window,
+        fovSpan: span,
+        fovLabel: `${inst.descriptor.name} sees ${target}`,
+        fovFom: {
+          percentCoverage: fom.percentCoverage,
+          accessCount: fom.accessCount,
+          maxGapSec: fom.maxGapSec,
+        },
+      });
+    }
+  } catch (err) {
+    if (!isDisposed()) store.setState({ fovWindow: null, fovSpan: span, fovLabel: '', fovFom: null });
+    console.error('instrument FOV analysis failed', err);
     throw err;
   }
 }

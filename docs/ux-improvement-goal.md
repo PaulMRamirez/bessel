@@ -57,12 +57,12 @@ Deferred decisions, with the defaults this goal adopts until revisited:
 
 ## Phased plan
 
-### Phase 1: Quick wins (trust + front door, no structural risk)
+### Phase 1: Quick wins (trust + front door, no structural risk) [done]
 
 Land the high-trust and discoverability fixes that need no architectural change.
 Backlog: B3, B4, B14, B15, B17, B25, B26, B12.
 
-### Phase 2: Structural IA (the load-bearing restructure)
+### Phase 2: Structural IA (the load-bearing restructure) [done]
 
 Consolidate the six analysis menus into one pinnable, tabbed right-dock workbench driven
 by a shared analysis context; split the left rail so the object list leads and camera
@@ -70,11 +70,15 @@ controls collapse; promote ops status into persistent canvas chrome; add the fir
 welcome path.
 Backlog: B1, B2, B5, B6, B7, B8, B9, B10, B11.
 
-### Phase 3: Per-persona depth (built on the new foundation)
+### Phase 3: Per-persona depth (built on the new foundation) [done]
 
 State/element readouts, target-bound illumination and FOV visibility, a compare tray, a
 real script surface, result tables, mobile/touch collapse, and busy-state feedback.
 Backlog: B13, B16, B18, B19, B20, B21, B22, B23, B24.
+
+All three phases are implemented and gate-green (pnpm verify + the full Playwright
+suite). Phase 3 shipped as five sub-increments: SI-1 (B18/B24/B21), SI-2 (B13/B20),
+SI-3 (B16/B19), SI-4 (B22), SI-5 (B23).
 
 ## Backlog
 

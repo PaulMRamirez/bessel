@@ -93,6 +93,21 @@ test('lighting analysis computes and renders eclipse intervals', async ({ page }
   expect(download.suggestedFilename()).toContain('.oem');
 });
 
+test('the in-FOV tool computes instrument-target visibility windows', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
+  await loadCassiniSample(page);
+  await openAnalyze(page, 'access');
+
+  // With the Cassini ISS sensor loaded, the in-FOV tool is enabled; running it
+  // reduces the nadir-pointed FOV sweep to a figure of merit and a located note.
+  const fov = page.getByTestId('compute-fov');
+  await expect(fov).toBeEnabled();
+  await fov.click();
+  await expect(page.getByTestId('fov-fom')).toContainText('In view', { timeout: 20_000 });
+  await expect(page.getByTestId('compute-fov-status')).toContainText('Done', { timeout: 20_000 });
+});
+
 test('analysis tools honor user-supplied parameters (span, target, secondary)', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
