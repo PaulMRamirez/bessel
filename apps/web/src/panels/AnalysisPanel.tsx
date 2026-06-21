@@ -16,6 +16,7 @@ import {
   type AppStore,
   type RunStatus,
   type AccessFom,
+  type LinkBudgetParams,
 } from '../store/index.ts';
 import { IntervalResult, ResultCsv, SeriesResult, StatResult } from './analysis-result.tsx';
 import {
@@ -23,6 +24,7 @@ import {
   ConjunctionParamsForm,
   ConstellationParamsForm,
   SlewParamsForm,
+  isValidWalker,
   DEFAULT_LINK_PARAMS,
   DEFAULT_CONJUNCTION_PARAMS,
   DEFAULT_CONSTELLATION_PARAMS,
@@ -35,6 +37,20 @@ import {
 import { RunStatusNote } from './RunStatus.tsx';
 
 const RAD2DEG = 180 / Math.PI;
+
+/** Comment-preamble lines recording the radio parameters a link run used, so the
+ *  exported Eb/N0 series is reproducible. Empty when no run has stored params. */
+function linkParamsPreamble(p: LinkBudgetParams | null): string {
+  if (!p) return '';
+  return (
+    [
+      `# link_eirp_dBW: ${p.eirpDbW}`,
+      `# link_freq_GHz: ${p.freqHz / 1e9}`,
+      `# link_g_over_t_dBK: ${p.gOverTDbK}`,
+      `# link_data_rate_bps: ${p.dataRateBps}`,
+    ].join('\n') + '\n#\n'
+  );
+}
 
 export interface AnalysisPanelProps {
   readonly engine: BesselEngine | null;
@@ -119,6 +135,10 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
     useState<ConstellationFormParams>(DEFAULT_CONSTELLATION_PARAMS);
   const [slew, setSlew] = useState<SlewFormParams>(DEFAULT_SLEW_PARAMS);
 
+  // Gate the constellation run on a buildable T/P so a valid-looking pair that does not
+  // divide cannot fail silently inside walkerConstellation.
+  const constellationValid = isValidWalker(constellationParams.totalSats, constellationParams.planes);
+
   const effSpanSec = useShared ? ctx.spanSec : Math.max(60, spanDays * 86400);
   const effStepSec = useShared ? ctx.stepSec : Math.max(1, stepSec);
   const effTarget = useShared ? ctx.target : target;
@@ -150,6 +170,7 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
   const fovResult = useStore(store, (s) => s.fovResult);
   const fovOk = useStore(store, (s) => s.fovOk);
   const linkSeries = useStore(store, (s) => s.linkSeries);
+  const linkParams = useStore(store, (s) => s.linkParams);
   const conjunction = useStore(store, (s) => s.conjunction);
   const constellation = useStore(store, (s) => s.constellation);
   const slewSeries = useStore(store, (s) => s.slewSeries);
@@ -388,7 +409,8 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
           csv={{
             testId: 'link-csv',
             filename: 'link-ebn0.csv',
-            build: (s) => seriesToCsv(s.et, [s.value], ['ebN0_dB'], { meta: runMeta }),
+            build: (s) =>
+              linkParamsPreamble(linkParams) + seriesToCsv(s.et, [s.value], ['ebN0_dB'], { meta: runMeta }),
           }}
         />
         <RunStatusNote status={runStatus['compute-link']} id="compute-link" />
@@ -429,8 +451,8 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
                         ['tca_s', conjunction.tcaSec],
                         ['rel_speed_km_s', conjunction.relSpeedKmS],
                         ['pc', conjunction.pc],
-                        ['sigma_km', conj.sigmaKm],
-                        ['hard_body_radius_km', conj.radiusKm],
+                        ['sigma_km', conjunction.sigmaKm],
+                        ['hard_body_radius_km', conjunction.radiusKm],
                       ],
                       { meta: runMeta },
                     ),
@@ -454,11 +476,17 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
         <Action
           variant="primary"
           status={runStatus['compute-constellation']}
+          disabled={!constellationValid}
           onClick={() => engine?.computeConstellation(constellationParams)}
           testId="compute-constellation"
         >
           Design Walker constellation
         </Action>
+        {!constellationValid ? (
+          <p className="bessel-loader-hint" data-testid="constellation-invalid">
+            Total sats (T) must be a positive multiple of the number of planes (P).
+          </p>
+        ) : null}
         <StatResult
           show={!!constellation}
           resultTestId="constellation-result"

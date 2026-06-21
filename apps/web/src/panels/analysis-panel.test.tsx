@@ -117,7 +117,7 @@ describe('AnalysisPanel CSV export', () => {
         lat: new Float64Array([0, 0.2]),
         label: 'gt',
       },
-      conjunction: { tcaSec: 10, missKm: 5, relSpeedKmS: 1, pc: 1e-4, label: 'a vs b' },
+      conjunction: { tcaSec: 10, missKm: 5, relSpeedKmS: 1, pc: 1e-4, sigmaKm: 1, radiusKm: 0.1, label: 'a vs b' },
       constellation: {
         totalSats: 24,
         planes: 3,

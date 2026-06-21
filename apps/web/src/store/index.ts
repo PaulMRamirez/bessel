@@ -17,5 +17,6 @@ export {
   type McsGoalReport,
   type OdResult,
   type Series,
+  type LinkBudgetParams,
 } from './app-state.ts';
 export { useStore } from './use-store.ts';

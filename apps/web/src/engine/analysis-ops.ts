@@ -238,7 +238,10 @@ export async function computeLinkBudget(
       ebN0[i] = linkBudget({ eirpDbW, distanceKm, freqHz, gOverTDbK, dataRateBps }).ebN0Db;
     }
     if (!isDisposed()) {
-      store.setState({ linkSeries: { et, value: ebN0, label: `${sc} to Earth Eb/N0 (dB)` } });
+      store.setState({
+        linkSeries: { et, value: ebN0, label: `${sc} to Earth Eb/N0 (dB)` },
+        linkParams: { eirpDbW, freqHz, gOverTDbK, dataRateBps },
+      });
     }
   } catch (err) {
     if (!isDisposed()) store.setState({ linkSeries: null });
@@ -413,6 +416,8 @@ export async function computeConjunction(
           missKm: ca.missKm,
           relSpeedKmS: ca.relSpeedKmS,
           pc,
+          sigmaKm,
+          radiusKm,
           label: `${sc} vs ${secondary}`,
         },
       });

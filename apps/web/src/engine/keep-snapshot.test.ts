@@ -11,7 +11,7 @@ import { createAppStore, KEPT_SNAPSHOT_LIMIT, type AppStore } from '../store/ind
 function engineWithConjunction(): { engine: BesselEngine; store: AppStore } {
   const store = createAppStore();
   store.setState({
-    conjunction: { tcaSec: 10, missKm: 1.5, relSpeedKmS: 7, pc: 1e-4, label: 'pair' },
+    conjunction: { tcaSec: 10, missKm: 1.5, relSpeedKmS: 7, pc: 1e-4, sigmaKm: 1, radiusKm: 0.1, label: 'pair' },
   });
   // keepSnapshot touches only the store, never the scene/core, so a stub canvas is
   // enough to construct the engine (a test-double gap, not a production weakening).

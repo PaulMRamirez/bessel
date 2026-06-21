@@ -24,7 +24,10 @@ function NumField(props: {
         step={props.step ?? 'any'}
         data-testid={props.testId}
         onChange={(ev) => {
+          // Ignore a non-finite parse (empty or partial input like '', '-', '1e') so NaN
+          // never reaches the engine; the field keeps its last good value.
           const n = Number(ev.target.value);
+          if (!Number.isFinite(n)) return;
           props.onChange(props.min !== undefined ? Math.max(props.min, n) : n);
         }}
       />
@@ -103,6 +106,20 @@ export function ConjunctionParamsForm(props: {
       <NumField label="Sigma (km)" value={v.sigmaKm} min={0.0001} testId="param-conj-sigma" onChange={(sigmaKm) => onChange({ ...v, sigmaKm })} />
       <NumField label="Hard-body R (km)" value={v.radiusKm} min={0.0001} testId="param-conj-radius" onChange={(radiusKm) => onChange({ ...v, radiusKm })} />
     </Fields>
+  );
+}
+
+/**
+ * Whether a Walker T/P pair is buildable: T and P positive integers with T an exact
+ * multiple of P. walkerConstellation throws otherwise, so the panel gates the run on this.
+ */
+export function isValidWalker(totalSats: number, planes: number): boolean {
+  return (
+    Number.isInteger(totalSats) &&
+    Number.isInteger(planes) &&
+    totalSats > 0 &&
+    planes > 0 &&
+    totalSats % planes === 0
   );
 }
 
