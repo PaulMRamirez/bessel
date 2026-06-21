@@ -150,6 +150,10 @@ export function cosmographiaGeometryToNative(raw: unknown): Geometry | null {
     const cloudAltitudeKm = asNumber(raw['cloudAltitude']) ?? asNumber(raw['cloudAltitudeKm']);
     const specularColor = asColor(raw['specularColor']);
     const specularPower = asNumber(raw['specularPower']);
+    // A Globe may carry a nested ring system; map it through the Rings branch so it
+    // round-trips rather than being dropped.
+    const ringsRaw = raw['rings'];
+    const rings = isRecord(ringsRaw) ? cosmographiaGeometryToNative({ type: 'Rings', ...ringsRaw }) : null;
     return {
       type: 'Globe',
       ...(radii ? { radii } : {}),
@@ -161,6 +165,7 @@ export function cosmographiaGeometryToNative(raw: unknown): Geometry | null {
       ...(specularColor !== undefined ? { specularColor } : {}),
       ...(specularPower !== undefined ? { specularPower } : {}),
       ...(typeof raw['emissive'] === 'boolean' ? { emissive: raw['emissive'] } : {}),
+      ...(rings !== null && rings.type === 'Rings' ? { rings } : {}),
     };
   }
   if (type === 'RingSystem' || type === 'Rings') {
@@ -488,6 +493,10 @@ const OBSERVATION_CLASSES = new Set(['observation']);
 // Natural-body classes are always bodies, even with a trajectory (a moon orbits).
 // A bare trajectory with no body class is treated as a spacecraft.
 const BODY_CLASSES = new Set([
+  // 'body' is the generic, round-trip-stable class toCosmographia emits for a native
+  // body so the body-vs-spacecraft split survives native->cosmo->native (a body with
+  // an ephemeris trajectory stays a body rather than being reclassified a spacecraft).
+  'body',
   'planet',
   'dwarfplanet',
   'moon',
@@ -723,6 +732,12 @@ export async function fromCosmographia(raw: unknown): Promise<BesselCatalog> {
   // located CatalogError rather than producing an unrenderable catalog.
   return parseBesselCatalog(assembled);
 }
+
+// The export side (the inverse of fromCosmographia on the lossless subset) lives in
+// its own module to keep this file focused on import; it is re-exported here so the
+// full Cosmographia compatibility surface is reachable from one place.
+export { toCosmographia } from './cosmographia-export.ts';
+export type { CosmographiaExport, CosmographiaExportItem } from './cosmographia-export.ts';
 
 /** Merge instruments sharing an id, unioning their target lists in first-seen order. */
 function mergeInstruments(instruments: readonly CatalogInstrument[]): CatalogInstrument[] {
