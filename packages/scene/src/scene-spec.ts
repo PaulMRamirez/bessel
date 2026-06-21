@@ -80,6 +80,8 @@ export interface LabelSpec {
   readonly id: string;
   readonly text: string;
   readonly anchorBody: string;
+  /** Optional CSS color for the label text (a catalog per-item label override). */
+  readonly color?: string;
 }
 
 export interface ParticleSystemSpec {
