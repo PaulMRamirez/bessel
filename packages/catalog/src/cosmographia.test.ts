@@ -57,8 +57,61 @@ describe('cosmographiaGeometryToNative (RingSystem)', () => {
   });
 });
 
-describe('cosmographiaGeometryToNative (unsupported)', () => {
-  it('returns null for an unsupported geometry type', () => {
-    expect(cosmographiaGeometryToNative({ type: 'ParticleSystem' })).toBeNull();
+describe('cosmographiaGeometryToNative (extended types)', () => {
+  it('maps a Mesh geometry with source and scale', () => {
+    expect(cosmographiaGeometryToNative({ type: 'Mesh', source: 'models/probe.obj', scale: 2 })).toEqual({
+      type: 'Mesh',
+      source: 'models/probe.obj',
+      scale: 2,
+    });
+  });
+
+  it('maps a DSK geometry', () => {
+    expect(cosmographiaGeometryToNative({ type: 'DSK', source: 'shape.bds' })).toEqual({
+      type: 'DSK',
+      source: 'shape.bds',
+    });
+  });
+
+  it('maps a ParticleSystem geometry', () => {
+    expect(cosmographiaGeometryToNative({ type: 'ParticleSystem', source: 'tail.json', count: 5000 })).toEqual({
+      type: 'ParticleSystem',
+      source: 'tail.json',
+      particleCount: 5000,
+    });
+  });
+
+  it('maps a KeplerianSwarm geometry', () => {
+    expect(cosmographiaGeometryToNative({ type: 'KeplerianSwarm', source: 'belt.json', color: '#888' })).toEqual({
+      type: 'KeplerianSwarm',
+      source: 'belt.json',
+      color: '#888',
+    });
+  });
+
+  it('maps a TimeSwitched geometry over its segments', () => {
+    expect(
+      cosmographiaGeometryToNative({
+        type: 'TimeSwitched',
+        segments: [
+          {
+            timeRange: { start: '2004-01-01T00:00:00Z', stop: '2004-02-01T00:00:00Z' },
+            geometry: { type: 'Mesh', source: 'a.obj' },
+          },
+        ],
+      }),
+    ).toEqual({
+      type: 'TimeSwitched',
+      segments: [
+        {
+          timeRange: { start: '2004-01-01T00:00:00Z', stop: '2004-02-01T00:00:00Z' },
+          geometry: { type: 'Mesh', source: 'a.obj' },
+        },
+      ],
+    });
+  });
+
+  it('returns null for an unknown geometry type', () => {
+    expect(cosmographiaGeometryToNative({ type: 'NotAThing' })).toBeNull();
   });
 });
