@@ -28,6 +28,7 @@ import {
   type KeplerianSwarmSpec,
   type ParticleSystemSpec,
   type TimeSwitchedSpec,
+  type LabelSpec,
 } from '@bessel/scene';
 import { linearRamp, oklchToRgb, rgbToHexNumber, rgbToHexString } from '@bessel/color';
 import { tokenValues } from '@bessel/selene-design/tokens';
@@ -37,6 +38,8 @@ import type {
   CatalogSpacecraft,
   CssColor,
   Geometry,
+  Label,
+  TrajectoryPlot,
 } from '@bessel/catalog';
 import type { SpiceEngine } from '@bessel/spice';
 import type { FileSystem } from '@bessel/pal';
@@ -44,6 +47,13 @@ import type { Object3D } from 'three';
 import brightStars from './assets/bright-stars.json';
 import { buildBodyFrameMap, resolveBodyFrame } from './readouts.ts';
 import { sampleEphemeris, positionAt, trajectoryOf, type EphemerisTable } from './sampler.ts';
+import { planTwoVector, type TwoVectorSpec } from './trajectory/twovector.ts';
+import {
+  cssColorToRgb01,
+  plotColors,
+  plotWindow,
+  type Rgb01,
+} from './trajectory/trajectory-plot.ts';
 import { missionWindow } from './mission/duration.ts';
 import { STEPS, FOCUS_DISTANCE, DEFAULT_FOCUS_DISTANCE } from './engine/constants.ts';
 
@@ -63,7 +73,18 @@ export type AttitudeSpec =
       readonly axis: readonly [number, number, number];
       readonly ratePerSec: number;
       readonly epochEt: number;
-    };
+    }
+  | { readonly kind: 'twovector'; readonly spec: TwoVectorSpec };
+
+/** A catalog per-item label resolved to the scene's needs (C17). */
+export interface ResolvedLabel {
+  /** false hides the label entirely; true/undefined shows it. */
+  readonly show?: boolean;
+  /** Override text; absent => the derived name. */
+  readonly text?: string;
+  /** CSS color for the label text. */
+  readonly color?: string;
+}
 
 /** Which spacecraft and center body the active mission tracks. */
 export interface MissionIdentity {
@@ -150,6 +171,36 @@ export function catalogBodyToPlanetDef(body: CatalogBody): PlanetDef {
     ...(specularColor ? { specularColor } : {}),
     ...(globe?.specularPower !== undefined ? { specularPower: globe.specularPower } : {}),
   };
+}
+
+/** Convert a catalog CssColor to a CSS color string (hex passthrough, object => rgb()). */
+function cssColorToCss(c: CssColor | undefined): string | undefined {
+  if (c === undefined) return undefined;
+  if (typeof c === 'string') return c;
+  const to255 = (v: number) => Math.round(Math.max(0, Math.min(1, v)) * 255);
+  return c.a === undefined
+    ? `rgb(${to255(c.r)}, ${to255(c.g)}, ${to255(c.b)})`
+    : `rgba(${to255(c.r)}, ${to255(c.g)}, ${to255(c.b)}, ${Math.max(0, Math.min(1, c.a))})`;
+}
+
+/**
+ * Build the per-item label override map (C17) keyed by the anchor name the scene
+ * labels by (a body/spacecraft name, else its id). Each catalog `label` contributes
+ * its text/color and its show flag; items without a label are absent (derived label).
+ */
+export function buildLabelOverrides(catalog: BesselCatalog): Map<string, ResolvedLabel> {
+  const map = new Map<string, ResolvedLabel>();
+  const add = (name: string, label: Label | undefined): void => {
+    if (!label) return;
+    map.set(name, {
+      ...(label.show !== undefined ? { show: label.show } : {}),
+      ...(label.text !== undefined ? { text: label.text } : {}),
+      ...(cssColorToCss(label.color) !== undefined ? { color: cssColorToCss(label.color)! } : {}),
+    });
+  };
+  for (const b of catalog.bodies ?? []) add(b.name ?? b.id, b.label);
+  for (const sc of catalog.spacecraft ?? []) add(scName(sc), sc.label);
+  return map;
 }
 
 /** Convert a catalog CssColor (string or {r,g,b}) to a 0..1 RGB tuple, or undefined. */
@@ -250,13 +301,26 @@ export function assembleSceneSpec(input: {
   readonly timeSwitched: readonly TimeSwitchedSpec[];
   readonly cameraFocus: string;
   readonly cameraDistance: number;
+  /** Per-item label overrides keyed by anchor name (C17); absent name => derived label. */
+  readonly labelOverrides?: ReadonlyMap<string, ResolvedLabel>;
 }): SceneSpec {
+  const overrides = input.labelOverrides;
+  const labelFor = (name: string): LabelSpec | null => {
+    const o = overrides?.get(name);
+    // show:false (C17) omits the label entirely; otherwise the override's text/color
+    // takes precedence, falling back to the derived name.
+    if (o && o.show === false) return null;
+    return {
+      id: name,
+      text: o?.text ?? name,
+      anchorBody: name,
+      ...(o?.color ? { color: o.color } : {}),
+    };
+  };
   const labels = [
-    ...input.bodies.map((b) => ({ id: b.name, text: b.name, anchorBody: b.name })),
-    ...(input.spacecraftName
-      ? [{ id: input.spacecraftName, text: input.spacecraftName, anchorBody: input.spacecraftName }]
-      : []),
-  ];
+    ...input.bodies.map((b) => labelFor(b.name)),
+    ...(input.spacecraftName ? [labelFor(input.spacecraftName)] : []),
+  ].filter((l): l is LabelSpec => l !== null);
   return {
     bodies: input.bodies,
     ...(input.spacecraftName ? { spacecraft: { name: input.spacecraftName } } : {}),
@@ -286,6 +350,22 @@ export function assembleSceneSpec(input: {
 }
 
 const scName = (sc: CatalogSpacecraft): string => sc.name ?? sc.id;
+
+/**
+ * Per-vertex trajectory colors (C16): a declared trajectoryPlot.color (with its
+ * optional fade) overrides the synthesized trail ramp; otherwise the existing blue
+ * trail ramp is the fallback. Returns undefined for an empty polyline.
+ */
+function trajectoryColorsFor(plot: TrajectoryPlot | undefined, count: number): Rgb01[] | undefined {
+  if (count === 0) return undefined;
+  const declared = cssColorToRgb01(plot?.color);
+  if (declared) return plotColors(declared, plot?.fade, count);
+  const ramp = linearRamp('trail', { r: 0.12, g: 0.17, b: 0.38 }, { r: 0.55, g: 0.78, b: 1 });
+  return Array.from({ length: count }, (_, i) => {
+    const c = ramp.color(i, [0, Math.max(1, count - 1)]);
+    return [c.r, c.g, c.b] as Rgb01;
+  });
+}
 
 /**
  * Add a heliocentric (Sun-relative) entry for a non-SPICE spacecraft to the table.
@@ -349,18 +429,23 @@ export async function buildCatalogMissionScene(
   const table = await sampleEphemeris(spice, sampleRefs, et0, et1, STEPS);
 
   // Spacecraft trajectory sampled in its center frame so the polyline shows the
-  // orbit rather than the center body's heliocentric drift.
+  // orbit rather than the center body's heliocentric drift. A declared
+  // trajectoryPlot (C16) bounds the drawn arc (lead/trail/duration around the
+  // load-time cursor epoch et0), sets the sample density (sampleCount), and colors
+  // the polyline (color/fade); without one we keep the synthesized blue ramp.
   let trajectoryPoints: Km3[] = [];
-  let trajectoryColors: (readonly [number, number, number])[] | undefined;
+  let trajectoryColors: Rgb01[] | undefined;
   let centerBody = bodies[0]?.name ?? 'Sun';
   if (spacecraft) {
     const center = trajectory?.center ?? centerBody;
     centerBody = resolveCenterName(center, bodies);
+    const plot = spacecraft.trajectoryPlot;
+    const pw = plotWindow(plot, et0, et0, et1, STEPS);
     if (trajectory && trajectory.type !== 'Spice') {
       // Dynamic import keeps @bessel/propagator (SGP4, mean elements) out of the
       // first-paint shell; the resolver and its samplers land in the lazy bundle.
       const { sampleTrajectory, trajectoryGrid, tablePoints } = await import('./trajectory/index.ts');
-      const grid = trajectoryGrid(et0, et1, STEPS);
+      const grid = trajectoryGrid(pw.et0, pw.et1, pw.steps);
       const sampled = await sampleTrajectory(
         spice,
         fs,
@@ -371,25 +456,25 @@ export async function buildCatalogMissionScene(
       );
       // Center-relative points render the orbit polyline; the heliocentric table
       // entry (center body position + the relative sample) lets playback and the
-      // readouts track the craft like any SPICE body.
+      // readouts track the craft like any SPICE body. The full-window grid keeps the
+      // heliocentric table covering the whole mission for playback/readouts even when
+      // the drawn arc is bounded; so inject from a separate full-window sample.
       trajectoryPoints = tablePoints(sampled);
-      injectHeliocentricCraft(table, scName(spacecraft), centerBody, sampled.flat);
+      const fullGrid = trajectoryGrid(et0, et1, STEPS);
+      const full = await sampleTrajectory(spice, fs, trajectory, fullGrid, scName(spacecraft), spacecraft.id);
+      injectHeliocentricCraft(table, scName(spacecraft), centerBody, full.flat);
     } else {
       const orbit = await sampleEphemeris(
         spice,
         [{ name: scName(spacecraft), spiceId: spacecraft.id }],
-        et0,
-        et1,
-        STEPS,
+        pw.et0,
+        pw.et1,
+        pw.steps,
         center,
       );
       trajectoryPoints = trajectoryOf(orbit, scName(spacecraft));
     }
-    const ramp = linearRamp('trail', { r: 0.12, g: 0.17, b: 0.38 }, { r: 0.55, g: 0.78, b: 1 });
-    trajectoryColors = trajectoryPoints.map((_, i) => {
-      const c = ramp.color(i, [0, Math.max(1, trajectoryPoints.length - 1)]);
-      return [c.r, c.g, c.b] as const;
-    });
+    trajectoryColors = trajectoryColorsFor(plot, trajectoryPoints.length);
   }
 
   // Map every catalog body's geometry and orientation onto the scene specs.
@@ -456,6 +541,7 @@ export async function buildCatalogMissionScene(
     timeSwitched,
     cameraFocus: centerBody,
     cameraDistance,
+    labelOverrides: buildLabelOverrides(catalog),
   });
 
   const spacecraftModel = spacecraft ? await loadMeshModel(spacecraft) : null;
@@ -494,6 +580,11 @@ async function resolveAttitude(
   if (o.type === 'UniformRotation' && o.axis && typeof o.ratePerSec === 'number') {
     const epochEt = o.epoch ? await safeEt(spice, o.epoch, et0) : et0;
     return { kind: 'uniform', axis: o.axis, ratePerSec: o.ratePerSec, epochEt };
+  }
+  // TwoVector (C18): plan the two reference directions now (fail loud on a malformed
+  // declaration) so the engine can resolve a per-frame attitude as the directions move.
+  if (o.type === 'TwoVector' && spacecraft) {
+    return { kind: 'twovector', spec: planTwoVector(o, spacecraft.id) };
   }
   return undefined;
 }

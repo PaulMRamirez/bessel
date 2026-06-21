@@ -982,13 +982,17 @@ export class SolarSystemScene {
   }
 
   /** Attach name labels to bodies or the spacecraft, anchored by object name. */
-  setLabels(specs: readonly { id: string; text: string; anchorBody: string }[]): void {
+  setLabels(
+    specs: readonly { id: string; text: string; anchorBody: string; color?: string }[],
+  ): void {
     const targets = [];
     for (const spec of specs) {
       const object =
         this.bodies.get(spec.anchorBody)?.mesh ??
         (this.spacecraft?.name === spec.anchorBody ? this.spacecraft.mesh : null);
-      if (object) targets.push({ id: spec.id, text: spec.text, object });
+      if (object) {
+        targets.push({ id: spec.id, text: spec.text, object, ...(spec.color ? { color: spec.color } : {}) });
+      }
     }
     this.labelLayer.setLabels(targets);
   }

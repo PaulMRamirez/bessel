@@ -11,6 +11,8 @@ export interface LabelTarget {
   readonly id: string;
   readonly text: string;
   readonly object: Object3D;
+  /** Optional CSS color for this label's text (a catalog per-item override). */
+  readonly color?: string;
 }
 
 /** Project a world position to screen pixels and report whether it is on screen. */
@@ -69,6 +71,7 @@ export class LabelLayer {
       el.textContent = target.text;
       el.style.position = 'absolute';
       el.style.transform = 'translate(-50%, -120%)';
+      if (target.color) el.style.color = target.color;
       this.dom.appendChild(el);
       return { target, el };
     });

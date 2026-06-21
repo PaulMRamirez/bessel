@@ -28,6 +28,7 @@ import type { PluginRegistry, BesselCatalog } from '@bessel/catalog';
 import { HttpKernelSource } from '@bessel/pal-web';
 import { furnishMissionKernels } from './load-mission.ts';
 import { positionAt, velocityAt, rangeRate } from '../sampler.ts';
+import { resolveTwoVector } from '../trajectory/twovector.ts';
 import { fovRim, footprint } from '../instruments.ts';
 import { toggleSelection, rollMeasurePair } from '../selection.ts';
 import {
@@ -326,6 +327,28 @@ export class BesselEngine {
           },
           () => {
             // No CK coverage at this epoch; leave the model orientation unchanged.
+          },
+        );
+      }
+    } else if (att?.kind === 'twovector') {
+      // TwoVector (C18): resolve the two reference directions at the current epoch
+      // (a worker round-trip per target direction), build the body-to-inertial
+      // rotation, and orient the model. Throttled like the CK path since the
+      // directions move slowly relative to the frame rate.
+      this.attitudeAccum += dt;
+      if (this.attitudeAccum > 0.2) {
+        this.attitudeAccum = 0;
+        const spec = att.spec;
+        void resolveTwoVector(e.spice, spec, now).then(
+          (rot) => {
+            if (this.disposed) return;
+            e.scene.setSpacecraftAttitude(rot);
+            this.publishSpacecraftQuat(rowMajor3x3ToQuaternion(rot));
+          },
+          (err: unknown) => {
+            // A direction that cannot be resolved at this epoch (no ephemeris): keep
+            // the last orientation rather than snapping the model.
+            console.error('TwoVector attitude resolve failed', err);
           },
         );
       }
