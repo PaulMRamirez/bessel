@@ -126,16 +126,38 @@ export interface GoalBinding {
   readonly desired: number;
 }
 
+/**
+ * Goal types whose achieved value is an angle on the circle [0, 2pi): a raw achieved - desired
+ * residual does not wrap, so a goal near 0/2pi (desired ~0.02, achieved ~6.27) yields a spurious
+ * ~2pi residual and a false non-convergence. For these the residual is wrapped into (-pi, pi].
+ * Inclination is NOT here: it lives in [0, pi] and never wraps.
+ */
+const PERIODIC_GOALS: ReadonlySet<GoalType> = new Set<GoalType>(['RAAN', 'ArgP']);
+
+const TWO_PI = 2 * Math.PI;
+
+/** Wrap an angular residual into (-pi, pi] so a wrap-around near 0/2pi is the short way round. */
+function wrapResidual(delta: number): number {
+  let d = delta % TWO_PI;
+  if (d > Math.PI) d -= TWO_PI;
+  else if (d <= -Math.PI) d += TWO_PI;
+  return d;
+}
+
 export function bindGoals(goals: readonly Goal[]): readonly GoalBinding[] {
   return goals.map((g) => {
     if (g.type === 'TimeOfFlight') throw new McsError('TimeOfFlight goals are not supported in this phase', []);
+    const periodic = PERIODIC_GOALS.has(g.type);
     return {
       evalAt: g.evalAt,
       type: g.type,
       tolerance: g.tolerance,
       weight: g.weight ?? 1,
       desired: g.desired,
-      residual: (s, mu) => achieved(g.type, s, mu, g.bodyRadius) - g.desired,
+      residual: (s, mu) => {
+        const delta = achieved(g.type, s, mu, g.bodyRadius) - g.desired;
+        return periodic ? wrapResidual(delta) : delta;
+      },
       gradWrtState: (s) => gradOf(g.type, s),
     };
   });

@@ -110,6 +110,37 @@ function validate(e: SampledEphemeris): void {
 }
 
 /**
+ * Every screened object must sample the SAME epoch grid: the all-vs-all sieve and refinement read
+ * object b at object a's sample indices, so a mismatched grid (different length, or matching length
+ * but differing epochs) would compare states at different times. Require the grids to match in
+ * length and element-wise within a small absolute/relative tolerance; throw a located ScreenError
+ * on the first object that diverges from the reference (the first object).
+ */
+function assertSharedGrid(objects: readonly SampledEphemeris[]): void {
+  if (objects.length < 2) return;
+  const ref = objects[0]!;
+  const n = ref.et.length;
+  for (let oi = 1; oi < objects.length; oi++) {
+    const e = objects[oi]!;
+    if (e.et.length !== n) {
+      throw new ScreenError(
+        `object ${e.id} has ${e.et.length} samples but object ${ref.id} has ${n}: all objects must share one screening grid`,
+      );
+    }
+    for (let k = 0; k < n; k++) {
+      const a = ref.et[k]!;
+      const b = e.et[k]!;
+      const tol = 1e-6 + 1e-9 * Math.max(Math.abs(a), Math.abs(b));
+      if (Math.abs(a - b) > tol) {
+        throw new ScreenError(
+          `object ${e.id} epoch[${k}]=${b} differs from object ${ref.id} epoch[${k}]=${a}: all objects must share one screening grid`,
+        );
+      }
+    }
+  }
+}
+
+/**
  * Refine the closest approach of a flagged pair from the shared sample grid: find
  * the sample index of minimum separation, then linearize the relative motion across
  * the bracketing samples and solve for the range-rate zero (Foster TCA). The
@@ -177,6 +208,12 @@ function refinePair(a: SampledEphemeris, b: SampledEphemeris): ConjunctionEvent 
 export function screenAllVsAll(objects: readonly SampledEphemeris[], opts: ScreenOptions): ConjunctionEvent[] {
   if (opts.thresholdKm <= 0) throw new ScreenError(`thresholdKm must be positive (got ${opts.thresholdKm})`);
   for (const e of objects) validate(e);
+  // The sieve and the pair refinement index object b at object a's sample indices (they "share the
+  // screening grid"). validate() only checks each object's own monotonicity and length, so a
+  // mismatched grid (different length, or the same length but different epochs) would index into a
+  // different time for b and silently yield a dropped or bogus conjunction. Assert a common et grid
+  // across all objects (length AND element-wise within tolerance) and fail loudly otherwise.
+  assertSharedGrid(objects);
   const pad = (opts.sieveMarginKm ?? 50) + opts.thresholdKm;
   const shells = objects.map(radialShells);
 

@@ -223,6 +223,19 @@ export function integrateDense(rhs: Rhs, y0: Float64Array, t0: number, tf: numbe
     if (stopped) break;
   }
 
-  const solution = makeSolution(segments, t0, segments[segments.length - 1]!.tOld + segments[segments.length - 1]!.h, n);
+  // A legal but sub-step-floor window (e.g. tf = t0 + 1e-10) passes the tf > t0 guard yet the
+  // step loop never accepts a segment; without this guard the makeSolution below would deref
+  // segments[-1] and throw a raw TypeError. Fail loudly with a located, typed error instead.
+  if (segments.length === 0) {
+    throw new IntegrationError(`dense integration produced no segments: window [${t0}, ${tf}] is too small to take a step`);
+  }
+
+  // The accepted arc may stop short of tf at a terminal event (tEnd). Cap the Solution domain at
+  // tEnd so interpolation cannot reach past the terminal event into physically stale states (e.g.
+  // below the surface after an impact). When no event stopped the arc, tEnd is tf, so the domain
+  // is the integrated span up to the last segment.
+  const lastSeg = segments[segments.length - 1]!;
+  const domainEnd = Math.min(tEnd, lastSeg.tOld + lastSeg.h);
+  const solution = makeSolution(segments, t0, domainEnd, n);
   return { solution, events: hits, stopped, tEnd };
 }

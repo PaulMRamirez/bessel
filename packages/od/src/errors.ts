@@ -22,12 +22,20 @@ export class SingularMatrixError extends OdError {
   }
 }
 
-/** The batch least-squares iteration did not converge within the iteration budget. */
+/**
+ * The batch least-squares iteration did not converge: either it exhausted its iteration budget, or
+ * it diverged (the residual RMS grew on a sustained run of steps, so the Gauss-Newton step is
+ * moving away from the minimum, not toward it). `reason` distinguishes the two; the default keeps
+ * the iteration-budget wording for existing callers.
+ */
 export class ConvergenceError extends OdError {
-  constructor(iterations: number, lastRms: number, tol: number) {
+  constructor(iterations: number, lastRms: number, tol: number, reason?: string) {
     super(
-      `batch least squares did not converge in ${iterations} iterations ` +
-        `(last residual RMS ${lastRms}, state-update tolerance ${tol})`,
+      reason
+        ? `batch least squares diverged after ${iterations} iterations: ${reason} ` +
+            `(last residual RMS ${lastRms}, state-update tolerance ${tol})`
+        : `batch least squares did not converge in ${iterations} iterations ` +
+            `(last residual RMS ${lastRms}, state-update tolerance ${tol})`,
     );
     this.name = 'ConvergenceError';
   }

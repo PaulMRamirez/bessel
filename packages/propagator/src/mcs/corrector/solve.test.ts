@@ -7,7 +7,12 @@
 import { describe, it, expect } from 'vitest';
 import { runMcs } from '../executor.ts';
 import { createMissionEnv } from '../env.ts';
-import type { Mcs, Segment } from '../segments.ts';
+import { bindControls, bindGoals } from './refs.ts';
+import { runDifferentialCorrector } from './solve.ts';
+import { DcNotConvergedError } from '../errors.ts';
+import type { DcEvalContext } from './residual.ts';
+import { DEFAULT_DC_SETTINGS, type ManeuverSegment, type Mcs, type Segment } from '../segments.ts';
+import type { MissionState, SegmentResult } from '../state.ts';
 
 const MU = 398600.4418;
 const RE = 6378.137;
@@ -151,5 +156,54 @@ describe('differential corrector convergence', () => {
     expect(rep.extraRuns).toBeGreaterThan(0); // geometric stop forces finite difference
     expect(rep.controls[0]).toBeCloseTo(dvExpected, 4);
     expect(Math.hypot(run.final.r.x, run.final.r.y, run.final.r.z)).toBeCloseTo(9000, 3);
+  });
+
+  it('rejects an uphill-only Newton step instead of force-accepting the final backtrack', () => {
+    // Synthetic residual that misleads the local linear model into an ascent direction: for the
+    // seed c = 0 the FD slope of f points the Newton step toward NEGATIVE c, but f has a tall wall
+    // for c < 0, so the step and EVERY backtrack along it only raise the residual. f(c) = -c - 1e-3
+    // for c >= 0 (slope -1, value -1e-3 at the seed) and f(c) = 100 + c^2 for c < 0 (the wall).
+    // Newton: g = -1e-3, g' ~ -1 => dc = -g/g' = -1e-3 (into the wall). The old line search
+    // force-accepted the smallest-lambda step on the final backtrack, so the corrector stepped
+    // UPHILL into the wall. The Armijo reject must keep the seed and fail loudly with best = seed.
+    const burn: ManeuverSegment = { kind: 'Maneuver', id: 'burn', mode: 'Impulsive', attitude: 'VNB', dv: { x: 0, y: 0, z: 0 } };
+    const children: Segment[] = [burn];
+    const input: MissionState = {
+      epoch: 0,
+      r: { x: 0, y: 0, z: 0 },
+      v: { x: 0, y: 0, z: 0 },
+      mass: 1000,
+      centralBody: 399,
+      segmentPath: ['ini'],
+    };
+    const f = (c: number): number => (c >= 0 ? -c - 1e-3 : 100 + c * c);
+    // execOne maps the patched control c = dv.x to a state whose Position.x is f(c); the Position.x
+    // goal residual is then exactly f(c). STM is irrelevant here (the FD Jacobian path is taken).
+    const execOne = (seg: Segment, state: MissionState): SegmentResult => {
+      const c = seg.kind === 'Maneuver' ? (seg as ManeuverSegment).dv.x : 0;
+      return {
+        out: { ...state, r: { x: f(c), y: 0, z: 0 } },
+        samples: [],
+        status: { kind: 'ok' },
+        halt: false,
+      };
+    };
+    const controls = bindControls(children, [{ segment: 'burn', param: 'Maneuver.dv.x', perturbation: 1e-6, initial: 0, maxStep: 10 }]);
+    const goals = bindGoals([{ evalAt: 'End', type: 'Position.x', desired: 0, tolerance: 1e-9 }]);
+    const ctx: DcEvalContext = { children, goals, input, env, mu: MU, execOne };
+
+    let caught: unknown;
+    try {
+      runDifferentialCorrector(controls, goals, ctx, { ...DEFAULT_DC_SETTINGS, damping: 'armijo', maxIterations: 10 }, ['tgt']);
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(DcNotConvergedError);
+    const err = caught as DcNotConvergedError;
+    // The corrector did NOT step uphill into the wall: the best-so-far is still the seed c = 0
+    // (residual f(0) = -1e-3). Had the old code force-accepted the backtrack, best would have moved
+    // to a negative c with a residual near 100.
+    expect(err.controls[0]!).toBeCloseTo(0, 9);
+    expect(err.residuals[0]!).toBeCloseTo(-1e-3, 9);
   });
 });

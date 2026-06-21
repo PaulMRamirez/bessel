@@ -35,6 +35,9 @@ export interface DcReport {
 
 const norm2 = (v: Float64Array): number => Math.sqrt(v.reduce((s, x) => s + x * x, 0));
 
+/** Armijo sufficient-decrease coefficient for the corrector backtracking line search. */
+const ARMIJO_C = 1e-4;
+
 function perGoalOf(goals: readonly GoalBinding[], raw: Float64Array): PerGoalReport[] {
   return goals.map((g, i) => ({
     type: g.type,
@@ -95,24 +98,35 @@ export function runDifferentialCorrector(
       dc[j] = step;
     }
 
-    // Damped line search on the scaled residual norm.
+    // Damped line search on the scaled residual norm with a real Armijo sufficient-decrease test:
+    // accept lambda only when the trial norm drops by at least ARMIJO_C * lambda of the current
+    // norm (the Newton direction is a descent direction on ||F||, so such a lambda exists unless we
+    // are already stationary). The old loop force-accepted the smallest-lambda step on the final
+    // backtrack regardless of decrease, so the corrector could take an UPHILL move and the post-loop
+    // fallback was dead. Now an exhausted backtrack REJECTS the step: c is left unchanged and the
+    // corrector stops, failing loudly with the best-so-far rather than stepping uphill.
     let lambda = 1;
     let accepted = false;
     const maxBacktracks = settings.damping === 'armijo' ? 8 : 0;
     for (let b = 0; b <= maxBacktracks; b++) {
       const trial = Float64Array.from(c, (cj, j) => cj + lambda * dc[j]!);
       const ev = evaluateResidual(trial, controls, ctx, false);
-      if (settings.damping === 'none' || norm2(ev.residualScaled) < normF || b === maxBacktracks) {
+      const trialNorm = norm2(ev.residualScaled);
+      const sufficientDecrease = trialNorm <= (1 - ARMIJO_C * lambda) * normF;
+      if (settings.damping === 'none' || sufficientDecrease) {
         c.set(trial);
         accepted = true;
         break;
       }
       lambda /= 2;
     }
-    if (!accepted) c.set(Float64Array.from(c, (cj, j) => cj + dc[j]!));
+    // No backtrack achieved sufficient decrease: reject (do NOT step uphill) and break to the loud
+    // non-convergence path with the best iterate seen so far.
+    if (!accepted) break;
   }
 
-  // Exhausted iterations: report the best-so-far and fail loudly.
+  // Exhausted iterations (or a stalled line search that found no feasible descent): report the
+  // best-so-far and fail loudly.
   const raw = best.raw;
   const report = buildReport(false, settings.maxIterations, best.c, raw);
   throw new DcNotConvergedError(segmentPath, settings.maxIterations, best.c, raw, report.perGoal);

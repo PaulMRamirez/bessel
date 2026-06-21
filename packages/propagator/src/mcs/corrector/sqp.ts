@@ -64,6 +64,13 @@ export function runSqpOptimizer(
   const lambda = new Float64Array(m); // multiplier estimates, updated each KKT solve
 
   let kktResidual = Infinity;
+  let stalled = false;
+  // The FD cost/constraint gradients cannot resolve the KKT residual below their own noise floor
+  // (~sqrt of the relative perturbation). Certify stationarity at the smaller-tolerance / larger-
+  // floor threshold, so a genuine optimum is recognized but a premature stall (KKT residual orders
+  // of magnitude larger) is not. Recomputed each sweep from the current gradient scale.
+  const fdFloor = Math.sqrt(settings.perturbationRel);
+  let stationarityThreshold = settings.optimizerTolerance;
   let iter = 0;
   for (iter = 0; iter < settings.optimizerMaxIterations; iter++) {
     const base = evaluateResidual(c, controls, ctx, settings.useStm);
@@ -95,11 +102,16 @@ export function runSqpOptimizer(
     // gradient mode tests, so the two methods are compared on equal footing.
     const reduced = reducedGradient(jac.J, gradN, m, n, lambda);
     kktResidual = Math.hypot(norm2(reduced), norm2(g));
+    stationarityThreshold = Math.max(settings.optimizerTolerance, fdFloor * Math.max(norm2(gradN), 1));
     if (kktResidual <= settings.optimizerTolerance) break;
 
     // Assemble and solve the (n + m) x (n + m) KKT system.
     const dStep = solveKkt(W, jac.J, gradN, lambda, g, n, m);
-    if (!dStep) break; // singular KKT: stationary or degenerate, stop with the feasible point
+    if (!dStep) {
+      // Singular KKT system: cannot take a step. Not a certified stationary point; mark the stall.
+      stalled = true;
+      break;
+    }
     const dcN = dStep.dc; // nondim control step
     const dl = dStep.dl;
 
@@ -136,7 +148,12 @@ export function runSqpOptimizer(
       }
       step /= 2;
     }
-    if (!accepted || !movedC) break; // no feasible cost decrease available: KKT-stationary
+    if (!accepted || !movedC) {
+      // The line search found no feasible cost decrease: a STALL. The iterate may still be far from
+      // a KKT point (kktResidual > tolerance), so do not treat reaching this as convergence.
+      stalled = true;
+      break;
+    }
     // Stall guard: if the accepted move barely changed the controls, the iterate is stationary to
     // the corrector's FD Jacobian floor; stop (the cost is already at its achievable optimum).
     let moveNorm = 0;
@@ -151,10 +168,16 @@ export function runSqpOptimizer(
   if (!goalsMet(goals, final.raw)) {
     throw new OptimizerNotConvergedError(segmentPath, iter, c, 'final point is infeasible');
   }
-  const converged = kktResidual <= settings.optimizerTolerance || iter < settings.optimizerMaxIterations;
+  // Convergence is the KKT stationarity test ALONE: the KKT residual at or below the stationarity
+  // threshold (the requested tolerance, or the FD-gradient noise floor when that is larger).
+  // Reaching the iteration cap, a singular KKT system, or a line-search stall does NOT by itself
+  // count as converged; a stall counts only when the KKT residual is genuinely stationary (the old
+  // `|| iter < maxIterations` reported converged:true for ANY early break, a false success).
+  const converged = kktResidual <= stationarityThreshold;
   return {
     report: {
       converged,
+      stalled,
       outerIterations: iter,
       controls: Float64Array.from(c),
       cost: evaluateObjective(objective, c, controls).cost,

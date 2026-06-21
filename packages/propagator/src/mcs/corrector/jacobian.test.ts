@@ -53,6 +53,50 @@ describe('Jacobian STM column vs finite difference', () => {
     const rel = Math.abs(stmJac.J[0]! - fdJac.J[0]!) / Math.abs(fdJac.J[0]!);
     expect(rel).toBeLessThan(1e-4);
   });
+
+  it('does NOT use the analytic STM for an upstream control across a later burn (falls back to FD)', () => {
+    // A multi-segment Target: a control on the FIRST burn's delta-v, with a SECOND burn and coast
+    // downstream. The published coast STM is referenced to the post-burn2 coast (stmEpoch != the
+    // burn1 injection epoch), so the analytic column would push the burn1 seed through the WRONG
+    // STM. The epoch gate must reject the analytic path and finite-difference instead, and the
+    // resulting column must match an independent central-difference reference.
+    const multi: Segment[] = [
+      { kind: 'Maneuver', id: 'burn1', mode: 'Impulsive', attitude: 'VNB', dv: { x: 0.03, y: 0, z: 0 } },
+      { kind: 'Propagate', id: 'coast1', model: 'TwoBody', maxDuration: 800, stop: [{ type: 'Duration', value: 800 }] },
+      { kind: 'Maneuver', id: 'burn2', mode: 'Impulsive', attitude: 'VNB', dv: { x: 0.02, y: 0, z: 0 } },
+      { kind: 'Propagate', id: 'coast2', model: 'TwoBody', maxDuration: 700, stop: [{ type: 'Duration', value: 700 }] },
+    ];
+    const controls = bindControls(multi, [{ segment: 'burn1', param: 'Maneuver.dv.x', perturbation: 1e-6 }]);
+    const goals = bindGoals([{ evalAt: 'End', type: 'Radius', desired: 7100, tolerance: 1e-4 }]);
+    const ctx: DcEvalContext = {
+      children: multi,
+      goals,
+      input,
+      env,
+      mu: MU,
+      execOne: (s, state, wantStm) => runSegment(s, state, env, { stm: wantStm }),
+    };
+    const c = Float64Array.of(0.03);
+
+    const base = evaluateResidual(c, controls, ctx, true);
+    // The coast STM is referenced to the post-burn2 epoch, NOT the burn1 injection epoch.
+    expect(base.stmEpoch).not.toBeUndefined();
+    expect(base.burnStates.get('burn1')!.epoch).toBe(0);
+    expect(base.stmEpoch!).toBeGreaterThan(0);
+
+    const stmJac = assembleJacobian(c, base, controls, goals, ctx, { ...DEFAULT_DC_SETTINGS, useStm: true });
+    // The analytic path was rejected: a finite-difference column was computed (extraRuns > 0).
+    expect(stmJac.extraRuns).toBeGreaterThan(0);
+
+    // And the column it produced matches an independent central-difference reference within tol.
+    const fdJac = assembleJacobian(c, base, controls, goals, ctx, {
+      ...DEFAULT_DC_SETTINGS,
+      useStm: false,
+      useCentralDifference: true,
+    });
+    const rel = Math.abs(stmJac.J[0]! - fdJac.J[0]!) / Math.abs(fdJac.J[0]!);
+    expect(rel).toBeLessThan(1e-4);
+  });
 });
 
 describe('mayRetargetStop', () => {

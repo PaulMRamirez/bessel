@@ -79,6 +79,25 @@ describe('screenAllVsAll', () => {
     expect(ev.missKm).toBeCloseTo(1, 2);
   });
 
+  it('rejects a mismatched screening grid (different length)', () => {
+    const R = 7000;
+    const etA = grid(0, 61, 10);
+    const etB = grid(0, 41, 10); // shorter grid: b would be indexed out of its own range
+    const a = rectilinear('A', [R - 7 * 300, 0, 0], [7, 0, 0], etA);
+    const b = rectilinear('B', [R, -7 * 300, 2], [0, 7, 0], etB);
+    expect(() => screenAllVsAll([a, b], { thresholdKm: 5 })).toThrow(ScreenError);
+    expect(() => screenAllVsAll([a, b], { thresholdKm: 5 })).toThrow(/share one screening grid/);
+  });
+
+  it('rejects a mismatched screening grid (same length, different epochs)', () => {
+    const R = 7000;
+    const etA = grid(0, 61, 10); // 0..600
+    const etB = grid(5, 61, 10); // 5..605: same length, shifted half a step
+    const a = rectilinear('A', [R - 7 * 300, 0, 0], [7, 0, 0], etA);
+    const b = rectilinear('B', [R, -7 * 300, 2], [0, 7, 0], etB);
+    expect(() => screenAllVsAll([a, b], { thresholdKm: 5 })).toThrow(/share one screening grid/);
+  });
+
   it('fails loudly on malformed input', () => {
     const et = grid(0, 3, 10);
     const bad: SampledEphemeris = { id: 'X', et, pos: new Float64Array(6), vel: new Float64Array(9) };
