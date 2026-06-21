@@ -78,6 +78,18 @@ function hasManeuverOrTargetBetween(base: ResidualEval, lo: number, hi: number):
   return false;
 }
 
+/**
+ * Finite-difference perturbation for control value `c` (relative size `rel`, explicit floor
+ * `perturbation`). The relative step is scaled by the control's OWN magnitude, floored by its
+ * explicit perturbation, NOT by ctrl.scale: scale is a nondimensionalization reference (default 1),
+ * and pinning the relative step to it gives a genuine ~1e-9 trim control a ~1e-6 absolute step that
+ * strides across a nonlinear region and smears the derivative. scale is used only to
+ * nondimensionalize the assembled column (dNondim), never to size the perturbation.
+ */
+export function fdStep(rel: number, c: number, perturbation: number): number {
+  return Math.max(rel * Math.max(Math.abs(c), perturbation), perturbation);
+}
+
 /** Multiply a row-major 6x6 STM by a 6-vector seed. */
 function phiTimes(phi: Float64Array, seed: Float64Array): Float64Array {
   const out = new Float64Array(6);
@@ -135,7 +147,7 @@ export function assembleJacobian(
     }
 
     // Finite difference (forward, or central when configured).
-    const step = Math.max(settings.perturbationRel * Math.max(Math.abs(c[j]!), ctrl.scale), ctrl.perturbation);
+    const step = fdStep(settings.perturbationRel, c[j]!, ctrl.perturbation);
     const cPlus = Float64Array.from(c);
     cPlus[j] = c[j]! + step;
     const evPlus = evaluateResidual(cPlus, controls, ctx, false);

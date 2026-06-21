@@ -21,6 +21,20 @@ export interface IntegratorOptions {
   readonly hMin?: number;
 }
 
+/**
+ * Smallest error scale a component may have. The error scale is sc_i = atol + rtol*|y_i|; with
+ * atol = 0 (a legal option) and an exactly-zero state component (y_i = 0), sc_i collapses to 0 and
+ * the rmsNorm division v_i/sc_i yields Inf/NaN, which surfaces downstream as a misleading
+ * "non-finite derivative" even though the derivative is finite. Floor sc to this tiny positive
+ * value so a zero-scale component contributes a finite, well-defined error term.
+ */
+export const SC_FLOOR = 1e-300;
+
+/** Error scale for one component: atol + rtol*|y|, floored to SC_FLOOR so it is never zero. */
+export function errorScale(atol: number, rtol: number, absY: number): number {
+  return Math.max(SC_FLOOR, atol + rtol * absY);
+}
+
 /** Root-mean-square norm of v_i / sc_i. */
 export function rmsNorm(v: Float64Array, sc: Float64Array): number {
   let sum = 0;
@@ -30,6 +44,16 @@ export function rmsNorm(v: Float64Array, sc: Float64Array): number {
   }
   return Math.sqrt(sum / v.length);
 }
+
+/**
+ * Smallest first step initialStep may return. A stiff start (large second-derivative norm d2)
+ * drives Hairer's h1 = (0.01/maxD)^(1/5) arbitrarily small, which can seed the stepper with an
+ * unusably tiny step (or, with d2 ~ 1/0, a zero/NaN one) that immediately trips the step-collapse
+ * guard. Floor the returned step to this small POSITIVE value so the adaptive controller can grow
+ * it; it stays well below the integrator's hMin-driven collapse threshold so genuine stiffness is
+ * still caught on rejection, not hidden.
+ */
+const INITIAL_STEP_FLOOR = 1e-8;
 
 /** Hairer's automatic initial step selection (Solving ODE I, II.4). */
 export function initialStep(rhs: Rhs, t0: number, y0: Float64Array, f0: Float64Array, sc: Float64Array): number {
@@ -46,7 +70,7 @@ export function initialStep(rhs: Rhs, t0: number, y0: Float64Array, f0: Float64A
   const d2 = rmsNorm(df, sc) / h0;
   const maxD = Math.max(d1, d2);
   const h1 = maxD <= 1e-15 ? Math.max(1e-6, h0 * 1e-3) : (0.01 / maxD) ** (1 / 5);
-  return Math.min(100 * h0, h1);
+  return Math.max(INITIAL_STEP_FLOOR, Math.min(100 * h0, h1));
 }
 
 /**
@@ -77,7 +101,7 @@ export function integrate(
 
   // Initial step from the derivative at the start.
   rhs(t, y, k[0]!);
-  for (let i = 0; i < n; i++) sc[i] = atol + rtol * Math.abs(y[i]!);
+  for (let i = 0; i < n; i++) sc[i] = errorScale(atol, rtol, Math.abs(y[i]!));
   let h = initialStep(rhs, t, y, k[0]!, sc);
 
   const out: Float64Array[] = [];
@@ -109,7 +133,7 @@ export function integrate(
           y5[i] = y[i]! + hStep * bsum;
           errVec[i] = hStep * esum;
         }
-        for (let i = 0; i < n; i++) sc[i] = atol + rtol * Math.max(Math.abs(y[i]!), Math.abs(y5[i]!));
+        for (let i = 0; i < n; i++) sc[i] = errorScale(atol, rtol, Math.max(Math.abs(y[i]!), Math.abs(y5[i]!)));
         const err = rmsNorm(errVec, sc);
         if (!Number.isFinite(err)) throw new IntegrationError('non-finite derivative during integration');
 

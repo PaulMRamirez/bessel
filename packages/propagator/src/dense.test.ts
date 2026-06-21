@@ -126,3 +126,20 @@ describe('Dense DOPRI5 continuous extension', () => {
     expect(() => solution.interpolate(tEnd + 100)).toThrow(OutOfDomainError);
   });
 });
+
+describe('integrateDense error-scale floor (atol = 0, zero component)', () => {
+  it('does not throw a misleading non-finite error when a component stays exactly zero with atol=0', () => {
+    // A component held exactly at zero would give error scale atol + rtol*0 = 0 with atol=0, and the
+    // rmsNorm division would yield Inf/NaN reported as a "non-finite derivative". The sc floor in
+    // dense.ts (shared errorScale) keeps the scale finite-positive so the arc builds normally.
+    const rhs: Rhs = (_t, _y, dy) => {
+      dy[0] = 1; // grows linearly
+      dy[1] = 0; // stays exactly zero
+    };
+    const { solution } = integrateDense(rhs, Float64Array.of(0, 0), 0, 1, { atol: 0, rtol: 1e-9 });
+    const end = solution.interpolate(1);
+    expect(end[0]!).toBeCloseTo(1, 6);
+    expect(end[1]!).toBe(0);
+    expect(Number.isFinite(end[1]!)).toBe(true);
+  });
+});

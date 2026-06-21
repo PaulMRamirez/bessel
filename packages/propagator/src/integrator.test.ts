@@ -11,6 +11,7 @@ import { createForceModel } from './force/model.ts';
 import { pointMass } from './force/point-mass.ts';
 import { zonalHarmonics } from './force/zonal.ts';
 import type { ForceModel } from './force/types.ts';
+import { errorScale, initialStep, integrate, rmsNorm, type Rhs } from './integrator.ts';
 
 const fixture = (name: string) =>
   new Uint8Array(readFileSync(fileURLToPath(new URL(`../../../kernels/fixtures/${name}`, import.meta.url))));
@@ -115,5 +116,51 @@ describe('Cowell vs an independent RK4 (point-mass + J2)', () => {
     expect(table.x[0]).toBeCloseTo(y[0]!, 1); // within 0.1 km of the independent RK4
     expect(table.y[0]).toBeCloseTo(y[1]!, 1);
     expect(table.z[0]).toBeCloseTo(y[2]!, 1);
+  });
+});
+
+describe('initialStep numerical floors', () => {
+  it('clamps a stiff-start step to a small positive floor (a large d2 cannot seed h ~ 0)', () => {
+    // A right-hand side whose derivative changes violently over the probe step drives Hairer's
+    // d2 enormous, so the unfloored h1 = (0.01/maxD)^(1/5) would be unusably tiny. The floor keeps
+    // the seed step strictly positive and above the integrator's collapse threshold (1e-9).
+    const stiff: Rhs = (_t, yv, dy) => {
+      dy[0] = 1e30 * yv[0]!; // huge, state-dependent slope -> huge second difference
+    };
+    const y0 = Float64Array.of(1);
+    const sc = Float64Array.of(1e-9 + 1e-11 * 1);
+    const f0 = Float64Array.of(1e30);
+    const h = initialStep(stiff, 0, y0, f0, sc);
+    expect(h).toBeGreaterThan(0);
+    expect(Number.isFinite(h)).toBe(true);
+    expect(h).toBeGreaterThanOrEqual(1e-8);
+  });
+});
+
+describe('error-scale floor (atol = 0, zero component)', () => {
+  it('errorScale never returns zero even with atol=0 and y=0', () => {
+    expect(errorScale(0, 1e-11, 0)).toBeGreaterThan(0);
+    expect(Number.isFinite(errorScale(0, 1e-11, 0))).toBe(true);
+  });
+
+  it('rmsNorm of an exactly-zero component with a floored scale is finite (no Inf/NaN)', () => {
+    const sc = Float64Array.of(errorScale(0, 1e-11, 0), errorScale(0, 1e-11, 7000));
+    const norm = rmsNorm(Float64Array.of(0, 1), sc);
+    expect(Number.isFinite(norm)).toBe(true);
+  });
+
+  it('integrate with atol=0 and a zero state component does not throw a misleading non-finite error', () => {
+    // dy/dt: a constant-rate component plus a component that stays exactly zero. With atol=0 the
+    // zero component's error scale would collapse to 0 and rmsNorm would divide to Inf, surfacing
+    // as "non-finite derivative" even though every derivative here is finite. The sc floor fixes it.
+    const rhs: Rhs = (_t, _y, dy) => {
+      dy[0] = 1; // grows
+      dy[1] = 0; // stays exactly zero
+    };
+    const y0 = Float64Array.of(0, 0);
+    const out = integrate(rhs, y0, 0, Float64Array.of(0, 1), { atol: 0, rtol: 1e-9 });
+    expect(out[1]![0]!).toBeCloseTo(1, 6);
+    expect(out[1]![1]!).toBe(0);
+    expect(Number.isFinite(out[1]![1]!)).toBe(true);
   });
 });

@@ -46,6 +46,30 @@ describe('secularRatesJ2', () => {
     const r = secularRatesJ2(7000, 0.001, Math.PI / 2, EARTH);
     expect(Math.abs(r.raanDot)).toBeLessThan(1e-18);
   });
+
+  it('applies the J4 secular correction (j4 shifts the node and perigee drift)', () => {
+    const i = 51.6 * (Math.PI / 180);
+    const withoutJ4 = secularRatesJ2(7000, 0.01, i, EARTH); // j4 unset -> J2 only
+    const withJ4 = secularRatesJ2(7000, 0.01, i, { ...EARTH, j4: -1.61962159e-6 });
+    // J4 must measurably move the node and perigee drift away from the J2-only values, and the
+    // correction must be finite and small relative to the J2 terms (a higher-order perturbation).
+    expect(withJ4.raanDot).not.toBe(withoutJ4.raanDot);
+    expect(withJ4.argpDot).not.toBe(withoutJ4.argpDot);
+    expect(Number.isFinite(withJ4.raanDot)).toBe(true);
+    expect(Number.isFinite(withJ4.argpDot)).toBe(true);
+    const dRaan = Math.abs(withJ4.raanDot - withoutJ4.raanDot);
+    expect(dRaan).toBeGreaterThan(0);
+    expect(dRaan).toBeLessThan(Math.abs(withoutJ4.raanDot)); // a correction, not a dominant term
+  });
+
+  it('reduces to the J2-only rates when j4 is zero', () => {
+    const i = 51.6 * (Math.PI / 180);
+    const unset = secularRatesJ2(7000, 0.01, i, EARTH);
+    const zero = secularRatesJ2(7000, 0.01, i, { ...EARTH, j4: 0 });
+    expect(zero.raanDot).toBe(unset.raanDot);
+    expect(zero.argpDot).toBe(unset.argpDot);
+    expect(zero.mDot).toBe(unset.mDot);
+  });
 });
 
 describe('analytic propagators', () => {

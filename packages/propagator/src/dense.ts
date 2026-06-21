@@ -14,7 +14,7 @@
 
 import { A, B, C, E, LAST_STAGE_IS_ENDPOINT, STAGES } from './integrator-coeffs.ts';
 import { IntegrationError, OutOfDomainError } from './errors.ts';
-import { initialStep, rmsNorm, type IntegratorOptions, type Rhs } from './integrator.ts';
+import { errorScale, initialStep, rmsNorm, type IntegratorOptions, type Rhs } from './integrator.ts';
 import { scanSegmentEvents, type EventHit, type EventSpec } from './events.ts';
 
 if (!LAST_STAGE_IS_ENDPOINT) {
@@ -139,7 +139,7 @@ export function integrateDense(rhs: Rhs, y0: Float64Array, t0: number, tf: numbe
   const y = Float64Array.from(y0);
 
   rhs(t, y, k[0]!);
-  for (let i = 0; i < n; i++) sc[i] = atol + rtol * Math.abs(y[i]!);
+  for (let i = 0; i < n; i++) sc[i] = errorScale(atol, rtol, Math.abs(y[i]!));
   let h = initialStep(rhs, t, y, k[0]!, sc);
 
   const segments: Segment[] = [];
@@ -171,7 +171,7 @@ export function integrateDense(rhs: Rhs, y0: Float64Array, t0: number, tf: numbe
         y5[i] = y[i]! + hStep * bsum;
         errVec[i] = hStep * esum;
       }
-      for (let i = 0; i < n; i++) sc[i] = atol + rtol * Math.max(Math.abs(y[i]!), Math.abs(y5[i]!));
+      for (let i = 0; i < n; i++) sc[i] = errorScale(atol, rtol, Math.max(Math.abs(y[i]!), Math.abs(y5[i]!)));
       const err = rmsNorm(errVec, sc);
       if (!Number.isFinite(err)) throw new IntegrationError('non-finite derivative during integration');
 
