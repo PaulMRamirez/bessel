@@ -760,10 +760,13 @@ lazy-ops seam, with:
   sweep, and the porkchop sweep, each with its own size budget.
 
 These are proven end-to-end by the workbench e2e suite (`e2e/tests/workbench.spec.ts`,
-`context.spec.ts`, `conjunction`/`coverage`/`mission-design`/`od`/`propagate`/
-`report` specs, plus the Cassini analysis path in `e2e/tests/analysis.spec.ts`),
-exercising the interval (window-algebra) and sampled (batched-ephemeris) engine
-paths, the scalar-readout and file-export paths, and the worker job paths.
+`context.spec.ts`, the `mission-design`/`od`/`propagate`/`report` specs, and the
+per-domain flows in `e2e/tests/analysis.spec.ts`, which now cover lighting, the
+access constraint stack, conjunction CDM ingest + full-covariance Pc, the worker
+coverage-grid sweep, maneuver/map plots, in-FOV windows, the terrain-LOS constraint,
+and the multi-target observation schedule), exercising the interval (window-algebra)
+and sampled (batched-ephemeris) engine paths, the scalar-readout and file-export
+paths, and the worker job paths.
 
 The F3 cancellable-job worker pool, OMM/CDM interop, time-evolving sensor swaths,
 attitude pointing keep-out, the integrator substrate (dense output + event
