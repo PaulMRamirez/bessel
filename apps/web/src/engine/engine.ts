@@ -58,12 +58,14 @@ import {
   type AnalysisContext,
   type AnalyzeTab,
   type RunStatus,
+  type SpacecraftSource,
 } from '../store/index.ts';
 import type { AccessConstraintSpec, FovPointingMode } from './analysis-defaults.ts';
 import { bootScene, loadInstrument, type EngineCore } from './bootstrap.ts';
 import { applyViewModel } from './apply-view.ts';
 import { type HpopForceModel } from './hpop-model.ts';
 import { type McsDesign } from './mcs.ts';
+import { type EditableMcs } from './mcs-editor.ts';
 import type {
   AnalysisSpan,
   AnalysisTargetSpan,
@@ -954,7 +956,16 @@ export class BesselEngine {
     });
   }
 
-  /** Propagation: SGP4 the bundled sample TLE and read it back as altitude + track. */
+  /** Set the editable spacecraft source the propagation tools read (a pasted TLE or a picked
+   *  scene object), mirroring its display name into scenario.primarySpacecraft so other tabs
+   *  share the same role-primary selection. Pass null to clear the source. */
+  setSpacecraftSource(source: SpacecraftSource | null): void {
+    this.store.setState((s) => ({
+      scenario: { ...s.scenario, spacecraftSource: source, primarySpacecraft: source ? source.name : null },
+    }));
+  }
+
+  /** Propagation: SGP4 the active TLE source and read it back as altitude + track. */
   async propagateTle(): Promise<void> {
     const e = this.core;
     if (!e) return;
@@ -984,13 +995,25 @@ export class BesselEngine {
     });
   }
 
-  /** Mission-design workbench: run a small MCS and draw the arc plus a DC report. */
+  /** Mission-design workbench: run a small fixed-shape MCS (the legacy 4-scalar design) and
+   *  draw the arc plus a DC report. Kept for callers that still pass a scalar McsDesign. */
   async runMcsDesign(design: McsDesign): Promise<void> {
     const e = this.core;
     if (!e) return;
     await this.runTool('run-mcs', async () => {
       const ops = await import('./analysis-ops.ts');
       await ops.runMcsDesign(e, this.store, this.isDisposed, design);
+    });
+  }
+
+  /** Editable mission-design workbench: compile and run the user-built MCS segment list,
+   *  draw the solved arc, and surface the residual trace + solved delta-v (run-mcs testid). */
+  async runEditableMcs(design: EditableMcs): Promise<void> {
+    const e = this.core;
+    if (!e) return;
+    await this.runTool('run-mcs', async () => {
+      const ops = await import('./analysis-ops.ts');
+      await ops.runEditableMcsDesign(e, this.store, this.isDisposed, design);
     });
   }
 

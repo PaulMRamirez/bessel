@@ -12,6 +12,7 @@ describe('scenario object model slice', () => {
     const scenario = createAppStore().getState().scenario;
     expect(scenario).toEqual({
       primarySpacecraft: null,
+      spacecraftSource: null,
       secondaryObjects: [],
       stations: [],
       activeStationId: null,
@@ -43,6 +44,7 @@ describe('scenario object model slice', () => {
     }));
     expect(store.getState().scenario).toEqual({
       primarySpacecraft: 'Cassini',
+      spacecraftSource: null,
       secondaryObjects: ['Saturn'],
       stations: [station],
       activeStationId: 'dss-14',

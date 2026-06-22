@@ -35,7 +35,6 @@ import {
 } from './coverage-metric.ts';
 import { downloadBlob } from '@bessel/ui';
 import { describeProvider, type ProviderKind, type ProviderSpec, type SpiceEngine } from '@bessel/spice';
-import { SAMPLE_TLE } from '../sample-tle.ts';
 import { RAD2DEG, DEG2RAD } from '../angles.ts';
 import {
   DEFAULT_LINK,
@@ -54,7 +53,10 @@ export { computeAccessStack, computeFovWindows } from './ops-access.ts';
 import type { AppStore } from '../store/index.ts';
 import type { EngineCore } from './bootstrap.ts';
 import { buildHpopForceModel, HPOP_FORCE_MODEL_LABELS, type HpopForceModel } from './hpop-model.ts';
-import { runMcsDesign as runMcsDesignCore, type McsDesign } from './mcs.ts';
+import { runMcsDesign as runMcsDesignCore, runEditableMcs, type McsDesign } from './mcs.ts';
+import { compileEditableMcs } from './mcs-compile.ts';
+import { type EditableMcs } from './mcs-editor.ts';
+import type { SpacecraftSource } from '../store/index.ts';
 import { runOdDemo } from './od.ts';
 import { centerMu } from './center-mu.ts';
 import { ScreeningClient, ScreeningCancelled } from '../screening-client.ts';
@@ -575,15 +577,38 @@ export async function exportOem(e: EngineCore, store: AppStore): Promise<void> {
   }
 }
 
+/** A located error raised when a propagation tool is run with no, or an unsuitable,
+ *  spacecraft source set (instead of silently falling back to bundled sample data). */
+export class SpacecraftSourceError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SpacecraftSourceError';
+  }
+}
+
+/** Read the active spacecraft source from the scenario slice, narrowed to a TLE source.
+ *  Fails loud when no source is set, or when the set source is a picked scene object (SGP4
+ *  needs element data, so the SGP4 path is TLE-only; the HPOP path handles object sources). */
+function requireTleSource(store: AppStore): Extract<SpacecraftSource, { kind: 'tle' }> {
+  const source = store.getState().scenario.spacecraftSource;
+  if (!source) {
+    throw new SpacecraftSourceError('set a spacecraft source (paste a TLE or pick a scene object) before propagating');
+  }
+  if (source.kind !== 'tle') {
+    throw new SpacecraftSourceError('SGP4 needs a TLE source; pick the HPOP path for a scene-object source');
+  }
+  return source;
+}
+
 /**
- * Propagation: parse the bundled sample TLE, run SGP4 over one day from its epoch,
- * publish the arc as an in-memory SPK Type-13 segment about the Earth, then query
- * that SPK through the F3 evalSeries pipeline for an altitude time series and a
- * ground track. This exercises the full @bessel/propagator path (TLE -> SGP4 ->
- * SPK-13 -> render) with no special-case geometry: the propagated orbit is read
- * back through the same spkpos pipeline as any other body. (Frame note: SGP4 is in
- * TEME; the segment is published as J2000, an arcminute-scale approximation near the
- * epoch. The EOP-aware TEME->J2000 conversion is the interop/frame work, #22.)
+ * Propagation: parse the active spacecraft source's TLE, run SGP4 over one day from its
+ * epoch, publish the arc as an in-memory SPK Type-13 segment about the Earth, then query
+ * that SPK through the F3 evalSeries pipeline for an altitude time series and a ground
+ * track. This exercises the full @bessel/propagator path (TLE -> SGP4 -> SPK-13 -> render)
+ * with no special-case geometry: the propagated orbit is read back through the same spkpos
+ * pipeline as any other body. Fails loud when no TLE source is set (no sample fallback).
+ * (Frame note: SGP4 is in TEME; the segment is published as J2000, an arcminute-scale
+ * approximation near the epoch. The EOP-aware TEME->J2000 conversion is the interop work, #22.)
  */
 export async function propagateTle(
   e: EngineCore,
@@ -592,7 +617,8 @@ export async function propagateTle(
   tle: TleState,
 ): Promise<void> {
   try {
-    const parsed = parseTle(SAMPLE_TLE.line1, SAMPLE_TLE.line2);
+    const source = requireTleSource(store);
+    const parsed = parseTle(source.line1, source.line2);
     const rec = sgp4init(parsed);
     // SPICE str2et rejects a trailing 'Z'; the TLE epoch is UTC regardless.
     const epoch = await e.spice.str2et(parsed.epochUtc.replace(/Z$/, ''));
@@ -632,10 +658,10 @@ export async function propagateTle(
     if (!isDisposed()) {
       store.setState({
         tleOrbit: {
-          altitude: { et, value: altitude, label: `${SAMPLE_TLE.name} altitude (km)` },
-          track: { et, lon: series.columns[1]!, lat: series.columns[2]!, label: `${SAMPLE_TLE.name} ground track` },
+          altitude: { et, value: altitude, label: `${source.name} altitude (km)` },
+          track: { et, lon: series.columns[1]!, lat: series.columns[2]!, label: `${source.name} ground track` },
           periodMin: 1440 / parsed.meanMotion,
-          label: SAMPLE_TLE.name,
+          label: source.name,
         },
       });
     }
@@ -705,13 +731,48 @@ export async function computeStationAccess(
   }
 }
 
+/** The numerical-propagation seed: an initial osculating Earth-centered J2000 state plus its
+ *  epoch and a display name, resolved from whichever spacecraft source is active. */
+interface HpopSeed {
+  readonly position: { x: number; y: number; z: number };
+  readonly velocity: { x: number; y: number; z: number };
+  readonly epoch: number;
+  readonly name: string;
+}
+
+/** Resolve the active spacecraft source into an HPOP seed state. A TLE source uses the SGP4
+ *  state at the TLE epoch; a scene-object source reads the object's osculating Earth-relative
+ *  J2000 state at the current epoch via SPICE. Fails loud when no source is set. */
+async function resolveHpopSeed(e: EngineCore, store: AppStore): Promise<HpopSeed> {
+  const source = store.getState().scenario.spacecraftSource;
+  if (!source) {
+    throw new SpacecraftSourceError('set a spacecraft source (paste a TLE or pick a scene object) before propagating');
+  }
+  if (source.kind === 'tle') {
+    const parsed = parseTle(source.line1, source.line2);
+    const rec = sgp4init(parsed);
+    const epoch = await e.spice.str2et(parsed.epochUtc.replace(/Z$/, ''));
+    const s0 = sgp4(rec, 0); // TEME state at the TLE epoch
+    return {
+      position: { x: s0.position[0], y: s0.position[1], z: s0.position[2] },
+      velocity: { x: s0.velocity[0], y: s0.velocity[1], z: s0.velocity[2] },
+      epoch,
+      name: source.name,
+    };
+  }
+  // Scene object: its osculating Earth-centered J2000 state at the current epoch.
+  const epoch = e.clock.state.et;
+  const s = await e.spice.spkezr(source.name, epoch, 'J2000', 'NONE', 'EARTH');
+  return { position: s.position, velocity: s.velocity, epoch, name: source.name };
+}
+
 /**
- * Numerical (HPOP) propagation: take the TLE's initial osculating state, integrate
- * it over one day with the native Cowell propagator under a point-mass + J2 force
- * model (@bessel/propagator), publish the arc as an SPK, and plot its altitude. This
- * is the analytic-vs-numerical companion to the SGP4 run and exercises the new
- * integrator end-to-end. (Frame note: the TLE state is TEME, integrated as J2000, an
- * arcminute-scale approximation near the epoch; the J2 axis assumption holds.)
+ * Numerical (HPOP) propagation: take the active source's initial osculating state, integrate
+ * it over one day with the native Cowell propagator under a selectable force model
+ * (@bessel/propagator), publish the arc as an SPK, and plot its altitude. This is the
+ * analytic-vs-numerical companion to the SGP4 run and exercises the integrator end-to-end.
+ * Fails loud when no source is set (no sample fallback). (Frame note for a TLE source: the
+ * state is TEME, integrated as J2000, an arcminute-scale approximation near the epoch.)
  */
 export async function propagateHpop(
   e: EngineCore,
@@ -721,20 +782,15 @@ export async function propagateHpop(
   model: HpopForceModel = 'j2',
 ): Promise<void> {
   try {
-    const parsed = parseTle(SAMPLE_TLE.line1, SAMPLE_TLE.line2);
-    const rec = sgp4init(parsed);
-    const epoch = await e.spice.str2et(parsed.epochUtc.replace(/Z$/, ''));
-    const s0 = sgp4(rec, 0); // TEME state at the TLE epoch
+    const seed = await resolveHpopSeed(e, store);
+    const epoch = seed.epoch;
     const step = 60;
     const n = Math.floor(86400 / step) + 1;
     const et = new Float64Array(n);
     for (let i = 0; i < n; i++) et[i] = epoch + i * step;
     const forceModel = buildHpopForceModel(model, { gm: EARTH_GM, re: EARTH_RE, j2: EARTH_J2 });
     const table = propagateCowell({
-      state: {
-        position: { x: s0.position[0], y: s0.position[1], z: s0.position[2] },
-        velocity: { x: s0.velocity[0], y: s0.velocity[1], z: s0.velocity[2] },
-      },
+      state: { position: seed.position, velocity: seed.velocity },
       epoch,
       etGrid: et,
       forceModel,
@@ -752,7 +808,7 @@ export async function propagateHpop(
         hpopAltitude: {
           et,
           value: altitude,
-          label: `${SAMPLE_TLE.name} HPOP altitude (km, ${HPOP_FORCE_MODEL_LABELS[model]})`,
+          label: `${seed.name} HPOP altitude (km, ${HPOP_FORCE_MODEL_LABELS[model]})`,
         },
       });
     }
@@ -790,6 +846,36 @@ export async function runMcsDesign(
   } catch (err) {
     if (!isDisposed()) store.setState({ mcsResult: null });
     console.error('MCS design run failed', err);
+    throw err;
+  }
+}
+
+/**
+ * Editable mission-design workbench: compile the user-built segment list (the MCS builder's
+ * EditableMcs) into the @bessel/propagator Mcs IR, run it SPICE-free, draw the solved arc as a
+ * camera-relative Earth-anchored orbit polyline, and write the result (final state, altitude
+ * series, per-iteration corrector residual trace, and solved delta-v) to the store. Fails loud
+ * with a located McsEditorError when the segment list cannot lower to a runnable IR.
+ */
+export async function runEditableMcsDesign(
+  e: EngineCore,
+  store: AppStore,
+  isDisposed: () => boolean,
+  design: EditableMcs,
+): Promise<void> {
+  try {
+    const mcs = compileEditableMcs(design);
+    const { result, arc } = await runEditableMcs(mcs);
+    if (isDisposed()) return;
+    // Camera-relative: km Earth-centered J2000 points; the scene applies the floating-origin
+    // scale, so no raw solar-system coordinates reach the GPU float32 buffers.
+    if (arc.length >= 2) {
+      e.scene.setOrbits([{ id: 'mcs-arc', anchorBody: 'Earth', points: arc, color: 0xffaa33 }]);
+    }
+    store.setState({ mcsResult: result });
+  } catch (err) {
+    if (!isDisposed()) store.setState({ mcsResult: null });
+    console.error('editable MCS run failed', err);
     throw err;
   }
 }

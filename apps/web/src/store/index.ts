@@ -6,6 +6,7 @@ export {
   KEPT_SNAPSHOT_LIMIT,
   type AnalysisContext,
   type ScenarioState,
+  type SpacecraftSource,
   type GroundStation,
   type AnalyzeTab,
   type KeptSnapshot,
