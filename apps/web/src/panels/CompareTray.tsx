@@ -4,10 +4,15 @@
 // that domain's snapshot metric keys; rows are the kept snapshots. Presentational: it reads the
 // keptSnapshots slice and calls the engine to remove/clear/export. Reuses ReportTable for the grid.
 
-import { Button } from '@bessel/selene-design';
+import { Button, Tag } from '@bessel/selene-design';
 import { ReportTable, downloadBlob } from '@bessel/ui';
 import type { BesselEngine } from '../engine/index.ts';
-import { useStore, type AppStore, type KeptSnapshot } from '../store/index.ts';
+import {
+  KEPT_SNAPSHOT_LIMIT,
+  useStore,
+  type AppStore,
+  type KeptSnapshot,
+} from '../store/index.ts';
 
 export interface CompareTrayProps {
   readonly engine: BesselEngine | null;
@@ -56,6 +61,7 @@ function toCsv(snapshots: readonly KeptSnapshot[]): string {
 export function CompareTray(props: CompareTrayProps): JSX.Element {
   const { engine, store } = props;
   const snapshots = useStore(store, (s) => s.keptSnapshots);
+  const isFull = snapshots.length >= KEPT_SNAPSHOT_LIMIT;
 
   if (snapshots.length === 0) {
     return (
@@ -69,6 +75,16 @@ export function CompareTray(props: CompareTrayProps): JSX.Element {
   return (
     <div className="bessel-compare-tray" data-testid="compare-tray">
       <div className="bessel-compare-tools">
+        <Tag tone={isFull ? 'amber' : 'neutral'}>
+          <span data-testid="compare-kept-count">
+            Kept {snapshots.length} / {KEPT_SNAPSHOT_LIMIT}
+          </span>
+        </Tag>
+        {isFull ? (
+          <Tag tone="amber">
+            <span data-testid="compare-tray-full">Tray full</span>
+          </Tag>
+        ) : null}
         <Button
           variant="secondary"
           testId="compare-csv"

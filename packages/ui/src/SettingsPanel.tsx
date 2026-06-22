@@ -1,6 +1,8 @@
 // Visualization settings panel: toggles for the scene layers. Presentational; the
 // viewer maps each change to the scene visibility seams.
 
+import { Button } from '@bessel/selene-design';
+
 export interface VisualizationSettings {
   readonly trajectory: boolean;
   readonly orbits: boolean;
@@ -20,6 +22,8 @@ export type SettingKey = keyof VisualizationSettings;
 export interface SettingsPanelProps {
   readonly settings: VisualizationSettings;
   readonly onChange: (key: SettingKey, value: boolean) => void;
+  /** When provided, render a "Reset to defaults" button; the parent owns the reset. */
+  readonly onReset?: () => void;
 }
 
 const LABELS: Record<SettingKey, string> = {
@@ -51,6 +55,11 @@ export function SettingsPanel(props: SettingsPanelProps): JSX.Element {
           {LABELS[key]}
         </label>
       ))}
+      {props.onReset && (
+        <Button variant="secondary" testId="settings-reset" onClick={props.onReset}>
+          Reset to defaults
+        </Button>
+      )}
     </fieldset>
   );
 }

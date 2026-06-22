@@ -107,11 +107,13 @@ export function TimelineControls(props: TimelineControlsProps): JSX.Element {
         {steps.slice(0, 2).map(renderStep)}
         <button
           type="button"
+          className="bessel-transport-step"
           onClick={props.onPlayToggle}
           aria-pressed={props.playing}
+          aria-label={props.playing ? 'Pause' : 'Play'}
           data-testid="timeline-play"
         >
-          {props.playing ? 'Pause' : 'Play'}
+          <span aria-hidden="true">{props.playing ? '⏸' : '▶'}</span>
         </button>
         {steps.slice(2).map(renderStep)}
       </div>

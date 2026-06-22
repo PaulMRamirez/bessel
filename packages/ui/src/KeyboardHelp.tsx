@@ -2,6 +2,7 @@
 // Escape closes it. Open state is owned by the viewer (toggled by the ? shortcut).
 
 import { useEffect, useRef } from 'react';
+import { CloseButton } from './CloseButton.tsx';
 import { KEYMAP } from './keymap.ts';
 
 export interface KeyboardHelpProps {
@@ -56,6 +57,11 @@ export function KeyboardHelp(props: KeyboardHelpProps): JSX.Element | null {
       tabIndex={-1}
       ref={ref}
     >
+      <CloseButton
+        onClose={props.onClose}
+        label="Close keyboard help"
+        className="bessel-close-button--corner"
+      />
       <h2>Keyboard shortcuts</h2>
       <dl>
         {KEYMAP.map((b) => (
@@ -78,9 +84,6 @@ export function KeyboardHelp(props: KeyboardHelpProps): JSX.Element | null {
           </div>
         ))}
       </dl>
-      <button type="button" onClick={props.onClose}>
-        Close
-      </button>
     </div>
   );
 }

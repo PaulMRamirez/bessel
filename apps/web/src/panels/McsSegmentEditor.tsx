@@ -51,29 +51,35 @@ export function McsSegmentEditor(props: McsSegmentEditorProps): JSX.Element {
             <span style={{ display: 'inline-flex', gap: 4 }}>
               <Button
                 variant="ghost"
+                iconOnly
                 testId={`mcs-segment-${i}-up`}
                 disabled={i === 0}
                 onClick={() => dispatch({ type: 'move', id: seg.id, dir: -1 })}
                 title="Move up"
+                ariaLabel="Move segment up"
               >
-                Up
+                ▲
               </Button>
               <Button
                 variant="ghost"
+                iconOnly
                 testId={`mcs-segment-${i}-down`}
                 disabled={i === segs.length - 1}
                 onClick={() => dispatch({ type: 'move', id: seg.id, dir: 1 })}
                 title="Move down"
+                ariaLabel="Move segment down"
               >
-                Down
+                ▼
               </Button>
               <Button
                 variant="ghost"
+                iconOnly
                 testId={`mcs-segment-${i}-remove`}
                 onClick={() => dispatch({ type: 'remove', id: seg.id })}
                 title="Remove segment"
+                ariaLabel="Remove segment"
               >
-                Remove
+                ✕
               </Button>
             </span>
           </div>
