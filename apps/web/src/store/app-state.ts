@@ -11,6 +11,12 @@ import type { Bookmark } from '../bookmarks.ts';
 import type { SavedScript } from '../scripts.ts';
 import { INITIAL_SCREENING, type ScreeningState } from '../screening-protocol.ts';
 import { createStore, type Store } from './create-store.ts';
+// [ux-p2-orbit] Type-only imports (erased at build, no runtime store->engine cycle): the
+// porkchop sweep result the Lambert card publishes, and the editable MCS the builder edits and
+// the "send to MCS" hop appends to, lifted into the store so the two cards share one design.
+import type { PorkchopResult } from '../engine/porkchop.ts';
+import type { EditableMcs } from '../engine/mcs-editor.ts';
+import { defaultEditableMcs } from '../engine/mcs-editor.ts';
 
 /** The active tab in the consolidated Analyze dock. The six intent-named domain tabs of
  *  the analysis-UX re-slot (design section 3): Orbit & Maneuver (with OD folded in),
@@ -191,6 +197,12 @@ export interface AppState {
   slewSeries: Series | null;
   /** Lambert transfer summary (delta-v) from the last maneuver-design run. */
   transfer: TransferResult | null;
+  /** [ux-p2-orbit] The Lambert porkchop sweep (delta-v over departure x TOF, plus the marked
+   *  minimum) from the last configurable-transfer run, or null. */
+  porkchop: PorkchopResult | null;
+  /** [ux-p2-orbit] The editable Mission Control Sequence the MCS builder edits; lifted into the
+   *  store so the porkchop "send to MCS" hop appends a Maneuver to the same design. */
+  editableMcs: EditableMcs;
   /** Sub-spacecraft ground track (lon/lat radians) from the last ground-track run. */
   groundTrack: GroundTrack | null;
   /** SGP4-propagated TLE orbit (altitude series + ground track) from the last run. */
@@ -598,6 +610,8 @@ export const initialAppState: AppState = {
   coverageGrid: null,
   slewSeries: null,
   transfer: null,
+  porkchop: null,
+  editableMcs: defaultEditableMcs(),
   groundTrack: null,
   tleOrbit: null,
   stationAccess: null,

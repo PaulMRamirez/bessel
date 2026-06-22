@@ -6,14 +6,14 @@
 // it edits an EditableMcs through the pure reducer and calls the engine. (STK_PARITY_SPEC §4.3;
 // analysis-UX Phase 1.)
 
-import { useMemo, useReducer } from 'react';
+import { useCallback, useMemo } from 'react';
 import { Button } from '@bessel/selene-design';
 import { TimeSeriesChart } from '@bessel/ui';
 import type { BesselEngine } from '../engine/index.ts';
 import { useStore, type AppStore } from '../store/index.ts';
 import { RunStatusNote, busyLabel } from './RunStatus.tsx';
 import { McsSegmentEditor } from './McsSegmentEditor.tsx';
-import { defaultEditableMcs, mcsEditorReducer } from '../engine/mcs-editor.ts';
+import { mcsEditorReducer, type McsEditorAction } from '../engine/mcs-editor.ts';
 
 export interface MissionPanelProps {
   readonly engine: BesselEngine | null;
@@ -28,7 +28,15 @@ export function MissionPanel(props: MissionPanelProps): JSX.Element {
   const result = useStore(store, (s) => s.mcsResult);
   const runStatus = useStore(store, (s) => s.runStatus);
   const run = busyLabel(runStatus['run-mcs'], 'Run mission sequence', 'Computing...');
-  const [design, dispatch] = useReducer(mcsEditorReducer, undefined, defaultEditableMcs);
+  // [ux-p2-orbit] The editable MCS lives in the store so the porkchop "send to MCS" hop and this
+  // editor share one design; edits dispatch through the same pure reducer over the store slice.
+  const design = useStore(store, (s) => s.editableMcs);
+  const dispatch = useCallback(
+    (action: McsEditorAction): void => {
+      store.setState((s) => ({ editableMcs: mcsEditorReducer(s.editableMcs, action) }));
+    },
+    [store],
+  );
 
   // The residual convergence trace plotted as residual-norm vs iteration (iter on the x axis).
   const residualChart = useMemo(() => {
