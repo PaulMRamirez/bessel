@@ -1,6 +1,7 @@
 // The Phase-2 Access & Comms cards (analysis-UX Phase 2, comms-engineer + observation-planner
-// journeys): the az/el-masked Station Passes timeline (selectable rows + a consecutive-pair select
-// that drive the active-selection bindings), the itemized Link-Budget Worksheet over the selected
+// journeys): the az/el-masked Station Passes timeline (selectable rows with a per-row Bind toggle
+// and a per-row "Pair with next" toggle that drive the active-selection bindings), the itemized
+// Link-Budget Worksheet over the selected
 // pass (worst-case + nominal tables + a margin-vs-time chart with the threshold drawn + CSV), and
 // the Slew Feasibility card (does the eigen-axis slew between two selected passes fit the gap). All
 // read the active station + the active-selection through the store; the engine owns the geometry.
@@ -27,6 +28,26 @@ import { RAD2DEG } from '../angles.ts';
 
 /** Format an ET seconds value into a compact relative-minutes label for the pass rows. */
 const minsFrom = (et: number, t0: number): string => `${((et - t0) / 60).toFixed(1)} min`;
+
+/** A small clearable binding chip (F33): a label of what is bound + a ✕ that clears it via the
+ *  passed handler (an existing engine setter). Rendered next to the not-ready hints so the bound
+ *  pass/pair is both visible and dismissible without scrolling back to the passes card. */
+function BindingChip(props: { label: string; testId: string; onClear: () => void }): JSX.Element {
+  return (
+    <span className="bessel-binding-chip" data-testid={props.testId}>
+      {props.label}
+      <button
+        type="button"
+        className="bessel-binding-chip-clear"
+        aria-label="Clear binding"
+        data-testid={`${props.testId}-clear`}
+        onClick={props.onClear}
+      >
+        ✕
+      </button>
+    </span>
+  );
+}
 
 // -- Station Passes ----------------------------------------------------------------------------
 
@@ -87,16 +108,16 @@ function StationPassTable(props: {
 }): JSX.Element {
   const { passes, engine } = props;
   const t0 = passes.span[0];
-  // The pair select: choosing a "from" pass pairs it with the chronologically next pass for the slew.
-  const pairFrom = props.selectedPair?.[0] ?? '';
-  const selectPair = (fromId: string): void => {
-    if (!fromId) {
+  // The slew pair lives on the rows now (F40): "Pair with next" pairs a row with the chronologically
+  // next pass; a row is "Paired" when it is the pair's first member. Reuses the slew-pair binding the
+  // old <select> wrote, so the slew card's feasibility behavior is unchanged.
+  const pairFromId = props.selectedPair?.[0] ?? null;
+  const togglePair = (fromId: string, nextId: string | undefined): void => {
+    if (pairFromId === fromId) {
       engine?.setSelectedWindowPair(null);
       return;
     }
-    const idx = passes.passes.findIndex((p) => p.id === fromId);
-    const next = passes.passes[idx + 1];
-    engine?.setSelectedWindowPair(next ? [fromId, next.id] : null);
+    engine?.setSelectedWindowPair(nextId ? [fromId, nextId] : null);
   };
   return (
     <div data-testid="station-passes">
@@ -109,6 +130,7 @@ function StationPassTable(props: {
         <thead>
           <tr>
             <th>Bind</th>
+            <th>Pair</th>
             <th>Rise</th>
             <th>Set</th>
             <th>Max el (deg)</th>
@@ -116,48 +138,48 @@ function StationPassTable(props: {
           </tr>
         </thead>
         <tbody>
-          {passes.passes.map((p) => (
-            <tr
-              key={p.id}
-              data-testid={`station-pass-${p.id}`}
-              aria-selected={props.selectedPassId === p.id}
-              className={props.selectedPassId === p.id ? 'bessel-row-selected' : undefined}
-            >
-              <td>
-                <button
-                  type="button"
-                  data-testid={`select-pass-${p.id}`}
-                  aria-pressed={props.selectedPassId === p.id}
-                  onClick={() => engine?.setSelectedPass(props.selectedPassId === p.id ? null : p.id)}
-                >
-                  {props.selectedPassId === p.id ? 'Bound' : 'Bind'}
-                </button>
-              </td>
-              <td>{minsFrom(p.rise, t0)}</td>
-              <td>{minsFrom(p.set, t0)}</td>
-              <td>{fmt(p.maxElevationRad * RAD2DEG, 1)}</td>
-              <td>{fmt(p.maxElevationRangeKm, 0)}</td>
-            </tr>
-          ))}
+          {passes.passes.map((p, i) => {
+            const nextId = passes.passes[i + 1]?.id;
+            const isLast = i === passes.passes.length - 1;
+            const isPaired = pairFromId === p.id;
+            return (
+              <tr
+                key={p.id}
+                data-testid={`station-pass-${p.id}`}
+                aria-selected={props.selectedPassId === p.id}
+                className={props.selectedPassId === p.id ? 'bessel-row-selected' : undefined}
+              >
+                <td>
+                  <button
+                    type="button"
+                    data-testid={`select-pass-${p.id}`}
+                    aria-pressed={props.selectedPassId === p.id}
+                    onClick={() => engine?.setSelectedPass(props.selectedPassId === p.id ? null : p.id)}
+                  >
+                    {props.selectedPassId === p.id ? 'Bound' : 'Bind'}
+                  </button>
+                </td>
+                <td>
+                  {/* A pair is two CONSECUTIVE passes, so the last row has no "next" to pair with. */}
+                  <button
+                    type="button"
+                    data-testid={`slew-pair-${i}`}
+                    aria-pressed={isPaired}
+                    disabled={isLast}
+                    onClick={() => togglePair(p.id, nextId)}
+                  >
+                    {isPaired ? 'Paired' : 'Pair with next'}
+                  </button>
+                </td>
+                <td>{minsFrom(p.rise, t0)}</td>
+                <td>{minsFrom(p.set, t0)}</td>
+                <td>{fmt(p.maxElevationRad * RAD2DEG, 1)}</td>
+                <td>{fmt(p.maxElevationRangeKm, 0)}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
-      {passes.passes.length >= 2 ? (
-        <label className="bessel-constraint-band">
-          Slew pair (from pass)
-          <select
-            value={pairFrom}
-            data-testid="select-pass-pair"
-            onChange={(ev) => selectPair(ev.target.value)}
-          >
-            <option value="">(none)</option>
-            {passes.passes.slice(0, -1).map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.id} to next
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : null}
     </div>
   );
 }
@@ -182,9 +204,19 @@ function LinkWorksheetBody(props: LinkWorksheetCardProps): JSX.Element {
     <>
       <LinkWorksheetForm value={props.worksheetParams} onChange={props.setWorksheetParams} />
       <p className="bessel-loader-hint" data-testid="link-worksheet-binding">
-        {selectedPassId
-          ? `Bound to selected pass ${selectedPassId} (worst-case + nominal elevation).`
-          : 'No pass selected: a representative geometry is used (select a pass row above to bind).'}
+        {selectedPassId ? (
+          <>
+            Bound to{' '}
+            <BindingChip
+              label={`pass ${selectedPassId}`}
+              testId="link-worksheet-binding-chip"
+              onClear={() => engine?.setSelectedPass(null)}
+            />{' '}
+            (worst-case + nominal elevation).
+          </>
+        ) : (
+          'No pass selected: a representative geometry is used (select a pass row above to bind).'
+        )}
       </p>
       <Action
         variant="primary"
@@ -301,9 +333,19 @@ function SlewFeasibilityBody(props: SlewFeasibilityCardProps): JSX.Element {
     <>
       <SlewFeasibilityForm value={props.slewParams} onChange={props.setSlewParams} />
       <p className="bessel-loader-hint" data-testid="slew-feasibility-binding">
-        {selectedPair
-          ? `Bound to consecutive passes ${selectedPair[0]} and ${selectedPair[1]}.`
-          : 'Select two consecutive passes (the slew-pair select on the passes card) to enable this check.'}
+        {selectedPair ? (
+          <>
+            Bound to{' '}
+            <BindingChip
+              label={`consecutive passes ${selectedPair[0]} and ${selectedPair[1]}`}
+              testId="slew-feasibility-binding-chip"
+              onClear={() => engine?.setSelectedWindowPair(null)}
+            />
+            .
+          </>
+        ) : (
+          'Pair two consecutive passes (the "Pair with next" toggle on the passes card) to enable this check.'
+        )}
       </p>
       <Action
         variant="primary"

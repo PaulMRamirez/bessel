@@ -1745,6 +1745,11 @@ export class BesselEngine {
     this.dispatchStation({ kind: 'remove', id });
   }
 
+  /** [ux-f30] Convenience: overwrite a station by id (edit in place; rejects unknown id). */
+  updateStation(station: GroundStation): void {
+    this.dispatchStation({ kind: 'update', station });
+  }
+
   stepRate(dir: -1 | 1): void {
     const idx = RATE_STEPS.indexOf(this.store.getState().rate as (typeof RATE_STEPS)[number]);
     const base = idx < 0 ? 3 : idx;

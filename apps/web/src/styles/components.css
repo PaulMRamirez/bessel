@@ -1261,6 +1261,35 @@ button[aria-pressed='true'] {
   margin-bottom: var(--space-1);
 }
 
+/* A binding chip: the currently bound pass / pass-pair shown as a clearable token, so
+   what a worksheet or slew check is bound to is visible and dismissable inline. */
+.bessel-binding-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-1);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 4px);
+  font-size: 0.7rem;
+  color: var(--text-1);
+}
+
+.bessel-binding-chip-clear {
+  background: transparent;
+  border: none;
+  color: var(--text-2);
+  cursor: pointer;
+  font-size: 0.7rem;
+  line-height: 1;
+  padding: 0;
+}
+
+.bessel-binding-chip-clear:hover,
+.bessel-binding-chip-clear:focus-visible {
+  color: var(--text-0);
+}
+
 /* A kept-snapshot chip: a non-interactive label plus a dedicated remove control, so
    clicking the variant name no longer destroys the snapshot (only the ✕ removes). */
 .bessel-snapshot-chip {

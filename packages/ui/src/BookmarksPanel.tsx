@@ -2,6 +2,7 @@
 // ones. Presentational; the engine encodes and persists the views.
 
 import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { Button } from '@bessel/selene-design';
 
 export interface BookmarkItem {
   readonly id: string;
@@ -29,8 +30,8 @@ export function BookmarksPanel(props: BookmarksPanelProps): JSX.Element {
   const [name, setName] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const submit = (ev: FormEvent): void => {
-    ev.preventDefault();
+  const submit = (ev?: FormEvent): void => {
+    ev?.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) return;
     props.onSave(trimmed);
@@ -54,9 +55,14 @@ export function BookmarksPanel(props: BookmarksPanelProps): JSX.Element {
           aria-label="Bookmark name"
           data-testid="bookmark-name"
         />
-        <button type="submit" disabled={name.trim() === ''} data-testid="bookmark-save">
+        <Button
+          variant="primary"
+          onClick={() => submit()}
+          disabled={name.trim() === ''}
+          testId="bookmark-save"
+        >
           Save view
-        </button>
+        </Button>
       </form>
       {props.bookmarks.length === 0 ? (
         <p className="bessel-bookmarks-empty">No saved views yet</p>
@@ -64,32 +70,32 @@ export function BookmarksPanel(props: BookmarksPanelProps): JSX.Element {
         <ul className="bessel-bookmarks-list" data-testid="bookmarks-list">
           {props.bookmarks.map((b) => (
             <li key={b.id} className="bessel-bookmark-row">
-              <button
-                type="button"
+              <Button
+                variant="ghost"
                 className="bessel-bookmark-apply"
                 onClick={() => props.onApply(b.id)}
               >
                 {b.name}
-              </button>
+              </Button>
               {props.onCopyLink ? (
-                <button
-                  type="button"
+                <Button
+                  variant="secondary"
                   className="bessel-bookmark-copy"
-                  aria-label={`Copy link to ${b.name}`}
-                  data-testid={`bookmark-copy-${b.id}`}
+                  ariaLabel={`Copy link to ${b.name}`}
+                  testId={`bookmark-copy-${b.id}`}
                   onClick={() => props.onCopyLink?.(b.id)}
                 >
                   Copy link
-                </button>
+                </Button>
               ) : null}
-              <button
-                type="button"
+              <Button
+                variant="ghost"
                 className="bessel-bookmark-delete"
-                aria-label={`Delete ${b.name}`}
+                ariaLabel={`Delete ${b.name}`}
                 onClick={() => props.onDelete(b.id)}
               >
                 <span aria-hidden="true">✕</span>
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
@@ -97,24 +103,24 @@ export function BookmarksPanel(props: BookmarksPanelProps): JSX.Element {
       {props.onExport || props.onImport ? (
         <div className="bessel-bookmark-tools" role="group" aria-label="Saved views import and export">
           {props.onExport ? (
-            <button
-              type="button"
-              data-testid="bookmarks-export"
+            <Button
+              variant="secondary"
+              testId="bookmarks-export"
               disabled={props.bookmarks.length === 0}
               onClick={props.onExport}
             >
               Export JSON
-            </button>
+            </Button>
           ) : null}
           {props.onImport ? (
             <>
-              <button
-                type="button"
-                data-testid="bookmarks-import"
+              <Button
+                variant="secondary"
+                testId="bookmarks-import"
                 onClick={() => fileRef.current?.click()}
               >
                 Import JSON
-              </button>
+              </Button>
               <input
                 ref={fileRef}
                 type="file"

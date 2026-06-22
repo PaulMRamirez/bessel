@@ -132,7 +132,11 @@ export function AnalysisContextBar({ engine, store }: AnalysisContextBarProps): 
       />
       {/* [ux-p2-access] Ground stations are first-class shared context: the access/comms cards read
           the ACTIVE station by role, so the registry control lives in the shared context bar. */}
-      <StationRegistryControl engine={engine} store={store} />
+      <StationRegistryControl
+        engine={engine}
+        store={store}
+        onUpdateStation={(s) => engine?.updateStation(s)}
+      />
     </div>
   );
 }

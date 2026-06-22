@@ -706,8 +706,11 @@ describe('Access & Comms Phase-2 cards surface passes / worksheet / slew feasibi
     expect(out).toContain('data-testid="station-passes-table"');
     expect(out).toContain('data-testid="station-pass-pass-0"');
     expect(out).toContain('data-testid="select-pass-pass-0"');
-    // Two passes enable the consecutive-pair select that drives the slew binding.
-    expect(out).toContain('data-testid="select-pass-pair"');
+    // Each row carries a "Pair with next" toggle that drives the slew binding (F40); the last row's
+    // toggle is disabled because a pair is two consecutive passes.
+    expect(out).toContain('data-testid="slew-pair-0"');
+    expect(out).toContain('data-testid="slew-pair-1"');
+    expect(out).toContain('Pair with next');
   });
 
   it('renders the link worksheet with the MODCOD select, margin readout, threshold chart, and CSV', () => {
@@ -737,6 +740,9 @@ describe('Access & Comms Phase-2 cards surface passes / worksheet / slew feasibi
     expect(out).toContain('data-testid="link-margin-chart"');
     expect(out).toContain('data-testid="link-margin-chart-threshold"');
     expect(out).toContain('data-testid="link-worksheet-csv"');
+    // The bound pass shows as a clearable chip (F33): the ✕ clears the binding via the existing handler.
+    expect(out).toContain('data-testid="link-worksheet-binding-chip"');
+    expect(out).toContain('data-testid="link-worksheet-binding-chip-clear"');
   });
 
   it('renders the slew-feasibility card with the fits verdict when a pair is selected', () => {
@@ -758,5 +764,8 @@ describe('Access & Comms Phase-2 cards surface passes / worksheet / slew feasibi
     expect(out).toContain('data-testid="slew-feasibility"');
     expect(out).toContain('data-testid="slew-fits"');
     expect(out).toContain('Slew FITS');
+    // The bound pair shows as a clearable chip (F33).
+    expect(out).toContain('data-testid="slew-feasibility-binding-chip"');
+    expect(out).toContain('data-testid="slew-feasibility-binding-chip-clear"');
   });
 });
