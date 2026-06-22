@@ -80,6 +80,10 @@ is unbuilt. See Section 15. The geometry engine added two more SPICE finders thi
 pass (`gfsep`, `gfposc`); the numerical analysis engines (access, events, rf,
 coverage, conjunction) deepened well beyond the Cosmographia viewer and are tracked
 in the Section 17 appendix, with the coverage-grid contour now rendered on the globe.
+Those engines are now fully surfaced in the consolidated analysis workbench (the
+analysis-UX re-slot, complete 2026-06-22): six intent-named domain tabs of
+collapsible TaskCards over a shared Scenario context, replacing the former flat
+AnalysisPanel. See Section 17 and docs/analysis-workbench.md.
 
 ---
 
@@ -141,7 +145,7 @@ in-process C++ calls.
 | Observation footprints (swath and discrete) | Yes (obsRate swath) | Done | `apps/web/src/instruments.ts` (`footprint`); footprint e2e green |
 | Spacecraft attitude from CK | Yes | Done | `packages/spice/src` (`ckw03`/`ckgp`/`sce2c` bindings), `packages/scene/src/orientation.ts` (`applyAttitude`), `kernels/fixtures/cassini-demo.bc` | CSPICE-WASM now exports the CK entry points (relinked via `pnpm cspice:build`); the engine writes and reads C-kernels, and the bundled Cassini demo furnishes a real CK + SCLK + FK and orients the model each frame from `pxform(scFrame, J2000)`. Validated by a write/`ckgp`/`pxform` round-trip against `q2m`. |
 | Camera-relative (floating origin) at solar-system scale | Yes | Done | `packages/scene/src/three-scene.ts`, `camera-modes.ts` | Mandatory per SPEC 5.1. |
-| Coverage-grid contour overlay on the globe | No (Cosmographia is a viewer) | Done | `packages/scene/src/coverage-overlay.ts`, `colormap.ts`; `apps/web/src/engine/analysis-ops.ts` (`computeCoverageGrid` -> `scene.setCoverageOverlay`), `AnalysisPanel.tsx` toggle; `coverage-overlay-scene.test.ts`, `analysis-panel.test.tsx` | Bessel advantage: a vertex-colored, camera-relative coverage overlay anchored to the focus body, fed by a `@bessel/coverage` grid sweep. |
+| Coverage-grid contour overlay on the globe | No (Cosmographia is a viewer) | Done | `packages/scene/src/coverage-overlay.ts`, `colormap.ts`; `apps/web/src/engine/analysis-ops.ts` (`sweepCoverage` -> `scene.setCoverageOverlay`), the `CoveragePanel` Coverage sweep card (`apps/web/src/panels/CoveragePanel.tsx`); `coverage-overlay-scene.test.ts`, `analysis-panel.test.tsx` | Bessel advantage: a vertex-colored, camera-relative coverage overlay anchored to the focus body, fed by a `@bessel/coverage` grid sweep. |
 
 ## 6. Camera and navigation
 
@@ -661,16 +665,31 @@ gap, with the warning path as evidence.
 | `@bessel/conjunction` | Alfano maximum Pc | Done | `max-pc.ts` (`maxCollisionProbability`); `covariance.test.ts` |
 | `@bessel/conjunction` | Epoch-covariance STM propagation to TCA (via `@bessel/propagator`) | Done | `cov-propagation.ts` (`propagateCovarianceToTca`, `collisionProbabilityPropagated`); `cov-propagation.test.ts` |
 
+UI surfacing of the above (the analysis-UX re-slot, complete 2026-06-22): every
+engine capability in this table is now surfaced as a parameter or toggle on an
+intent-named TaskCard in the consolidated analysis workbench, not engine-only. The
+former flat `AnalysisPanel` is replaced by `apps/web/src/panels/AnalyzeWorkbench.tsx`
+and the six domain panels (`OrbitManeuverPanel`, `LightingGeometryPanel`,
+`AccessCommsPanel`, `ConjunctionPanel`, `CoveragePanel`, `ReportComparePanel`). The
+deep capabilities (full-covariance Pc, B-plane, beta angle, az/el mask, sun keepout,
+terrain LOS, range rate, area-weighted FOM, modcod margin, covariance input) are all
+reachable from the UI. See docs/analysis-workbench.md and docs/analysis-personas.md
+for the user-facing map; the analysis-UX goal is docs/analysis-ux-goal.md (COMPLETE).
+
 Rendering and worker integration of the above:
 - The coverage-grid result renders as a camera-relative contour overlay on the
-  focus body (Section 5 row "Coverage-grid contour overlay").
+  focus body (Section 5 row "Coverage-grid contour overlay"), colored by a selectable
+  FOM metric with a legend, and the sweep runs on a dedicated, cancellable coverage
+  worker (`apps/web/src/coverage.worker.ts`).
 - All-vs-all conjunction screening runs off the main thread in a dedicated (single)
   Web Worker with progress and cancel: `apps/web/src/screening.worker.ts`,
-  `apps/web/src/screening-client.ts`.
-- The analysis workbench tools are parameterized with input forms and per-result
-  CSV export: `apps/web/src/panels/AnalysisPanel.tsx`,
-  `apps/web/src/panels/analysis-tool-forms.tsx`. Per-tool inputs, engines, and
-  validation provenance are catalogued in docs/analysis-tools.md.
+  `apps/web/src/screening-client.ts`. It screens a REAL ingested catalog (pasted CCSDS
+  CDM / OEM / TLE parsed via `@bessel/interop` and `@bessel/propagator`).
+- The Lambert porkchop departure-vs-time-of-flight sweep runs on its own cancellable
+  worker (`apps/web/src/porkchop.worker.ts`).
+- Per-card inputs, engines, and validation provenance are catalogued in
+  docs/analysis-tools.md; the per-tool input forms live in
+  `apps/web/src/panels/analysis-tool-forms.tsx`.
 
 ---
 

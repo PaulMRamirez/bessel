@@ -1,6 +1,16 @@
 # Goal: a natural cross-perspective flow for the deep analysis capabilities
 
-Status: proposed (awaiting human decisions on the open questions in section 7).
+Status: COMPLETE (2026-06-22). All phases 0-3 are implemented and merged and the
+section 6 gate is green: the flat AnalysisPanel is replaced by the six intent-named
+domain tabs (Orbit & Maneuver, Lighting & Geometry, Access & Comms, Conjunction,
+Coverage & Constellation, Report & Compare) with collapsible TaskCards, the Scenario
+Object Model context bar (spacecraft source, ground-station registry, target), the
+AnalysisLauncher search, mission-profile preset chips, whole-variant Compare, the
+unified export, active-selection bindings, and the cross-tab carriers. The
+user-facing guide is docs/analysis-workbench.md; the per-perspective walkthroughs are
+docs/analysis-personas.md. The goal text below is retained as the original record and
+is not rewritten.
+
 Source: the `analysis-ux-design` workflow (5 user-perspective agents + a current-UI
 audit, a senior-UX synthesis, and an adversarial persona-flow critique).
 
