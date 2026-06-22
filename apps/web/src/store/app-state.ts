@@ -128,9 +128,12 @@ export interface AppState {
   cameraMode: 'orbit' | 'sync' | 'free' | 'frame';
   /** The SPICE frame the camera basis locks to in 'frame' mode (e.g. IAU_EARTH). */
   cameraFrame: string;
-  /** Eclipse (umbra) intervals from the last lighting analysis, with their span. */
-  eclipseUmbra: readonly (readonly [number, number])[] | null;
-  eclipseSpan: readonly [number, number] | null;
+  /** Full umbra/penumbra/annular/sunlit eclipse phases from the last eclipse run. */
+  eclipsePhases: EclipsePhasesResult | null;
+  /** Beta-angle season series (deg + eclipse-onset threshold) from the last beta run. */
+  betaSeries: BetaSeriesResult | null;
+  /** Solar-intensity (visible-disk fraction, 0..1) series from the last intensity run. */
+  solarIntensitySeries: Series | null;
   /** Range time series (spacecraft to center body) from the last range analysis. */
   rangeSeries: Series | null;
   /** Line-of-sight access windows (spacecraft to the Sun) from the last access run. */
@@ -294,6 +297,28 @@ export interface GroundTrack {
   readonly label: string;
 }
 
+/** Beta-angle season series (deg over the span) plus the body's eclipse-onset
+ *  threshold: the satellite is in eclipse season while |beta| < onsetDeg. */
+export interface BetaSeriesResult {
+  /** Beta angle (deg) over time; et aligned to valueDeg. */
+  readonly series: Series;
+  /** Eclipse-onset half-angle (deg): |beta| below this puts the orbit in eclipse season. */
+  readonly onsetDeg: number;
+  readonly span: readonly [number, number];
+}
+
+/** Full eclipse phase windows over a span: the four mutually exclusive conditions
+ *  (umbra/penumbra/annular/sunlit) plus the total per-day shadowed duration. */
+export interface EclipsePhasesResult {
+  readonly umbra: readonly (readonly [number, number])[];
+  readonly penumbra: readonly (readonly [number, number])[];
+  readonly annular: readonly (readonly [number, number])[];
+  readonly sunlit: readonly (readonly [number, number])[];
+  readonly span: readonly [number, number];
+  /** Total shadowed (umbra + penumbra + annular) seconds per mean day over the span. */
+  readonly shadowSecPerDay: number;
+}
+
 export interface ReportResult {
   /** Column headers (with units), e.g. ["UTC", "range (km)"]. */
   readonly headers: readonly string[];
@@ -411,8 +436,9 @@ export const initialAppState: AppState = {
   track: false,
   cameraMode: 'orbit',
   cameraFrame: 'IAU_EARTH',
-  eclipseUmbra: null,
-  eclipseSpan: null,
+  eclipsePhases: null,
+  betaSeries: null,
+  solarIntensitySeries: null,
   rangeSeries: null,
   accessResult: null,
   fovResult: null,

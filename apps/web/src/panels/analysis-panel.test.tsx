@@ -1,7 +1,8 @@
-import { createElement } from 'react';
+import { createElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, it, expect } from 'vitest';
 import { LightingGeometryPanel } from './LightingGeometryPanel.tsx';
+import { betaCard, eclipseCard, solarIntensityCard } from './lighting-cards.tsx';
 import { AccessCommsPanel } from './AccessCommsPanel.tsx';
 import { ConjunctionPanel } from './ConjunctionPanel.tsx';
 import { CoveragePanel } from './CoveragePanel.tsx';
@@ -25,7 +26,7 @@ describe('domain panels group the tools into TaskCards (B10 re-slot)', () => {
   it('renders an accordion with a card toggle for every re-slotted tool', () => {
     // Every tool is reachable via its TaskCard toggle, even when collapsed.
     const cardsByPanel: readonly [string, readonly string[]][] = [
-      [lighting(createAppStore()), ['range', 'ground-track', 'eclipse']],
+      [lighting(createAppStore()), ['range', 'ground-track', 'beta', 'eclipse', 'solar-intensity']],
       [access(createAppStore()), ['access', 'in-fov', 'link']],
       [conjunction(createAppStore()), ['closest-approach', 'catalog-screen']],
       [coverage(createAppStore()), ['constellation', 'coverage-grid']],
@@ -236,5 +237,68 @@ describe('the empty notice surfaces when no spacecraft is loaded', () => {
     expect(lighting(createAppStore(), false)).toContain('data-testid="analysis-empty-notice"');
     expect(access(createAppStore(), false)).toContain('data-testid="analysis-empty-notice"');
     expect(lighting(createAppStore(), true)).not.toContain('data-testid="analysis-empty-notice"');
+  });
+});
+
+// The Lighting & Geometry Phase-1 cards (beta season, full eclipse phases, solar
+// intensity). The card bodies are rendered directly (the accordion only expands two by
+// default, and an expandRequest needs an effect that static markup does not run), so each
+// card's run action, seeded result, units/interpretation hint, and CSV export are
+// asserted against a seeded slice.
+const ctx = (status: Record<string, 'idle' | 'running' | 'ok' | { error: string }> = {}) => ({
+  engine: null,
+  span: { spanSec: 86400, stepSec: 120 },
+  runStatus: status,
+  runMeta: {},
+});
+const renderCard = (node: ReactNode): string => renderToStaticMarkup(createElement('div', null, node));
+
+describe('Lighting & Geometry Phase-1 cards surface beta / eclipse phases / solar intensity', () => {
+  it('renders the beta-angle card with run action, plot, onset hint, and CSV', () => {
+    const beta = {
+      series: { et: new Float64Array([0, 3600]), value: new Float64Array([12, 8]), label: 'beta (deg)' },
+      onsetDeg: 13.4,
+      span: [0, 86400] as const,
+    };
+    const out = renderCard(betaCard(ctx(), beta));
+    expect(out).toContain('data-testid="compute-beta"');
+    expect(out).toContain('data-testid="beta-result"');
+    expect(out).toContain('data-testid="beta-csv"');
+    expect(out).toContain('data-testid="beta-onset"');
+    // The interpretation hint carries the eclipse-onset threshold in degrees.
+    expect(out).toContain('13.4 deg');
+    // Empty state with no result is just the run action + hint, no result block.
+    expect(renderCard(betaCard(ctx(), null))).not.toContain('data-testid="beta-result"');
+  });
+
+  it('renders the eclipse card with all four phase timelines and the per-day duration', () => {
+    const phases = {
+      umbra: [[100, 200]] as const,
+      penumbra: [[90, 100]] as const,
+      annular: [] as const,
+      sunlit: [[200, 86400]] as const,
+      span: [0, 86400] as const,
+      shadowSecPerDay: 110,
+    };
+    const out = renderCard(eclipseCard(ctx(), phases));
+    expect(out).toContain('data-testid="compute-eclipse"');
+    expect(out).toContain('data-testid="eclipse-result"');
+    for (const phase of ['umbra', 'penumbra', 'annular', 'sunlit']) {
+      expect(out, `${phase} timeline`).toContain(`data-testid="eclipse-${phase}-timeline"`);
+      expect(out, `${phase} csv`).toContain(`data-testid="eclipse-${phase}-csv"`);
+    }
+    // The per-day shadowed duration is reported in minutes (110 s -> 1.8 min).
+    expect(out).toContain('data-testid="eclipse-duration"');
+    expect(out).toContain('1.8 min/day');
+  });
+
+  it('renders the solar-intensity card with run action, plot, 0..1 hint, and CSV', () => {
+    const series = { et: new Float64Array([0, 60]), value: new Float64Array([1, 0.4]), label: 'fraction' };
+    const out = renderCard(solarIntensityCard(ctx(), series));
+    expect(out).toContain('data-testid="compute-solar-intensity"');
+    expect(out).toContain('data-testid="solar-intensity-result"');
+    expect(out).toContain('data-testid="solar-intensity-csv"');
+    expect(out).toContain('data-testid="solar-intensity-hint"');
+    expect(out).toContain('1 = full sun, 0 = total umbra');
   });
 });

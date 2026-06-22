@@ -20,5 +20,7 @@ export {
   type OdResult,
   type Series,
   type LinkBudgetParams,
+  type BetaSeriesResult,
+  type EclipsePhasesResult,
 } from './app-state.ts';
 export { useStore } from './use-store.ts';

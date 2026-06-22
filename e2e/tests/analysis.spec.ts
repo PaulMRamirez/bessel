@@ -24,9 +24,13 @@ test('lighting analysis computes and renders eclipse intervals', async ({ page }
   await expandCard(page, 'eclipse');
   await page.getByTestId('compute-eclipse').click();
 
-  // The result (umbra Gantt) appears, with an interval count rendered.
-  await expect(page.getByTestId('eclipse-timeline')).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByTestId('interval-count')).toContainText('interval');
+  // The full-phase result appears: the umbra Gantt (one of the four stacked phase
+  // timelines) with an interval count, plus the per-day shadowed-duration readout.
+  await expect(page.getByTestId('eclipse-umbra-timeline')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('eclipse-penumbra-timeline')).toBeVisible();
+  await expect(page.getByTestId('eclipse-sunlit-timeline')).toBeVisible();
+  await expect(page.getByTestId('eclipse-umbra-timeline').getByTestId('interval-count')).toContainText('interval');
+  await expect(page.getByTestId('eclipse-duration')).toContainText('min/day');
 
   // The range analysis plots the spacecraft-to-center-body distance as a
   // time-series polyline (the second charting primitive, batched spkpos path).
@@ -100,6 +104,19 @@ test('lighting analysis computes and renders eclipse intervals', async ({ page }
   await page.getByTestId('compute-groundtrack').click();
   await expect(page.getByTestId('ground-track')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId('ground-track').locator('polyline').first()).toBeVisible();
+
+  // Beta-angle season (Lighting & Geometry tab): the beta (deg) plot plus the
+  // eclipse-onset threshold readout.
+  await expandCard(page, 'beta');
+  await page.getByTestId('compute-beta').click();
+  await expect(page.getByTestId('beta-chart')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('beta-onset')).toContainText('Eclipse season');
+
+  // Solar intensity (Lighting & Geometry tab): the visible solar-disk fraction (0..1).
+  await expandCard(page, 'solar-intensity');
+  await page.getByTestId('compute-solar-intensity').click();
+  await expect(page.getByTestId('solar-intensity-chart')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('solar-intensity-hint')).toContainText('full sun');
 
   // Interop (Report & Compare tab): exporting the trajectory downloads a CCSDS OEM file.
   await openAnalyze(page, 'report-compare');
