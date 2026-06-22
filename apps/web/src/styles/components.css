@@ -969,6 +969,32 @@ button[aria-pressed='true'] {
   color: var(--text-0);
 }
 
+/* The shared close glyph (CloseButton): one dismiss affordance for every surface,
+   so a header X always means CLOSE. A bare, low-emphasis target that brightens on
+   hover/focus; placement (inline vs absolute corner) is left to the host context. */
+.bessel-close-button {
+  background: transparent;
+  border: none;
+  color: var(--text-2);
+  cursor: pointer;
+  font-size: 0.85rem;
+  line-height: 1;
+  padding: var(--space-1);
+  border-radius: var(--radius-sm, 4px);
+}
+
+.bessel-close-button:hover,
+.bessel-close-button:focus-visible {
+  color: var(--text-0);
+}
+
+/* Corner variant: pin the close to the top-right of a positioned container. */
+.bessel-close-button--corner {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+}
+
 .bessel-tabs {
   display: flex;
   flex-wrap: wrap;

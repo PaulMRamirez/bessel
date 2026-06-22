@@ -31,6 +31,14 @@ export interface ButtonProps {
   className?: string;
   /** Native title/tooltip. */
   title?: string;
+  /** Accessible name. Required when children render as a glyph/icon only, so the
+   *  control is not announced as just its symbol. Falls back to title when unset. */
+  ariaLabel?: string;
+  /** When true, a control whose only content is a glyph: square footprint, no
+   *  horizontal text padding, so iconified actions sit flush in a control row. */
+  iconOnly?: boolean;
+  /** Reflected as aria-pressed for toggle controls (play/pause, layer toggles). */
+  pressed?: boolean;
 }
 
 /**
@@ -47,6 +55,9 @@ export function Button({
   testId,
   className,
   title,
+  ariaLabel,
+  iconOnly = false,
+  pressed,
 }: ButtonProps) {
   const v = VARIANTS[variant];
   return (
@@ -57,9 +68,12 @@ export function Button({
       data-testid={testId}
       className={className}
       title={title}
+      aria-label={ariaLabel}
+      aria-pressed={pressed}
       style={{
         height: 'var(--control-lg)',
-        padding: '0 14px',
+        padding: iconOnly ? '0' : '0 14px',
+        width: iconOnly ? 'var(--control-lg)' : full ? '100%' : 'auto',
         borderRadius: 'var(--radius-md)',
         fontFamily: 'var(--font-ui)',
         fontSize: 'var(--text-sm)',
@@ -70,7 +84,6 @@ export function Button({
         border: `0.5px solid ${v.bd}`,
         cursor: disabled ? 'not-allowed' : 'pointer',
         opacity: disabled ? 0.4 : 1,
-        width: full ? '100%' : 'auto',
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',

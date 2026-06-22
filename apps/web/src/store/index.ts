@@ -4,6 +4,7 @@ export {
   createAppStore,
   initialAppState,
   KEPT_SNAPSHOT_LIMIT,
+  DEFAULT_VISUALIZATION_SETTINGS,
   type AnalysisContext,
   type ScenarioState,
   type SpacecraftSource,

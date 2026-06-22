@@ -53,6 +53,7 @@ import {
 import { loadSavedScripts, persistSavedScripts, upsertScript } from '../scripts.ts';
 import {
   KEPT_SNAPSHOT_LIMIT,
+  DEFAULT_VISUALIZATION_SETTINGS,
   type AppStore,
   type AnalysisContext,
   type AnalyzeTab,
@@ -703,6 +704,28 @@ export class BesselEngine {
   /** Clear the current multi-object selection (and so the active measurement). */
   clearSelection(): void {
     this.store.setState({ selection: [] });
+  }
+
+  /** Close the selection inspector: drop the selection and leave Measure mode in one
+   *  action, so the header close is a single, discoverable dismiss. */
+  closeInspector(): void {
+    this.store.setState({ selection: [], measureMode: false });
+  }
+
+  /** Acknowledge the current telemetry fault so the banner hides until a new
+   *  (different) fault string is raised. */
+  acknowledgeFault(): void {
+    this.store.setState((s) => ({ acknowledgedFault: s.telemetryFault }));
+  }
+
+  /** Show or hide the live-geometry readout strip (independent of camera state). */
+  setShowLiveGeometry(show: boolean): void {
+    this.store.setState({ showLiveGeometry: show });
+  }
+
+  /** Restore the layer/visualization settings to their canonical defaults. */
+  resetSettings(): void {
+    this.store.setState({ settings: { ...DEFAULT_VISUALIZATION_SETTINGS } });
   }
 
   centerOn(body: string, animate = true): void {

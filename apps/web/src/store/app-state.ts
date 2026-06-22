@@ -313,6 +313,12 @@ export interface AppState {
   telemetryOverlay: readonly PredictedVsActual[];
   /** Loud telemetry-transport fault from the adapter, surfaced as a banner. */
   telemetryFault: string | null;
+  /** The fault string the user has acknowledged. The banner shows only while
+   *  telemetryFault is set AND differs from this, so a changed fault re-raises it. */
+  acknowledgedFault: string | null;
+  /** Whether the live-geometry readout strip is shown when tracking/focused. The
+   *  user can dismiss it; SettingsPanel restores it. Independent of camera state. */
+  showLiveGeometry: boolean;
   /** Mission timeline annotations (arc boundaries + SPICE-found events). */
   annotations: readonly TimelineAnnotation[];
   /** Applied spacecraft attitude quaternion [x,y,z,w], or null when none. */
@@ -722,6 +728,21 @@ export interface Measurement {
   readonly angleDeg: number | null;
 }
 
+/** The canonical layer/visualization defaults. Shared by the initial state and by
+ *  SettingsPanel's "Reset to defaults", so the reset target cannot drift. */
+export const DEFAULT_VISUALIZATION_SETTINGS: VisualizationSettings = {
+  trajectory: true,
+  orbits: true,
+  labels: true,
+  fov: true,
+  footprint: true,
+  axes: true,
+  stars: true,
+  atmosphere: false,
+  shadows: false,
+  realImagery: false,
+};
+
 export const initialAppState: AppState = {
   status: 'Initializing',
   ready: false,
@@ -803,18 +824,7 @@ export const initialAppState: AppState = {
   ringTextured: false,
   cloudShell: false,
   realImageryApplied: false,
-  settings: {
-    trajectory: true,
-    orbits: true,
-    labels: true,
-    fov: true,
-    footprint: true,
-    axes: true,
-    stars: true,
-    atmosphere: false,
-    shadows: false,
-    realImagery: false,
-  },
+  settings: { ...DEFAULT_VISUALIZATION_SETTINGS },
   visibility: {},
   readouts: {
     rangeKm: null,
@@ -836,6 +846,8 @@ export const initialAppState: AppState = {
   telemetryResidualKm: null,
   telemetryOverlay: [],
   telemetryFault: null,
+  acknowledgedFault: null,
+  showLiveGeometry: true,
   annotations: [],
   spacecraftQuat: null,
   bookmarks: [],
