@@ -73,6 +73,31 @@ describe('AnalysisPanel tool grouping (B10)', () => {
   });
 });
 
+describe('AnalysisPanel coverage-grid overlay toggle', () => {
+  it('renders the coverage-grid show + clear toggles in the Access & Coverage section', () => {
+    const out = html();
+    const sectionIdx = out.indexOf('data-testid="analysis-section-access"');
+    const commsIdx = out.indexOf('data-testid="analysis-section-comms"');
+    expect(sectionIdx).toBeGreaterThan(-1);
+    expect(commsIdx).toBeGreaterThan(sectionIdx);
+    // The show and clear toggles live within the Access & Coverage section.
+    const section = out.slice(sectionIdx, commsIdx);
+    expect(section).toContain('data-testid="compute-coverage-grid"');
+    expect(section).toContain('data-testid="clear-coverage-grid"');
+  });
+
+  it('shows the area-weighted summary once a coverage grid is seeded', () => {
+    const store = createAppStore();
+    store.setState({
+      coverageGrid: { cellCount: 162, areaWeightedPercentCoverage: 0.42, label: 'Probe over EARTH' },
+    });
+    const out = renderToStaticMarkup(
+      createElement(AnalysisPanel, { engine: null, store, hasSpacecraft: true }),
+    );
+    expect(out).toContain('data-testid="coverage-grid-stat"');
+  });
+});
+
 describe('AnalysisPanel tool parameters', () => {
   it('renders an input form for each of the four configurable tools', () => {
     const out = html();
