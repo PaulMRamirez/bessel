@@ -1,7 +1,7 @@
 # Bessel vs Cosmographia: Parity Matrix
 
-Status: Draft v1.2 (closure pass)
-Date: 2026-06-19
+Status: Draft v1.3 (analysis-engine refresh)
+Date: 2026-06-21
 
 > Scope: this matrix tracks parity against the **Cosmographia visualizer** only.
 > The separate STK-class mission-analysis engine layer (propagation, access,
@@ -55,9 +55,9 @@ Counts after the closure pass (Draft v1.0 values in parentheses where changed):
 | Category                         | Done    | Partial | Missing | By-design |
 | -------------------------------- | ------- | ------- | ------- | --------- |
 | 2. Catalog and data model        | 4 (2)   | 0 (2)   | 0       | 0         |
-| 3. SPICE and geometry engine     | 11      | 0       | 0       | 0         |
+| 3. SPICE and geometry engine     | 13 (11) | 0       | 0       | 0         |
 | 4. Geometry taxonomy (7 types)   | 7 (4)   | 0 (3)   | 0       | 0         |
-| 5. Rendering fidelity            | 10 (7)  | 1 (2)   | 0 (2)   | 0         |
+| 5. Rendering fidelity            | 11 (10) | 1       | 0       | 0         |
 | 6. Camera and navigation         | 6 (3)   | 0       | 0 (1)   | 0         |
 | 7. Timeline and playback         | 5 (4)   | 0 (1)   | 0       | 0         |
 | 8. Analysis and measurement      | 4 (2)   | 0 (1)   | 0 (1)   | 0         |
@@ -76,7 +76,10 @@ directions (`fromCosmographia` + `toCosmographia`, proven by
 `cosmographia-roundtrip.test.ts`), closing the last catalog Partial. The handful of
 remaining items are narrow or by-design: model reflections are not rendered (shadows
 are), the model format is glTF not 3DS/CMOD (by design), and TLE auto-update (niche)
-is unbuilt. See Section 15.
+is unbuilt. See Section 15. The geometry engine added two more SPICE finders this
+pass (`gfsep`, `gfposc`); the numerical analysis engines (access, events, rf,
+coverage, conjunction) deepened well beyond the Cosmographia viewer and are tracked
+in the Section 17 appendix, with the coverage-grid contour now rendered on the globe.
 
 ---
 
@@ -108,6 +111,8 @@ in-process C++ calls.
 | Body constants (bodvrd, bodvcd) | Yes | Done | engine.ts |
 | DSK Type 2 shape read (readDsk) | Yes | Done | engine.ts; `dsk.test.ts` |
 | Kernel I/O via platform-neutral source (furnsh, unload, kclear, ktotal) | Yes (direct filesystem) | Done | engine.ts plus PAL `KernelSource` (`packages/pal-*`) |
+| Angular-separation finder (gfsep) | Yes | Done | `packages/spice/src/bindings.ts` (`gfsep`), `engine.ts`; `geometry-finder.test.ts` validates intervals against an independent `vsep` and fails loud on a bad body |
+| Coordinate finder (gfposc, topocentric elevation) | Yes | Done | `packages/spice/src/bindings.ts` (`gfposc`), `engine.ts`; `geometry-finder.test.ts` validates latitudinal-latitude (elevation) crossing intervals |
 
 ## 4. Geometry taxonomy (the seven types)
 
@@ -136,6 +141,7 @@ in-process C++ calls.
 | Observation footprints (swath and discrete) | Yes (obsRate swath) | Done | `apps/web/src/instruments.ts` (`footprint`); footprint e2e green |
 | Spacecraft attitude from CK | Yes | Done | `packages/spice/src` (`ckw03`/`ckgp`/`sce2c` bindings), `packages/scene/src/orientation.ts` (`applyAttitude`), `kernels/fixtures/cassini-demo.bc` | CSPICE-WASM now exports the CK entry points (relinked via `pnpm cspice:build`); the engine writes and reads C-kernels, and the bundled Cassini demo furnishes a real CK + SCLK + FK and orients the model each frame from `pxform(scFrame, J2000)`. Validated by a write/`ckgp`/`pxform` round-trip against `q2m`. |
 | Camera-relative (floating origin) at solar-system scale | Yes | Done | `packages/scene/src/three-scene.ts`, `camera-modes.ts` | Mandatory per SPEC 5.1. |
+| Coverage-grid contour overlay on the globe | No (Cosmographia is a viewer) | Done | `packages/scene/src/coverage-overlay.ts`, `colormap.ts`; `apps/web/src/engine/analysis-ops.ts` (`computeCoverageGrid` -> `scene.setCoverageOverlay`), `AnalysisPanel.tsx` toggle; `coverage-overlay-scene.test.ts`, `analysis-panel.test.tsx` | Bessel advantage: a vertex-colored, camera-relative coverage overlay anchored to the focus body, fed by a `@bessel/coverage` grid sweep. |
 
 ## 6. Camera and navigation
 
@@ -618,6 +624,53 @@ geometry types and the lossless round-trip is asserted by
 moves from `3 Done / 1 Partial` to `4 Done / 0 Partial`. The remaining lossy
 constructs are recorded as **By-design** (filename non-preservation) rather than a
 gap, with the warning path as evidence.
+
+---
+
+## 17. Analysis-engine depth (beyond the Cosmographia viewer)
+
+> Status: refreshed 2026-06-21. Section 8 tracks the Cosmographia *viewer*
+> measurement readouts (angle, distance, altitude, geometric readouts). The
+> numerical analysis engines below exceed Cosmographia entirely (it is a pure
+> viewer with no equivalent), so they are tracked here as an appendix rather than
+> inflating the Section 8 viewer tally. The binding requirements for this layer
+> live in docs/STK_PARITY_SPEC.md Section 9; this subsection is the
+> code-verified status of what landed this session, not a re-statement of those
+> requirements. "Done" means implemented in the named module and exercised by a
+> co-located test.
+
+| Engine | Capability | Status | Evidence |
+| --- | --- | --- | --- |
+| `@bessel/access` | Line-of-sight + range; multi-hop relay chains; facility elevation | Done | `index.ts` (`computeAccess`, `computeChainAccess`), `facility.ts`; `access.test.ts`, `facility.test.ts` |
+| `@bessel/access` | Range-rate constraint | Done | `range-rate.ts` (`computeRangeRateWindow`); `range-rate.test.ts` |
+| `@bessel/access` | Sun-exclusion constraint via `gfsep` | Done | `sun-exclusion.ts` (`computeSunExclusionWindow`); `sun-exclusion.test.ts` |
+| `@bessel/access` | Azimuth/elevation mask via `gfposc` | Done | `az-el-mask.ts` (`computeAzElMaskWindow`, `interpolateMaskFloor`); `az-el-mask.test.ts` |
+| `@bessel/access` | Terrain-masked line of sight (via `@bessel/terrain`) | Done | `terrain-los.ts` (`computeTerrainMaskedLosWindow`); `terrain-los.test.ts` |
+| `@bessel/events` | Umbra / penumbra / annular / sunlit intervals | Done | `index.ts` (`eclipseIntervals`); `eclipse.test.ts` |
+| `@bessel/events` | Solar beta angle | Done | `beta.ts` (`betaAngle`, `betaAngleSeries`); `beta.test.ts` |
+| `@bessel/events` | Solar intensity / penumbra fraction (two-circle lens overlap) | Done | `intensity.ts` (`solarIntensity`, `overlapArea`, `visibleFraction`); `intensity.test.ts` |
+| `@bessel/rf` | Friis / gain / EIRP / G-T / link budget / Doppler / ITU-R rain (P.618/P.838) and gaseous | Done | `rf.test.ts`, `atmosphere.ts` |
+| `@bessel/rf` | Off-axis antenna pattern + pointing loss + polarization loss | Done | `antenna-pattern.ts`; `antenna-pattern.test.ts` |
+| `@bessel/rf` | Rain sky-noise temperature | Done | `atmosphere.ts`; `atmosphere.test.ts` |
+| `@bessel/rf` | M-PSK / M-QAM BER + modcod table + link margin | Done | `modulation.ts` (`berMpsk`, `berMqam`, `MODCOD_TABLE`, `linkMarginDb`); `modulation.test.ts` |
+| `@bessel/coverage` | Figure of merit / grid sweep / N-fold / Walker | Done | `index.ts` (`figureOfMerit`, `walkerConstellation`), `grid-sweep.ts`; `coverage.test.ts`, `grid-sweep.test.ts`, `grid-sweep-nfold.test.ts` |
+| `@bessel/coverage` | Revisit / response-time + access-duration stats | Done | `fom-stats.ts` (`figureOfMeritStats`); referenced by `coverage.test.ts` |
+| `@bessel/coverage` | Area-weighted figure of merit | Done | `grid-sweep.ts` (`areaWeightedPercentCoverage`); `area-weighted.test.ts` |
+| `@bessel/conjunction` | Closest approach + 2D Foster Pc + all-vs-all screening | Done | `index.ts` (`closestApproachLinear`, `collisionProbability2D`), `screen.ts`; `conjunction.test.ts`, `screen.test.ts` |
+| `@bessel/conjunction` | Full 2x2-covariance Pc (Mahalanobis) + B-plane projection | Done | `covariance.ts` (`collisionProbabilityCov`, `projectCovarianceToEncounterPlane`); `covariance.test.ts` |
+| `@bessel/conjunction` | Alfano maximum Pc | Done | `max-pc.ts` (`maxCollisionProbability`); `covariance.test.ts` |
+| `@bessel/conjunction` | Epoch-covariance STM propagation to TCA (via `@bessel/propagator`) | Done | `cov-propagation.ts` (`propagateCovarianceToTca`, `collisionProbabilityPropagated`); `cov-propagation.test.ts` |
+
+Rendering and worker integration of the above:
+- The coverage-grid result renders as a camera-relative contour overlay on the
+  focus body (Section 5 row "Coverage-grid contour overlay").
+- All-vs-all conjunction screening runs off the main thread in a worker pool with
+  progress and cancel: `apps/web/src/screening.worker.ts`,
+  `apps/web/src/screening-client.ts`.
+- The analysis workbench tools are parameterized with input forms and per-result
+  CSV export: `apps/web/src/panels/AnalysisPanel.tsx`,
+  `apps/web/src/panels/analysis-tool-forms.tsx`. Per-tool inputs, engines, and
+  validation provenance are catalogued in docs/analysis-tools.md.
 
 ---
 

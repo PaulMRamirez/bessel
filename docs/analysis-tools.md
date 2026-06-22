@@ -24,8 +24,11 @@ see REFERENCES.md and docs/STK_PARITY_SPEC.md.
 - SGP4 produces TEME coordinates; Bessel publishes them as J2000, an
   arcminute-scale approximation near the element epoch. An EOP-aware TEME to
   J2000 transform is deferred (docs/STK_PARITY_SPEC.md).
-- The numerical propagator ships point-mass plus zonal J2 to J4 and a third-body
-  term; full NxN tesseral gravity, drag, and SRP are deferred.
+- The numerical propagator ships point-mass, zonal and full NxN tesseral spherical
+  harmonics (`packages/propagator/src/force/spherical-harmonics.ts`), a third-body
+  term, atmospheric drag (`force/drag.ts`, with Harris-Priester and Jacchia-1971
+  density models), and solar radiation pressure (`force/srp.ts`), all selectable in
+  the force model.
 - Each engine is validated against an independent reference (below). The fixed
   demo parameters are for demonstration; treat absolute numbers accordingly.
 
@@ -76,16 +79,24 @@ see REFERENCES.md and docs/STK_PARITY_SPEC.md.
   hard-body radius.
 - Computes: time of closest approach, miss distance, relative speed, and the 2D
   probability of collision.
-- Engine: `@bessel/conjunction` (rectilinear closest approach; Foster 2D Pc).
+- Engine: `@bessel/conjunction` (rectilinear closest approach; Foster 2D Pc). The
+  package also provides full 2x2-covariance Pc (Mahalanobis), B-plane projection,
+  Alfano maximum Pc, STM covariance propagation to the time of closest approach, and
+  all-vs-all screening (`screenAllVsAll`), the latter run off the main thread in a
+  worker pool with progress and cancel (`apps/web/src/screening.worker.ts`).
 - Validation: Pc against the analytic centered-circular form.
-- Limits: a demonstration of the math on the loaded pair, not an operational
-  screening; all-vs-all catalog screening is deferred.
+- Limits: this button demonstrates the math on the loaded pair; the operational
+  all-vs-all screening is exercised through the screening worker rather than this
+  demo button.
 
 ### Walker constellation design
 - Inputs: a Walker Delta 24/3/1 pattern at 700 km, 53 deg inclination.
 - Computes: the generated constellation structure (planes, satellites per plane).
 - Engine: `@bessel/coverage` (`walkerConstellation`).
-- Limits: pure element-set generation; a flown coverage grid sweep is deferred.
+- Limits: this button is pure element-set generation; a flown coverage grid sweep
+  is available via `sweepCoverageGrid` (with area-weighted FOM and revisit/
+  response-time statistics) and renders as a camera-relative contour overlay on the
+  globe (the Coverage grid tool, `engine.computeCoverageGrid`).
 
 ### Attitude slew
 - Inputs: a slew from a nadir-pointing to a Sun-pointing attitude at the current

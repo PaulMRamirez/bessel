@@ -45,7 +45,8 @@ If a task tempts you to break this rule, the scope is wrong; stop and flag it.
   cancellable-job protocol, the multi-worker pool, and the `PROVIDER_CATALOG`.
 - `@bessel/catalog`: the native catalog schema, parsing, and the plugin registry.
 - `@bessel/scene`: the camera-relative Three.js scene, the catalog-driven scene
-  builder, picking, labels, and the geometry builders. SPICE-free.
+  builder, picking, labels, the geometry builders, and the coverage-grid contour
+  overlay (`coverage-overlay.ts` + `colormap.ts`). SPICE-free.
 - `@bessel/timeline`: the clock, event annotations, the `SpiceWindow` interval
   algebra, and the shared zero-crossing geometry finder.
 - `@bessel/state`: the view-URL codec (`v=1`), the MMGIS deep-link builder, CZML
@@ -71,13 +72,23 @@ SPICE engine. Algorithm provenance is in REFERENCES.md.
   and a sequential extended Kalman filter, with range, range-rate, and angle
   measurement models, seeded by the propagator's State Transition Matrix.
 - `@bessel/access`: visibility/access windows (line-of-sight, range, facility
-  elevation) and chained access.
-- `@bessel/events`: eclipse and lighting intervals.
-- `@bessel/rf`: link budgets, antenna gain, BER, Doppler, ITU-R attenuation, and
-  the comm-entity schema.
-- `@bessel/coverage`: figure-of-merit reduction and Walker constellation
-  generation.
-- `@bessel/conjunction`: closest approach and the 2D probability of collision.
+  elevation, range-rate, Sun exclusion via `gfsep`, az/el mask via `gfposc`,
+  terrain-masked line of sight) and chained access. Depends on `@bessel/terrain`
+  for the terrain-masked constraint.
+- `@bessel/events`: eclipse and lighting intervals (umbra/penumbra/annular/sunlit),
+  the solar beta angle, and solar-intensity/penumbra-fraction from a two-circle
+  lens overlap.
+- `@bessel/rf`: link budgets, antenna gain, off-axis antenna patterns with pointing
+  and polarization loss, BER (BPSK/QPSK and M-PSK/M-QAM with a modcod table and link
+  margin), Doppler, ITU-R attenuation with rain sky-noise temperature, and the
+  comm-entity schema.
+- `@bessel/coverage`: figure-of-merit reduction (with revisit/response-time and
+  access-duration statistics, plus area-weighted coverage), grid sweep, N-fold,
+  and Walker constellation generation.
+- `@bessel/conjunction`: closest approach, 2D probability of collision (Foster and
+  full 2x2-covariance Mahalanobis), B-plane projection, the Alfano maximum Pc, and
+  epoch-covariance STM propagation to the time of closest approach. Depends on
+  `@bessel/propagator` for the STM-based covariance propagation.
 - `@bessel/attitude`: two-vector pointing laws, eigen-axis slews, and keep-out
   constraints.
 - `@bessel/sensors`: field-of-view geometry, ellipsoid footprints, and swath
