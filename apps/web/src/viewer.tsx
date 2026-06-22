@@ -5,7 +5,7 @@
 // presentational; all imperative work lives in the engine.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SOLAR_SYSTEM } from '@bessel/scene';
-import { StatusDot, Icon, type StatusTone } from '@bessel/selene-design';
+import { StatusDot, Icon, DomainIcon, type StatusTone } from '@bessel/selene-design';
 import { sortByEt } from '@bessel/timeline';
 import {
   BookmarksPanel,
@@ -529,31 +529,45 @@ export function BesselViewer(): JSX.Element {
                 role="group"
                 aria-label="Instrument layers"
               >
-                <button
-                  type="button"
-                  className="bessel-viewcontrols__layer-toggle"
-                  onClick={() => engine?.setSetting('fov', !settings.fov)}
-                  aria-pressed={settings.fov}
-                  data-testid="toggle-fov"
-                >
-                  Sensor FOV
-                </button>
-                <button
-                  type="button"
-                  className="bessel-viewcontrols__layer-toggle"
-                  onClick={() => engine?.setSetting('footprint', !settings.footprint)}
-                  aria-pressed={settings.footprint}
-                  data-testid="toggle-footprint"
-                >
-                  Footprint
-                </button>
+                <Tooltip label="Sensor FOV cone">
+                  <button
+                    type="button"
+                    className="bessel-viewcontrols__layer-toggle"
+                    onClick={() => engine?.setSetting('fov', !settings.fov)}
+                    aria-pressed={settings.fov}
+                    aria-label="Sensor FOV cone"
+                    data-testid="toggle-fov"
+                  >
+                    <DomainIcon name="sensor-fov" />
+                  </button>
+                </Tooltip>
+                <Tooltip label="Sensor footprint">
+                  <button
+                    type="button"
+                    className="bessel-viewcontrols__layer-toggle"
+                    onClick={() => engine?.setSetting('footprint', !settings.footprint)}
+                    aria-pressed={settings.footprint}
+                    aria-label="Sensor footprint"
+                    data-testid="toggle-footprint"
+                  >
+                    <DomainIcon name="sensor-footprint" />
+                  </button>
+                </Tooltip>
               </span>
             ) : null}
           </>
         )}
-        <button type="button" onClick={() => void engine?.share().then(showShare)} data-testid="share">
-          Share view
-        </button>
+        <Tooltip label="Share view">
+          <button
+            type="button"
+            className="bessel-viewcontrols__layer-toggle"
+            onClick={() => void engine?.share().then(showShare)}
+            aria-label="Share view"
+            data-testid="share"
+          >
+            <Icon name="share" />
+          </button>
+        </Tooltip>
         {shareNote ? (
           shareNote.copied ? (
             <span className="bessel-share-note" role="status" data-testid="share-confirm">

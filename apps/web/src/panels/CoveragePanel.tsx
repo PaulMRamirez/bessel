@@ -5,7 +5,7 @@
 // metric-aware contour (legend) plus a regional FOM summary table with CSV. Presentational.
 
 import { useState, type ReactNode } from 'react';
-import { Button } from '@bessel/selene-design';
+import { Button, DomainIcon } from '@bessel/selene-design';
 import { downloadBlob } from '@bessel/ui';
 import type { BesselEngine } from '../engine/index.ts';
 import { useStore, type AppStore } from '../store/index.ts';
@@ -223,6 +223,7 @@ export function CoveragePanel(props: CoveragePanelProps): JSX.Element {
   const cards: readonly TaskCardEntry[] = [
     {
       id: 'constellation',
+      icon: <DomainIcon name="walker-constellation" size="sm" />,
       title: 'Walker constellation',
       purpose: 'Design a Walker T/P/F constellation that feeds the sweep.',
       status: runStatus['compute-constellation'],
@@ -230,6 +231,7 @@ export function CoveragePanel(props: CoveragePanelProps): JSX.Element {
     },
     {
       id: 'coverage-grid',
+      icon: <DomainIcon name="coverage-grid" size="sm" />,
       title: 'Coverage sweep',
       purpose: 'Metric-aware coverage contour + FOM summary over the asset set.',
       status: runStatus['compute-coverage-grid'],

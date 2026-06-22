@@ -66,6 +66,8 @@ export interface TaskCardProps {
   readonly expanded: boolean;
   /** Toggle request from the header button. */
   readonly onToggle: () => void;
+  /** An optional decorative concept icon shown before the title (a DomainIcon). */
+  readonly icon?: ReactNode;
   /** The card body (config form, run, inline result), shown only when expanded. */
   readonly children: ReactNode;
 }
@@ -89,6 +91,9 @@ export function TaskCard(props: TaskCardProps): JSX.Element {
           <span className="bessel-taskcard-caret">
             <Icon name={props.expanded ? 'chevron-down' : 'chevron-right'} size="sm" />
           </span>
+          {props.icon ? (
+            <span className="bessel-taskcard-icon" aria-hidden="true">{props.icon}</span>
+          ) : null}
           <span className="bessel-taskcard-title">{props.title}</span>
           <span className="bessel-taskcard-purpose">{props.purpose}</span>
           <StatusChip status={props.status} id={props.id} />
@@ -113,6 +118,8 @@ export interface TaskCardEntry {
   readonly title: string;
   readonly purpose: string;
   readonly status?: RunStatus;
+  /** An optional decorative concept icon shown before the title (a DomainIcon). */
+  readonly icon?: ReactNode;
   /** Render the card body. Called only when the card is expanded. */
   readonly render: () => ReactNode;
 }
@@ -232,6 +239,7 @@ export function TaskCardAccordion(props: TaskCardAccordionProps): JSX.Element {
             title={card.title}
             purpose={card.purpose}
             {...(card.status !== undefined ? { status: card.status } : {})}
+            {...(card.icon !== undefined ? { icon: card.icon } : {})}
             expanded={isOpen}
             onToggle={() => toggleCard(card.id)}
           >
