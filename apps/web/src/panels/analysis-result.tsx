@@ -4,7 +4,7 @@
 // button (loud on failure), and a significant-digits selector. Presentational.
 
 import { useState, type ReactNode } from 'react';
-import { Button } from '@bessel/selene-design';
+import { Button, Icon } from '@bessel/selene-design';
 import {
   IntervalTimeline,
   ReportTable,
@@ -72,7 +72,7 @@ function ResultView(props: {
             testId={`${props.baseTestId}-view-chart`}
             onClick={() => setMode('chart')}
           >
-            {'\u{1F4C8}'}
+            <Icon name="chart" />
           </Button>
         </Tooltip>
         <Tooltip label="Show table">
@@ -84,7 +84,7 @@ function ResultView(props: {
             testId={`${props.baseTestId}-view-table`}
             onClick={() => setMode('table')}
           >
-            {'\u{2637}'}
+            <Icon name="table" />
           </Button>
         </Tooltip>
         <Button variant="secondary" testId={`${props.baseTestId}-copy`} onClick={copy}>

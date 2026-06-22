@@ -5,6 +5,7 @@
 // slices and calls engine; the lighting card bodies live in lighting-cards.tsx.
 
 import { useState, type ReactNode } from 'react';
+import { DomainIcon } from '@bessel/selene-design';
 import { GroundTrackMap, type GroundTrackProjection } from '@bessel/ui';
 import { seriesToCsv } from '@bessel/interop';
 import type { BesselEngine } from '../engine/index.ts';
@@ -141,6 +142,7 @@ export function LightingGeometryPanel(props: LightingGeometryPanelProps): JSX.El
     {
       id: 'ground-track',
       title: 'Ground track',
+      icon: <DomainIcon name="ground-track" size="sm" />,
       purpose: 'Sub-spacecraft longitude/latitude over the span.',
       status: runStatus['compute-groundtrack'],
       render: groundTrackCard,
@@ -148,6 +150,7 @@ export function LightingGeometryPanel(props: LightingGeometryPanelProps): JSX.El
     {
       id: 'beta',
       title: 'Beta-angle season',
+      icon: <DomainIcon name="beta-angle" size="sm" />,
       purpose: 'Solar beta angle over the span vs the eclipse-onset threshold.',
       status: runStatus['compute-beta'],
       render: () => betaCard(cardCtx, betaSeries),
@@ -155,6 +158,7 @@ export function LightingGeometryPanel(props: LightingGeometryPanelProps): JSX.El
     {
       id: 'eclipse',
       title: 'Eclipse phases',
+      icon: <DomainIcon name="eclipse" size="sm" />,
       purpose: 'Umbra/penumbra/annular/sunlit windows + per-day duration.',
       status: runStatus['compute-eclipse'],
       render: () => eclipseCard(cardCtx, eclipsePhases),

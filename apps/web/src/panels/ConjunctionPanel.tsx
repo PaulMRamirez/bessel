@@ -5,6 +5,7 @@
 // Max-Pc and renders a B-plane viewer. The single-pair closest-approach card is kept.
 
 import { useState, type ReactNode } from 'react';
+import { DomainIcon } from '@bessel/selene-design';
 import type { BesselEngine } from '../engine/index.ts';
 import { useStore, type AppStore } from '../store/index.ts';
 import { StatResult } from './analysis-result.tsx';
@@ -115,6 +116,7 @@ export function ConjunctionPanel(props: ConjunctionPanelProps): JSX.Element {
       title: 'Catalog ingestion & screening',
       purpose: 'Ingest REAL CDM/OEM/TLE, then all-vs-all screen on a worker.',
       status: runStatus['ingest-catalog'],
+      icon: <DomainIcon name="conjunction" size="sm" />,
       render: ingestCard,
     },
     {
@@ -122,6 +124,7 @@ export function ConjunctionPanel(props: ConjunctionPanelProps): JSX.Element {
       title: 'Per-event Pc & B-plane',
       purpose: 'Full-covariance Pc + Max-Pc and the encounter-plane plot for a flagged event.',
       status: runStatus['compute-event-pc'],
+      icon: <DomainIcon name="b-plane" size="sm" />,
       render: pcCard,
     },
     {

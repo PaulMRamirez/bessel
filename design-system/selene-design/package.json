@@ -42,5 +42,8 @@
     "@types/react-dom": "^18",
     "tsup": "^8",
     "typescript": "^5"
+  },
+  "dependencies": {
+    "lucide-react": "^1.21.0"
   }
 }

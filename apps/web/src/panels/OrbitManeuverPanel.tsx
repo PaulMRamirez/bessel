@@ -7,6 +7,7 @@
 // send-to-MCS hop (LambertPorkchopCard). Presentational; the geometry runs behind the lazy seam.
 
 import { useState, type ReactNode } from 'react';
+import { DomainIcon } from '@bessel/selene-design';
 import { seriesToCsv } from '@bessel/interop';
 import type { BesselEngine } from '../engine/index.ts';
 import { useStore, type AppStore } from '../store/index.ts';
@@ -77,6 +78,7 @@ export function OrbitManeuverPanel(props: OrbitManeuverPanelProps): JSX.Element 
   const cards: readonly TaskCardEntry[] = [
     {
       id: 'propagate',
+      icon: <DomainIcon name="propagate" size="sm" />,
       title: 'Propagate orbit (SGP4 / HPOP)',
       purpose: 'Propagate a TLE/state and read altitude + ground track.',
       status: runStatus['propagate-tle'],
@@ -105,6 +107,7 @@ export function OrbitManeuverPanel(props: OrbitManeuverPanelProps): JSX.Element 
     },
     {
       id: 'lambert',
+      icon: <DomainIcon name="porkchop" size="sm" />,
       title: 'Lambert transfer + porkchop',
       purpose: 'Sweep a departure x time-of-flight delta-v contour, then send the best to MCS.',
       status: runStatus['compute-porkchop'],

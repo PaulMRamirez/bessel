@@ -4,7 +4,7 @@
 // that domain's snapshot metric keys; rows are the kept snapshots. Presentational: it reads the
 // keptSnapshots slice and calls the engine to remove/clear/export. Reuses ReportTable for the grid.
 
-import { Button, Tag } from '@bessel/selene-design';
+import { Button, Tag, Icon } from '@bessel/selene-design';
 import { ReportTable, downloadBlob } from '@bessel/ui';
 import type { BesselEngine } from '../engine/index.ts';
 import {
@@ -113,7 +113,7 @@ export function CompareTray(props: CompareTrayProps): JSX.Element {
                     title="Remove from compare"
                     onClick={() => engine?.removeSnapshot(s.id)}
                   >
-                    {'✕'}
+                    <Icon name="close" size="sm" />
                   </button>
                 </span>
               ))}

@@ -4,6 +4,8 @@
 export * from './tokens';
 
 export * from './components/core/Button';
+export * from './components/core/Icon';
+export * from './components/core/DomainIcon';
 export * from './components/layout/SectionLabel';
 export * from './components/layout/Divider';
 export * from './components/data-display/Tag';

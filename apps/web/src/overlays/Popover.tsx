@@ -5,6 +5,7 @@
 // hidden.
 
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { Icon } from '@bessel/selene-design';
 
 export interface PopoverProps {
   /** Trigger button content (text or icon). */
@@ -78,7 +79,7 @@ export function Popover(props: PopoverProps): JSX.Element {
               aria-label={pinned ? 'Unpin panel' : 'Pin panel open'}
               onClick={() => setPinned((p) => !p)}
             >
-              {pinned ? '📌' : '📍'}
+              <Icon name="pin" />
             </button>
           ) : null}
           {props.children}

@@ -13,6 +13,7 @@
 // uses. The presets hide nothing; every tab and card stays reachable normally.
 
 import { useCallback, useState, type KeyboardEvent } from 'react';
+import { Icon, DomainIcon } from '@bessel/selene-design';
 import { AnalysisContextBar } from './AnalysisContextBar.tsx';
 import { AnalysisLauncher, type LauncherEntry } from './AnalysisLauncher.tsx';
 import { PresetBar, type PresetEntry, type MissionPreset } from './PresetBar.tsx';
@@ -42,13 +43,16 @@ export interface AnalyzeWorkbenchProps {
   readonly telemetryFault: string | null;
 }
 
-const TABS: readonly { readonly id: AnalyzeTab; readonly label: string }[] = [
-  { id: 'orbit-maneuver', label: 'Orbit & Maneuver' },
-  { id: 'lighting-geometry', label: 'Lighting & Geometry' },
-  { id: 'access-comms', label: 'Access & Comms' },
-  { id: 'conjunction', label: 'Conjunction' },
-  { id: 'coverage', label: 'Coverage & Constellation' },
-  { id: 'report-compare', label: 'Report & Compare' },
+// Each tab carries a concept icon: a bespoke domain glyph where one fits (propagate,
+// eclipse, conjunction, walker), a universal Lucide glyph where it does not (comms,
+// report). The icon is decorative; the visible label remains the accessible name.
+const TABS: readonly { readonly id: AnalyzeTab; readonly label: string; readonly icon: JSX.Element }[] = [
+  { id: 'orbit-maneuver', label: 'Orbit & Maneuver', icon: <DomainIcon name="propagate" size="sm" /> },
+  { id: 'lighting-geometry', label: 'Lighting & Geometry', icon: <DomainIcon name="eclipse" size="sm" /> },
+  { id: 'access-comms', label: 'Access & Comms', icon: <Icon name="share" size="sm" /> },
+  { id: 'conjunction', label: 'Conjunction', icon: <DomainIcon name="conjunction" size="sm" /> },
+  { id: 'coverage', label: 'Coverage & Constellation', icon: <DomainIcon name="walker-constellation" size="sm" /> },
+  { id: 'report-compare', label: 'Report & Compare', icon: <Icon name="chart" size="sm" /> },
 ];
 
 export function AnalyzeWorkbench(props: AnalyzeWorkbenchProps): JSX.Element {
@@ -132,6 +136,7 @@ export function AnalyzeWorkbench(props: AnalyzeWorkbenchProps): JSX.Element {
             data-testid={`tab-${t.id}`}
             onClick={() => selectTab(t.id)}
           >
+            <span className="bessel-tab-icon" aria-hidden="true">{t.icon}</span>
             {t.label}
           </button>
         ))}

@@ -4,7 +4,7 @@
 // dispatch through the pure mcsEditorReducer the parent owns, so this component is presentational.
 // (analysis-UX Phase 1, design section 3 tab 1.)
 
-import { Button } from '@bessel/selene-design';
+import { Button, Icon } from '@bessel/selene-design';
 import type {
   EditableMcs,
   EditableSegment,
@@ -58,7 +58,7 @@ export function McsSegmentEditor(props: McsSegmentEditorProps): JSX.Element {
                 title="Move up"
                 ariaLabel="Move segment up"
               >
-                ▲
+                <Icon name="chevron-up" />
               </Button>
               <Button
                 variant="ghost"
@@ -69,7 +69,7 @@ export function McsSegmentEditor(props: McsSegmentEditorProps): JSX.Element {
                 title="Move down"
                 ariaLabel="Move segment down"
               >
-                ▼
+                <Icon name="chevron-down" />
               </Button>
               <Button
                 variant="ghost"
@@ -79,7 +79,7 @@ export function McsSegmentEditor(props: McsSegmentEditorProps): JSX.Element {
                 title="Remove segment"
                 ariaLabel="Remove segment"
               >
-                ✕
+                <Icon name="close" />
               </Button>
             </span>
           </div>

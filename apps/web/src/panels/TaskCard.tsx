@@ -7,7 +7,7 @@
 // (idle/running/ok/error) and the RunStatusNote tag styling.
 
 import { useEffect, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { Tag } from '@bessel/selene-design';
+import { Tag, Icon } from '@bessel/selene-design';
 import type { RunStatus } from '../store/index.ts';
 
 /** Maximum number of TaskCards a TaskCardAccordion keeps expanded at once. */
@@ -66,6 +66,8 @@ export interface TaskCardProps {
   readonly expanded: boolean;
   /** Toggle request from the header button. */
   readonly onToggle: () => void;
+  /** An optional decorative concept icon shown before the title (a DomainIcon). */
+  readonly icon?: ReactNode;
   /** The card body (config form, run, inline result), shown only when expanded. */
   readonly children: ReactNode;
 }
@@ -86,9 +88,12 @@ export function TaskCard(props: TaskCardProps): JSX.Element {
           data-testid={`taskcard-${props.id}-toggle`}
           onClick={props.onToggle}
         >
-          <span className="bessel-taskcard-caret" aria-hidden="true">
-            {props.expanded ? '▾' : '▸'}
+          <span className="bessel-taskcard-caret">
+            <Icon name={props.expanded ? 'chevron-down' : 'chevron-right'} size="sm" />
           </span>
+          {props.icon ? (
+            <span className="bessel-taskcard-icon" aria-hidden="true">{props.icon}</span>
+          ) : null}
           <span className="bessel-taskcard-title">{props.title}</span>
           <span className="bessel-taskcard-purpose">{props.purpose}</span>
           <StatusChip status={props.status} id={props.id} />
@@ -113,6 +118,8 @@ export interface TaskCardEntry {
   readonly title: string;
   readonly purpose: string;
   readonly status?: RunStatus;
+  /** An optional decorative concept icon shown before the title (a DomainIcon). */
+  readonly icon?: ReactNode;
   /** Render the card body. Called only when the card is expanded. */
   readonly render: () => ReactNode;
 }
@@ -232,6 +239,7 @@ export function TaskCardAccordion(props: TaskCardAccordionProps): JSX.Element {
             title={card.title}
             purpose={card.purpose}
             {...(card.status !== undefined ? { status: card.status } : {})}
+            {...(card.icon !== undefined ? { icon: card.icon } : {})}
             expanded={isOpen}
             onToggle={() => toggleCard(card.id)}
           >

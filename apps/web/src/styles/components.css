@@ -1041,6 +1041,9 @@ button[aria-pressed='true'] {
 }
 
 .bessel-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
@@ -1048,6 +1051,38 @@ button[aria-pressed='true'] {
   cursor: pointer;
   padding: var(--space-1) var(--space-2);
   font-size: 0.8rem;
+}
+
+.bessel-tab-icon {
+  display: inline-flex;
+  align-items: center;
+  opacity: 0.85;
+}
+
+/* Iconified viewcontrols toggles (FOV cone, footprint, share): a square icon button
+   with an amber active ring when the layer is on. */
+.bessel-viewcontrols__layer-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm, 4px);
+  color: var(--text-1);
+  cursor: pointer;
+  padding: 4px;
+}
+
+.bessel-viewcontrols__layer-toggle:hover,
+.bessel-viewcontrols__layer-toggle:focus-visible {
+  color: var(--text-0);
+  border-color: var(--border);
+}
+
+.bessel-viewcontrols__layer-toggle[aria-pressed='true'] {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-bg);
 }
 
 .bessel-tab:hover {
@@ -1177,6 +1212,13 @@ button[aria-pressed='true'] {
 
 .bessel-taskcard-caret {
   color: var(--text-2);
+}
+
+.bessel-taskcard-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-1);
+  margin-right: 2px;
 }
 
 .bessel-taskcard-title {

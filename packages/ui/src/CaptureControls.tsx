@@ -1,8 +1,8 @@
 // Capture controls: a still-image button and a record/stop toggle. Presentational;
 // the viewer supplies the canvas and capture handlers. Both controls are
-// iconified: glyph footprints with accessible names via ariaLabel and Tooltip.
+// iconified: selene Icon components with accessible names via ariaLabel and Tooltip.
 
-import { Button } from '@bessel/selene-design';
+import { Button, Icon } from '@bessel/selene-design';
 import { Tooltip } from './Tooltip';
 
 export interface CaptureControlsProps {
@@ -22,7 +22,7 @@ export function CaptureControls(props: CaptureControlsProps): JSX.Element {
           onClick={props.onCaptureStill}
           testId="capture-still"
         >
-          ◉
+          <Icon name="camera" />
         </Button>
       </Tooltip>
       <Tooltip label={recordLabel}>
@@ -34,9 +34,7 @@ export function CaptureControls(props: CaptureControlsProps): JSX.Element {
           onClick={props.onToggleRecording}
           testId="capture-record"
         >
-          <span style={{ color: props.recording ? undefined : 'var(--red-hot)' }}>
-            {props.recording ? '■' : '●'}
-          </span>
+          {props.recording ? <Icon name="stop" /> : <Icon name="record" />}
         </Button>
       </Tooltip>
     </div>
