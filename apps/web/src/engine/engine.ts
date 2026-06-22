@@ -82,6 +82,8 @@ import type {
   ConjunctionCatalogRef,
   IngestFormat,
   IngestScreenOpts,
+  // [ux-p2-orbit] the configurable Lambert porkchop sweep parameters.
+  PorkchopParams,
 } from './analysis-ops.ts';
 
 // True when two optional angles are equal or both absent (within tolerance).
@@ -136,6 +138,7 @@ export type {
   SlewOpts,
   ReportConfig,
   CoverageSweepOpts,
+  PorkchopParams,
 } from './analysis-ops.ts';
 
 /** The outcome of a share/copy action: the link, and whether it reached the clipboard. */
@@ -962,6 +965,26 @@ export class BesselEngine {
     await this.runTool('compute-transfer', async () => {
       const ops = await import('./analysis-ops.ts');
       await ops.computeTransfer(e, this.store, this.isDisposed);
+    });
+  }
+
+  /** [ux-p2-orbit] Maneuver design: a Lambert PORKCHOP sweep over a departure-epoch and
+   *  time-of-flight grid, publishing the delta-v contour and the marked minimum. */
+  async computePorkchop(params: PorkchopParams): Promise<void> {
+    const e = this.core;
+    if (!e) return;
+    await this.runTool('compute-porkchop', async () => {
+      const ops = await import('./analysis-ops.ts');
+      await ops.computePorkchop(e, this.store, this.isDisposed, params);
+    });
+  }
+
+  /** [ux-p2-orbit] Cross-tab carrier: append the porkchop's marked optimum to the editable MCS
+   *  as an impulsive Maneuver, so the designer flows porkchop -> MCS without re-typing the burn. */
+  async sendPorkchopToMcs(): Promise<void> {
+    await this.runTool('send-to-mcs', async () => {
+      const ops = await import('./analysis-ops.ts');
+      ops.sendPorkchopToMcs(this.store);
     });
   }
 

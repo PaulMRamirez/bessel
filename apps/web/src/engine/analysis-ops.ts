@@ -59,7 +59,10 @@ import type { EngineCore } from './bootstrap.ts';
 import { buildHpopForceModel, HPOP_FORCE_MODEL_LABELS, type HpopForceModel } from './hpop-model.ts';
 import { runMcsDesign as runMcsDesignCore, runEditableMcs, type McsDesign } from './mcs.ts';
 import { compileEditableMcs } from './mcs-compile.ts';
-import { type EditableMcs } from './mcs-editor.ts';
+import { type EditableMcs, mcsEditorReducer } from './mcs-editor.ts';
+// [ux-p2-orbit] The pure Lambert porkchop sweep (co-located in this lazy analysis chunk so the
+// CPU-bound grid solve stays behind the dynamic-import seam, never in the first-paint shell).
+import { linspace, sweepPorkchop, type SampledState } from './porkchop.ts';
 import type { SpacecraftSource } from '../store/index.ts';
 import { runOdDemo } from './od.ts';
 import { centerMu } from './center-mu.ts';
@@ -633,6 +636,101 @@ export async function computeTransfer(
     console.error('transfer analysis failed', err);
     throw err;
   }
+}
+
+/** [ux-p2-orbit] The configurable porkchop sweep parameters: the departure and arrival bodies
+ *  (resolved against the loaded ephemerides), the central body the transfer orbits, a departure
+ *  epoch RANGE and a time-of-flight RANGE, and the (modest, bounded) grid sample counts. */
+export interface PorkchopParams {
+  readonly departureBody: string;
+  readonly arrivalBody: string;
+  /** The body the heliocentric transfer orbits (the Lambert center); typically the Sun. */
+  readonly centerBody: string;
+  /** Departure-window range as day offsets from the current epoch (low to high). */
+  readonly departureDay0: number;
+  readonly departureDay1: number;
+  /** Time-of-flight range in days (low to high). */
+  readonly tofDay0: number;
+  readonly tofDay1: number;
+  /** Departure-axis and TOF-axis sample counts (clamped to a modest, CPU-bounded grid). */
+  readonly departureSamples: number;
+  readonly tofSamples: number;
+}
+
+const DAY_SEC = 86400;
+
+/** Hard cap on the porkchop grid so the CPU-bound sweep stays bounded behind the lazy seam. */
+const PORKCHOP_MAX_SAMPLES = 24;
+
+/**
+ * Maneuver design: a Lambert PORKCHOP sweep. Samples the departure and arrival body states about
+ * the central body across a departure-epoch range crossed with a time-of-flight range, solves
+ * Lambert at every grid node, and publishes a contour of total departure delta-v with the marked
+ * minimum (the candidate burn the "send to MCS" hop consumes). The body-state sampling (spkezr)
+ * happens once per axis node here; the inner grid solve is the pure sweepPorkchop. Fails loud on
+ * an unresolved body or a missing central-body GM.
+ */
+export async function computePorkchop(
+  e: EngineCore,
+  store: AppStore,
+  isDisposed: () => boolean,
+  params: PorkchopParams,
+): Promise<void> {
+  const nd = Math.max(2, Math.min(PORKCHOP_MAX_SAMPLES, Math.floor(params.departureSamples)));
+  const nt = Math.max(2, Math.min(PORKCHOP_MAX_SAMPLES, Math.floor(params.tofSamples)));
+  const mu = await centerMu(e, params.centerBody);
+  if (mu === null) {
+    store.setState({ porkchop: null });
+    throw new Error(`porkchop: no GM for central body "${params.centerBody}"`);
+  }
+  const et0 = e.clock.state.et;
+  const departureEt = linspace(et0 + params.departureDay0 * DAY_SEC, et0 + params.departureDay1 * DAY_SEC, nd);
+  const tofSec = linspace(params.tofDay0 * DAY_SEC, params.tofDay1 * DAY_SEC, nt);
+  try {
+    // Sample the departure body once per departure epoch, and the arrival body at every
+    // (departure + TOF) so each grid node has its real boundary states, all about the center.
+    const departureStates: SampledState[] = [];
+    const arrivalStates: SampledState[][] = [];
+    for (let i = 0; i < nd; i++) {
+      const dEt = departureEt[i]!;
+      const dep = await e.spice.spkezr(params.departureBody, dEt, 'J2000', 'NONE', params.centerBody);
+      departureStates.push({ position: dep.position, velocity: dep.velocity });
+      const row: SampledState[] = [];
+      for (let j = 0; j < nt; j++) {
+        const arr = await e.spice.spkezr(params.arrivalBody, dEt + tofSec[j]!, 'J2000', 'NONE', params.centerBody);
+        row.push({ position: arr.position, velocity: arr.velocity });
+      }
+      arrivalStates.push(row);
+    }
+    const label = `${params.departureBody} -> ${params.arrivalBody} departure delta-v (km/s)`;
+    const result = sweepPorkchop({ departureEt, tofSec }, mu, departureStates, arrivalStates, label);
+    if (!isDisposed()) store.setState({ porkchop: result });
+  } catch (err) {
+    if (!isDisposed()) store.setState({ porkchop: null });
+    console.error('porkchop analysis failed', err);
+    throw err;
+  }
+}
+
+/**
+ * Cross-tab carrier (analysis-UX section 5.2): append the porkchop's marked optimum to the
+ * editable MCS as an impulsive Maneuver, so the trajectory designer flows porkchop -> MCS
+ * without re-typing the burn. The EditableManeuver model carries a scalar prograde magnitude, so
+ * the appended burn's dv is the magnitude of the solved departure delta-v vector. Pure store
+ * mutation through the mcsEditorReducer; fails loud when there is no solved porkchop to send.
+ */
+export function sendPorkchopToMcs(store: AppStore): void {
+  const result = store.getState().porkchop;
+  if (!result || !result.best) {
+    throw new Error('send to MCS: no solved porkchop optimum to send');
+  }
+  const dvKmS = result.best.deltaVKmS;
+  const current = store.getState().editableMcs;
+  const added = mcsEditorReducer(current, { type: 'add', kind: 'Maneuver' });
+  // Set the freshly appended Maneuver's magnitude to the solved departure delta-v.
+  const appended = added.segments[added.segments.length - 1]!;
+  const next = mcsEditorReducer(added, { type: 'patch', id: appended.id, patch: { dvKmS } });
+  store.setState({ editableMcs: next });
 }
 
 /**
