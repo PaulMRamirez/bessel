@@ -66,6 +66,32 @@ export interface CoverageGrid {
   readonly grid: GridSpec;
   /** Cells in row-major order (row by latitude ascending, column by longitude). */
   readonly cells: readonly CoverageCell[];
+  /**
+   * Area-weighted mean of percentCoverage across all cells (additive). On a uniform
+   * lat/lon grid each cell subtends a spherical area proportional to cos(latCenter)
+   * (the area element is cos(lat) dLat dLon), so high-latitude cells, which crowd
+   * together on the sphere, are down-weighted relative to the equator. This corrects
+   * the bias of the naive per-cell mean, which over-counts polar cells. 0 when the
+   * grid has no positive-weight cells.
+   */
+  readonly areaWeightedPercentCoverage: number;
+}
+
+/**
+ * Area-weighted mean of each cell's percentCoverage, weighting cell c by cos(lat_c)
+ * (proportional to its spherical cell area on a uniform lat/lon grid). Pure: depends
+ * only on cell centers and coverage. Negative cos weights (|lat| > 90 deg, which a
+ * valid grid never produces) are clamped to 0. Returns 0 when the total weight is 0.
+ */
+export function areaWeightedPercentCoverage(cells: readonly CoverageCell[]): number {
+  let weighted = 0;
+  let totalWeight = 0;
+  for (const cell of cells) {
+    const weight = Math.max(0, Math.cos(cell.latRad));
+    weighted += weight * cell.fom.percentCoverage;
+    totalWeight += weight;
+  }
+  return totalWeight > 0 ? weighted / totalWeight : 0;
 }
 
 /** A bad grid configuration (loud, located). */
@@ -187,5 +213,5 @@ export async function sweepCoverageGrid(
       req.onProgress?.(done / total);
     }
   }
-  return { grid: g, cells };
+  return { grid: g, cells, areaWeightedPercentCoverage: areaWeightedPercentCoverage(cells) };
 }
