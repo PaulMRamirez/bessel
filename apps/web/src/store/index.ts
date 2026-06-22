@@ -20,5 +20,9 @@ export {
   type OdResult,
   type Series,
   type LinkBudgetParams,
+  type DesignedConstellation,
+  type CoverageGridResult,
+  type CoverageMetricSelection,
+  type CoverageFomSummaryState,
 } from './app-state.ts';
 export { useStore } from './use-store.ts';
