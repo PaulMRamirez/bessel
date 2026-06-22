@@ -6,6 +6,7 @@
 // read the active station + the active-selection through the store; the engine owns the geometry.
 
 import { createElement } from 'react';
+import { Button } from '@bessel/selene-design';
 import { TimeSeriesChart, downloadBlob } from '@bessel/ui';
 import { tableToCsv } from '@bessel/interop';
 import type { BesselEngine } from '../engine/index.ts';
@@ -265,17 +266,17 @@ function LinkWorksheetView(props: { worksheet: LinkWorksheetResult }): JSX.Eleme
       <p className="bessel-loader-hint">
         The dashed line is the link-closes threshold (margin = 0).
       </p>
-      <button
-        type="button"
+      <Button
+        variant="secondary"
         className="bessel-csv-button"
-        data-testid="link-worksheet-csv"
+        testId="link-worksheet-csv"
         onClick={() => {
           exportCase('worst', worksheet.worstCase.lines);
           exportCase('nominal', worksheet.nominal.lines);
         }}
       >
         Export worksheet CSV
-      </button>
+      </Button>
     </div>
   );
 }

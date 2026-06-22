@@ -48,8 +48,8 @@ test('the scripting console saves, reloads, and runs a named script with Cmd+Ent
   await page.getByTestId('script-save').click();
   await input.fill('pause');
 
-  // Reloading the saved script from the menu restores its source.
-  await page.getByTestId('script-load').selectOption('mars-run');
+  // Reloading the saved script from the per-row list restores its source.
+  await page.getByTestId('script-load-mars-run').click();
   await expect(input).toHaveValue('gotoObject Mars\nsetTimeRate 60');
 
   // Cmd/Ctrl+Enter in the editor runs without clicking the button.

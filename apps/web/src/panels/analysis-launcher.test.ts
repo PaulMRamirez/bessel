@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { LAUNCHER_REGISTRY, filterLauncher } from './AnalysisLauncher.tsx';
+import { LAUNCHER_REGISTRY, LAUNCHER_DOMAINS, filterLauncher } from './AnalysisLauncher.tsx';
 
 // The AnalysisLauncher filters a static card registry by intent keyword. The registry is
 // the only data the search reads (no engine), so its shape and the filter are unit-tested.
@@ -41,5 +41,16 @@ describe('filterLauncher', () => {
   it('returns nothing for an empty query (the dropdown stays closed)', () => {
     expect(filterLauncher('')).toEqual([]);
     expect(filterLauncher('   ')).toEqual([]);
+  });
+});
+
+describe('LAUNCHER_DOMAINS', () => {
+  it('lists one distinct label per registry tab, in registry order, for the empty/no-match hint', () => {
+    // One entry per distinct tab: the hint never repeats a domain.
+    const distinctTabs = new Set(LAUNCHER_REGISTRY.map((e) => e.tab));
+    expect(LAUNCHER_DOMAINS.length).toBe(distinctTabs.size);
+    expect(new Set(LAUNCHER_DOMAINS).size).toBe(LAUNCHER_DOMAINS.length);
+    // The first registry tab is orbit & maneuver, so its label leads the hint.
+    expect(LAUNCHER_DOMAINS[0]).toBe('orbit & maneuver');
   });
 });

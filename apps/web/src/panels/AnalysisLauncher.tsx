@@ -4,7 +4,7 @@
 // accordion to expand that card. Deliberately small: a static array of {id, title, tab,
 // keywords}, no engine or heavy code, so it stays out of the first-paint shell budget.
 
-import { useState } from 'react';
+import { useId, useState, type KeyboardEvent } from 'react';
 import type { AnalyzeTab } from '../store/index.ts';
 
 /** One launchable analysis card: its accordion id, the owning tab, a label, and the
@@ -52,17 +52,86 @@ export function filterLauncher(query: string): readonly LauncherEntry[] {
   );
 }
 
+/** The searchable domains, shown as a hint when the query is empty or matches nothing so the
+ *  box is never a dead end: the user learns what intents the search understands. Derived from
+ *  the registry tabs (one human label per tab) rather than hand-listed, so it cannot drift. */
+const DOMAIN_LABELS: Readonly<Record<AnalyzeTab, string>> = {
+  'orbit-maneuver': 'orbit & maneuver',
+  'lighting-geometry': 'lighting & geometry',
+  'access-comms': 'access & comms',
+  conjunction: 'conjunction',
+  coverage: 'coverage',
+  'report-compare': 'report & compare',
+};
+
+/** The distinct domain labels in registry order, for the empty/no-match hint. */
+export const LAUNCHER_DOMAINS: readonly string[] = (() => {
+  const seen = new Set<AnalyzeTab>();
+  const out: string[] = [];
+  for (const e of LAUNCHER_REGISTRY) {
+    if (!seen.has(e.tab)) {
+      seen.add(e.tab);
+      out.push(DOMAIN_LABELS[e.tab]);
+    }
+  }
+  return out;
+})();
+
 export interface AnalysisLauncherProps {
   /** Switch to the owning tab and expand the chosen card. */
   readonly onLaunch: (entry: LauncherEntry) => void;
 }
 
 /** The search launcher input and its result list. Selecting a result calls onLaunch and
- *  clears the query. Keyboard and screen-reader operable: a labelled input plus a list of
- *  real buttons. */
+ *  clears the query. Keyboard and screen-reader operable: a labelled combobox input drives a
+ *  listbox of options. ArrowDown/ArrowUp move a roving highlight (activeIndex, surfaced via
+ *  aria-activedescendant), Enter activates the highlighted option (or the sole result),
+ *  Escape clears the query. Click still works unchanged. When the query is empty or matches
+ *  nothing, an unobtrusive hint lists the searchable domains so the box is never a dead end. */
 export function AnalysisLauncher(props: AnalysisLauncherProps): JSX.Element {
   const [query, setQuery] = useState('');
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const baseId = useId();
+  const listId = `${baseId}-results`;
+  const optionId = (index: number): string => `${baseId}-option-${index}`;
+
   const results = filterLauncher(query);
+  const trimmed = query.trim();
+  // A non-empty query that matches nothing, or an empty (focused) box: both get the hint.
+  const showHint = results.length === 0;
+
+  // Clamp the active highlight when the result set shrinks under the cursor.
+  const active = activeIndex >= 0 && activeIndex < results.length ? activeIndex : -1;
+
+  const launch = (entry: LauncherEntry): void => {
+    props.onLaunch(entry);
+    setQuery('');
+    setActiveIndex(-1);
+  };
+
+  const onKeyDown = (ev: KeyboardEvent<HTMLInputElement>): void => {
+    if (ev.key === 'ArrowDown') {
+      if (results.length === 0) return;
+      ev.preventDefault();
+      setActiveIndex((i) => (i + 1 >= results.length ? 0 : i + 1));
+    } else if (ev.key === 'ArrowUp') {
+      if (results.length === 0) return;
+      ev.preventDefault();
+      setActiveIndex((i) => (i <= 0 ? results.length - 1 : i - 1));
+    } else if (ev.key === 'Enter') {
+      // Enter activates the highlight, or the only result when there is exactly one.
+      const target = active >= 0 ? results[active] : results.length === 1 ? results[0] : undefined;
+      if (target) {
+        ev.preventDefault();
+        launch(target);
+      }
+    } else if (ev.key === 'Escape') {
+      if (query) ev.preventDefault();
+      setQuery('');
+      setActiveIndex(-1);
+    }
+  };
+
   return (
     <div className="bessel-analysis-launcher" data-testid="analysis-launcher-root">
       <input
@@ -72,26 +141,49 @@ export function AnalysisLauncher(props: AnalysisLauncherProps): JSX.Element {
         placeholder="What do you want to analyze?"
         value={query}
         data-testid="analysis-launcher"
-        onChange={(ev) => setQuery(ev.target.value)}
+        role="combobox"
+        aria-expanded={results.length > 0}
+        aria-controls={listId}
+        aria-autocomplete="list"
+        aria-activedescendant={active >= 0 ? optionId(active) : undefined}
+        onChange={(ev) => {
+          setQuery(ev.target.value);
+          setActiveIndex(-1);
+        }}
+        onKeyDown={onKeyDown}
       />
       {results.length > 0 ? (
-        <ul className="bessel-launcher-results" data-testid="launcher-results">
-          {results.map((entry) => (
-            <li key={entry.id}>
+        <ul
+          className="bessel-launcher-results"
+          data-testid="launcher-results"
+          id={listId}
+          role="listbox"
+        >
+          {results.map((entry, index) => (
+            <li key={entry.id} role="presentation">
               <button
                 type="button"
                 className="bessel-launcher-result"
                 data-testid={`launcher-result-${entry.id}`}
-                onClick={() => {
-                  props.onLaunch(entry);
-                  setQuery('');
-                }}
+                id={optionId(index)}
+                role="option"
+                aria-selected={index === active}
+                aria-current={index === active ? true : undefined}
+                onClick={() => launch(entry)}
               >
                 {entry.title}
               </button>
             </li>
           ))}
         </ul>
+      ) : null}
+      {showHint ? (
+        <p className="bessel-launcher-hint" data-testid="launcher-empty" role="note">
+          {trimmed
+            ? 'No tasks match; try a domain name: '
+            : 'Search by intent or domain: '}
+          {LAUNCHER_DOMAINS.join(', ')}.
+        </p>
       ) : null}
     </div>
   );

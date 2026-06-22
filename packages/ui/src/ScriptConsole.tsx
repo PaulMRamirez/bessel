@@ -29,12 +29,6 @@ const PLACEHOLDER = ['gotoObject Earth', 'setTimeRate 3600', 'show orbits', '# u
 
 export function ScriptConsole(props: ScriptConsoleProps): JSX.Element {
   const [name, setName] = useState('');
-  // The load <select> resets to '' after each pick so re-selecting the SAME saved
-  // name re-fires onChange (the reset-to-saved workflow must re-run, not be swallowed
-  // by a controlled value already holding that name). The delete target is tracked
-  // separately so the Delete control still knows which script the user last chose.
-  const [selected, setSelected] = useState('');
-  const [deleteTarget, setDeleteTarget] = useState('');
 
   return (
     <section className="bessel-script" aria-label="Scripting console">
@@ -74,7 +68,7 @@ export function ScriptConsole(props: ScriptConsoleProps): JSX.Element {
         </button>
       </div>
 
-      <div className="bessel-script-save" role="group" aria-label="Save and load scripts">
+      <div className="bessel-script-save" role="group" aria-label="Save the current script">
         <label className="bessel-visually-hidden" htmlFor="bessel-script-name">
           Script name
         </label>
@@ -98,43 +92,35 @@ export function ScriptConsole(props: ScriptConsoleProps): JSX.Element {
         >
           Save
         </button>
-        <label className="bessel-visually-hidden" htmlFor="bessel-script-load">
-          Load a saved script
-        </label>
-        <select
-          id="bessel-script-load"
-          value={selected}
-          onChange={(e) => {
-            const picked = e.target.value;
-            if (picked) {
-              setDeleteTarget(picked);
-              props.onLoadSaved(picked);
-            }
-            // Always snap back to the placeholder so re-selecting the same name fires.
-            setSelected('');
-          }}
-          data-testid="script-load"
-        >
-          <option value="">Load saved...</option>
-          {props.savedScriptNames.map((n) => (
-            <option key={n} value={n}>
-              {n}
-            </option>
-          ))}
-        </select>
-        <button
-          type="button"
-          disabled={!deleteTarget || !props.savedScriptNames.includes(deleteTarget)}
-          onClick={() => {
-            if (deleteTarget) props.onDeleteSaved(deleteTarget);
-            setDeleteTarget('');
-            setSelected('');
-          }}
-          data-testid="script-delete"
-        >
-          Delete
-        </button>
       </div>
+
+      {props.savedScriptNames.length === 0 ? (
+        <p className="bessel-script-saved-empty">No saved scripts yet</p>
+      ) : (
+        <ul className="bessel-script-saved-list" data-testid="script-saved-list">
+          {props.savedScriptNames.map((n) => (
+            <li key={n} className="bessel-script-saved-row">
+              <button
+                type="button"
+                className="bessel-script-saved-load"
+                onClick={() => props.onLoadSaved(n)}
+                data-testid={`script-load-${n}`}
+              >
+                {n}
+              </button>
+              <button
+                type="button"
+                className="bessel-script-saved-delete"
+                aria-label={`Delete ${n}`}
+                onClick={() => props.onDeleteSaved(n)}
+                data-testid={`script-delete-${n}`}
+              >
+                <span aria-hidden="true">✕</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
 
       <pre
         className="bessel-script-output"

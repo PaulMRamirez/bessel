@@ -1991,6 +1991,84 @@ button[aria-pressed='true'] {
   color: var(--text-1);
 }
 
+/* Saved scripts as a per-row list (Load + per-row remove), consistent with saved
+   views (BookmarksPanel), replacing the former select + gated Delete two-step. */
+.bessel-script-saved-list {
+  list-style: none;
+  margin: var(--space-1) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.bessel-script-saved-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.bessel-script-saved-load {
+  flex: 1;
+  text-align: left;
+  background: transparent;
+  border-color: transparent;
+}
+
+.bessel-script-saved-delete {
+  padding: 0 0.4rem;
+  line-height: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+.bessel-script-saved-delete:hover,
+.bessel-script-saved-delete:focus-visible {
+  color: var(--text-0);
+}
+
+.bessel-script-saved-empty {
+  color: var(--text-1);
+  margin: var(--space-1) 0 0;
+  font-size: 0.78rem;
+}
+
+/* Accordion-level expand/collapse-all control, shown only when the card count
+   exceeds the at-most-two-expanded cap (the discoverable escape hatch). */
+.bessel-taskcard-accordion-controls {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--space-1);
+}
+
+/* Ground-track map: enlarge toggle row and the on-map legend swatches. */
+.bessel-groundtrack-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.bessel-groundtrack-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.bessel-groundtrack-legend-line {
+  stroke: var(--data-accent);
+}
+
+.bessel-groundtrack-legend-station {
+  fill: var(--accent);
+}
+
+.bessel-groundtrack-station-label {
+  fill: var(--text-1);
+  font-size: 0.62rem;
+}
+
 .bessel-script-verbs {
   list-style: none;
   margin: var(--space-1) 0 0;

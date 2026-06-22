@@ -1,12 +1,11 @@
-// The reset-to-saved workflow must re-run when the user re-picks the SAME saved name.
-// With a controlled <select value={selected}> that keeps the loaded name, re-selecting
-// it fires no onChange (React only dispatches on a value change) and onLoadSaved never
-// re-runs. The fix snaps the controlled value back to the placeholder ('') after each
-// pick, so the next selection of that same name is again a value change.
+// Saved scripts render as a per-row list (a Load action plus a per-row remove), matching
+// BookmarksPanel. Loading is a direct per-row click that fires onLoadSaved(name) every
+// time, so the reset-to-saved workflow re-runs without any controlled-select dance, and
+// deletion is a per-row remove that fires onDeleteSaved(name) for that row's script.
 //
-// No DOM here: we drive React's useState with a real stateful harness across renders,
-// invoke the select's onChange, re-render, and assert the controlled value returns to
-// '' (which is what re-enables the re-fire) rather than sticking on the loaded name.
+// No DOM here: we render the element, walk it for a row's Load and remove buttons by
+// their per-name test ids, invoke their onClick handlers, and assert the right name
+// reaches each handler.
 
 import { describe, it, expect, vi } from 'vitest';
 import { isValidElement, type ReactElement } from 'react';
@@ -65,21 +64,23 @@ function render(props: ScriptConsoleProps): ReactElement {
   return ScriptConsole(props) as ReactElement;
 }
 
-describe('@bessel/ui ScriptConsole load select', () => {
-  it('returns the controlled value to the placeholder after a pick (re-fire enabled)', () => {
+describe('@bessel/ui ScriptConsole saved scripts', () => {
+  it('loads a saved script from its per-row Load action, re-firing on every click', () => {
     states = [];
     const onLoadSaved = vi.fn();
-    // First render: pick 'flyby'.
-    let tree = render({ ...base, onLoadSaved });
-    let select = findByTestId(tree, 'script-load')!;
-    expect((select.props as { value: string }).value).toBe('');
-    (select.props as { onChange: (e: unknown) => void }).onChange({ target: { value: 'flyby' } });
+    const tree = render({ ...base, onLoadSaved });
+    const load = findByTestId(tree, 'script-load-flyby')!;
+    (load.props as { onClick: () => void }).onClick();
+    (load.props as { onClick: () => void }).onClick();
+    expect(onLoadSaved).toHaveBeenCalledTimes(2);
     expect(onLoadSaved).toHaveBeenCalledWith('flyby');
-    // Re-render: the controlled value must be '' again (not stuck on 'flyby'), so
-    // selecting 'flyby' once more is a value change and re-fires onChange.
-    tree = render({ ...base, onLoadSaved });
-    select = findByTestId(tree, 'script-load')!;
-    expect((select.props as { value: string }).value).toBe('');
+  });
+
+  it('shows an empty state when there are no saved scripts', () => {
+    states = [];
+    const tree = render({ ...base, savedScriptNames: [] });
+    expect(findByTestId(tree, 'script-saved-list')).toBeNull();
+    expect(JSON.stringify(tree)).toContain('No saved scripts yet');
   });
 
   it('disables Copy log when the log is empty and enables it with lines', () => {
@@ -100,15 +101,11 @@ describe('@bessel/ui ScriptConsole load select', () => {
     expect((details.props as { open: boolean }).open).toBe(true);
   });
 
-  it('keeps a delete target after a pick so Delete stays enabled', () => {
+  it('removes a saved script from its per-row delete control', () => {
     states = [];
     const onDeleteSaved = vi.fn();
-    let tree = render({ ...base, onDeleteSaved });
-    const select = findByTestId(tree, 'script-load')!;
-    (select.props as { onChange: (e: unknown) => void }).onChange({ target: { value: 'survey' } });
-    tree = render({ ...base, onDeleteSaved });
-    const del = findByTestId(tree, 'script-delete')!;
-    expect((del.props as { disabled: boolean }).disabled).toBe(false);
+    const tree = render({ ...base, onDeleteSaved });
+    const del = findByTestId(tree, 'script-delete-survey')!;
     (del.props as { onClick: () => void }).onClick();
     expect(onDeleteSaved).toHaveBeenCalledWith('survey');
   });

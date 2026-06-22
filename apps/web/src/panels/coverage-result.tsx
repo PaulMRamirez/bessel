@@ -4,6 +4,7 @@
 // engine or geometry. The legend mirrors @bessel/scene's viridis ramp so the swatch matches
 // the draped overlay (low = dark violet, high = yellow), with the worse/better ends labelled.
 
+import { Button } from '@bessel/selene-design';
 import type { CoverageMetricSelection, CoverageFomSummaryState } from '../store/index.ts';
 import { fmt } from './analysis-shared.tsx';
 
@@ -77,14 +78,14 @@ export function FomSummaryTable(props: {
           ))}
         </tbody>
       </table>
-      <button
-        type="button"
+      <Button
+        variant="secondary"
         className="bessel-csv-button"
-        data-testid="coverage-fom-csv"
+        testId="coverage-fom-csv"
         onClick={props.onExportCsv}
       >
         Export CSV
-      </button>
+      </Button>
     </div>
   );
 }
