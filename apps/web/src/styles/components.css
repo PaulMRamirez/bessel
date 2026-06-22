@@ -262,26 +262,6 @@
   background: var(--border);
 }
 
-.bessel-viewcontrols {
-  position: absolute;
-  top: var(--space-2);
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-1) var(--space-2);
-  background: var(--hud-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  flex-wrap: wrap;
-  max-width: calc(100% - 6rem);
-}
-
-.bessel-selection {
-  color: var(--text-1);
-  font-size: 0.8rem;
-}
 
 /* Bottom bar / timeline -------------------------------------------------- */
 
@@ -649,6 +629,7 @@ button[aria-pressed='true'] {
 
 .bessel-body-center,
 .bessel-body-track,
+.bessel-body-layer,
 .bessel-eye {
   display: inline-flex;
   align-items: center;
@@ -662,6 +643,12 @@ button[aria-pressed='true'] {
   border-radius: var(--radius-sm);
   color: var(--text-1);
   line-height: 0;
+  cursor: pointer;
+}
+
+/* Instrument FOV / footprint sub-toggles on the instrument row: amber while on. */
+.bessel-body-layer[aria-pressed='true'] {
+  color: var(--accent);
 }
 
 /* The per-row controls stay quiet until the row is hovered or they are active. */
@@ -1096,32 +1083,6 @@ button[aria-pressed='true'] {
   opacity: 0.85;
 }
 
-/* Iconified viewcontrols toggles (FOV cone, footprint, share): a square icon button
-   with an amber active ring when the layer is on. */
-.bessel-viewcontrols__layer-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm, 4px);
-  color: var(--text-1);
-  cursor: pointer;
-  padding: 4px;
-}
-
-.bessel-viewcontrols__layer-toggle:hover,
-.bessel-viewcontrols__layer-toggle:focus-visible {
-  color: var(--text-0);
-  border-color: var(--border);
-}
-
-.bessel-viewcontrols__layer-toggle[aria-pressed='true'] {
-  color: var(--accent);
-  border-color: var(--accent);
-  background: var(--accent-bg);
-}
-
 .bessel-tab:hover {
   color: var(--text-0);
 }
@@ -1548,24 +1509,6 @@ button[aria-pressed='true'] {
 }
 
 /* Co-located instrument layer toggles in the canvas view-controls (B11). */
-.bessel-viewcontrols__layers {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding-left: var(--space-2);
-  border-left: 1px solid var(--border);
-}
-
-/* Instrument selector: shown only for multi-instrument missions. */
-.bessel-instrument-select select {
-  font-size: 0.82rem;
-  color: var(--text-0);
-  background: var(--bg-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 0.2rem var(--space-1);
-}
-
 /* Timeline enrichment (B8): visible marker labels, next-event readout, parse error. */
 .bessel-marker-group {
   display: contents;

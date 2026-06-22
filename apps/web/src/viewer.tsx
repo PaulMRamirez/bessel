@@ -5,7 +5,7 @@
 // presentational; all imperative work lives in the engine.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SOLAR_SYSTEM } from '@bessel/scene';
-import { StatusDot, Icon, DomainIcon, Button, type StatusTone } from '@bessel/selene-design';
+import { StatusDot, Icon, Button, type StatusTone } from '@bessel/selene-design';
 import { sortByEt } from '@bessel/timeline';
 import {
   BookmarksPanel,
@@ -160,7 +160,6 @@ export function BesselViewer(): JSX.Element {
   const timelineError = useStore(store, (s) => s.timelineError);
   const focus = useStore(store, (s) => s.focus);
   const instruments = useStore(store, (s) => s.instruments);
-  const instrumentNames = useStore(store, (s) => s.instrumentNames);
   const activeInstrumentId = useStore(store, (s) => s.activeInstrumentId);
   const footprintPoints = useStore(store, (s) => s.footprintPoints);
   const fovOk = useStore(store, (s) => s.fovOk);
@@ -408,6 +407,21 @@ export function BesselViewer(): JSX.Element {
           onCenter={(id) => engine?.centerOn(id)}
           onToggleTrack={() => engine?.toggleTrack()}
           tracking={track}
+          instrumentLayer={{
+            isShown: (id) => instruments && activeInstrumentId === id,
+            onToggle: (id) => {
+              if (instruments && activeInstrumentId === id) {
+                engine?.toggleInstruments();
+              } else {
+                if (activeInstrumentId !== id) void engine?.setActiveInstrument(id);
+                if (!instruments) engine?.toggleInstruments();
+              }
+            },
+            fovOn: settings.fov,
+            footprintOn: settings.footprint,
+            onToggleFov: () => engine?.setSetting('fov', !settings.fov),
+            onToggleFootprint: () => engine?.setSetting('footprint', !settings.footprint),
+          }}
         />
       </PanelContainer>
       {selection.length > 0 || measureMode ? (
@@ -564,67 +578,6 @@ export function BesselViewer(): JSX.Element {
           testId="telemetry-fault-alert"
         />
       </div>
-      {hasSpacecraft ? (
-        <div className="bessel-viewcontrols" role="group" aria-label="Instrument controls">
-          <button
-            type="button"
-            onClick={() => engine?.toggleInstruments()}
-            aria-pressed={instruments}
-            data-testid="toggle-instruments"
-          >
-            {instruments ? 'Hide instruments' : 'Show instruments'}
-          </button>
-            {instruments && instrumentNames.length > 1 ? (
-              <label className="bessel-instrument-select">
-                <span className="bessel-visually-hidden">Active instrument</span>
-                <select
-                  value={activeInstrumentId ?? ''}
-                  onChange={(e) => void engine?.setActiveInstrument(e.target.value)}
-                  data-testid="instrument-select"
-                  aria-label="Active instrument"
-                >
-                  {instrumentNames.map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
-            {instruments ? (
-              <span
-                className="bessel-viewcontrols__layers"
-                role="group"
-                aria-label="Instrument layers"
-              >
-                <Tooltip label="Sensor FOV cone">
-                  <button
-                    type="button"
-                    className="bessel-viewcontrols__layer-toggle"
-                    onClick={() => engine?.setSetting('fov', !settings.fov)}
-                    aria-pressed={settings.fov}
-                    aria-label="Sensor FOV cone"
-                    data-testid="toggle-fov"
-                  >
-                    <DomainIcon name="sensor-fov" />
-                  </button>
-                </Tooltip>
-                <Tooltip label="Sensor footprint">
-                  <button
-                    type="button"
-                    className="bessel-viewcontrols__layer-toggle"
-                    onClick={() => engine?.setSetting('footprint', !settings.footprint)}
-                    aria-pressed={settings.footprint}
-                    aria-label="Sensor footprint"
-                    data-testid="toggle-footprint"
-                  >
-                    <DomainIcon name="sensor-footprint" />
-                  </button>
-                </Tooltip>
-              </span>
-            ) : null}
-        </div>
-      ) : null}
       <div className="bessel-canvas-topright">
         <Tooltip label="Keyboard shortcuts and help (press ?)">
           <button
