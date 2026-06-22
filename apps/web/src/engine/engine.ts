@@ -817,6 +817,27 @@ export class BesselEngine {
     });
   }
 
+  /** Coverage-grid overlay: sweep a global FOM grid for the spacecraft and drape it on
+   *  the globe (camera-relative). The heavy sweep + overlay build load with the lazy ops. */
+  async computeCoverageGrid(opts: AnalysisSpan = {}): Promise<void> {
+    const e = this.core;
+    if (!e) return;
+    await this.runTool('compute-coverage-grid', async () => {
+      const ops = await import('./analysis-ops.ts');
+      await ops.computeCoverageGrid(e, this.store, this.isDisposed, opts);
+    });
+  }
+
+  /** Clear the draped coverage overlay (and its summary readout). */
+  async clearCoverageGrid(): Promise<void> {
+    const e = this.core;
+    if (!e) return;
+    await this.runTool('clear-coverage-grid', async () => {
+      const ops = await import('./analysis-ops.ts');
+      ops.clearCoverageGrid(e, this.store);
+    });
+  }
+
   /** Attitude analysis: an eigen-axis slew between two pointing modes as a slew-angle series. */
   async computeSlew(opts: SlewOpts = {}): Promise<void> {
     const e = this.core;

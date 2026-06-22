@@ -7,7 +7,8 @@
 
 import { eclipseIntervals } from '@bessel/events';
 import { computeAccess, computeElevationAccess, type Facility } from '@bessel/access';
-import { figureOfMerit, walkerConstellation } from '@bessel/coverage';
+import { figureOfMerit, walkerConstellation, sweepCoverageGrid, type GridSpec } from '@bessel/coverage';
+import type { CoverageOverlayCell } from '@bessel/scene';
 import { windowIntersect } from '@bessel/timeline';
 import { linkBudget } from '@bessel/rf';
 import { closestApproachLinear, collisionProbability2D } from '@bessel/conjunction';
@@ -956,4 +957,93 @@ export async function runReport(
     console.error('report failed', err);
     throw err;
   }
+}
+
+// Default global coverage grid resolution: coarse enough to stay responsive (one
+// elevation-access sweep per cell) while reading as a contoured overlay on the globe.
+const COVERAGE_LAT_COUNT = 9;
+const COVERAGE_LON_COUNT = 18;
+const HALF_PI = Math.PI / 2;
+
+/**
+ * Coverage-grid overlay: sweep a global lat/lon figure-of-merit grid for the loaded
+ * spacecraft over the mission center body (@bessel/coverage sweepCoverageGrid, which
+ * reuses the @bessel/access elevation engine per cell), reduce each cell's FOM to the
+ * 0..1 percentCoverage scalar, and drape it on the globe as a colored overlay
+ * (scene.setCoverageOverlay, camera-relative). The heavy sweep + overlay build run only
+ * here, behind the engine's dynamic-import boundary, so the first-paint shell is
+ * unaffected. Requires a spacecraft mission; a no-op (clears the overlay) otherwise.
+ */
+export async function computeCoverageGrid(
+  e: EngineCore,
+  store: AppStore,
+  isDisposed: () => boolean,
+  opts: AnalysisSpan = {},
+): Promise<void> {
+  const sc = e.identity.spacecraftName;
+  const body = e.identity.centerBody;
+  if (!sc || !body) {
+    e.scene.clearCoverageOverlay();
+    store.setState({ coverageGrid: null });
+    return;
+  }
+  const bodyFrame = `IAU_${body.toUpperCase()}`;
+  const t0 = e.clock.state.et;
+  const span: [number, number] = [t0, t0 + (opts.spanSec ?? 86400)];
+  const grid: GridSpec = {
+    body,
+    bodyFrame,
+    latMin: -HALF_PI * 0.94,
+    latMax: HALF_PI * 0.94,
+    latCount: COVERAGE_LAT_COUNT,
+    lonMin: -Math.PI,
+    lonMax: Math.PI,
+    lonCount: COVERAGE_LON_COUNT,
+  };
+  try {
+    const result = await sweepCoverageGrid(e.spice, {
+      grid,
+      assets: [sc],
+      span,
+      step: opts.stepSec ?? 300,
+      minElevationRad: 5 * DEG2RAD,
+    });
+    if (isDisposed()) return;
+    // Reduce each cell to the 0..1 scalar the overlay colors by (percentCoverage).
+    const cells: CoverageOverlayCell[] = result.cells.map((c) => ({
+      latRad: c.latRad,
+      lonRad: c.lonRad,
+      fom: c.fom.percentCoverage,
+    }));
+    const radii = await e.spice.bodvrd(body, 'RADII').catch(() => [6378.137]);
+    if (isDisposed()) return;
+    const bodyRadiusKm = radii[0] && Number.isFinite(radii[0]) ? radii[0] : 6378.137;
+    e.scene.setCoverageOverlay({
+      anchorBody: body,
+      bodyRadiusKm,
+      latCount: grid.latCount,
+      lonCount: grid.lonCount,
+      cells,
+    });
+    store.setState({
+      coverageGrid: {
+        cellCount: cells.length,
+        areaWeightedPercentCoverage: result.areaWeightedPercentCoverage,
+        label: `${sc} over ${body}`,
+      },
+    });
+  } catch (err) {
+    if (!isDisposed()) {
+      e.scene.clearCoverageOverlay();
+      store.setState({ coverageGrid: null });
+    }
+    console.error('coverage grid sweep failed', err);
+    throw err;
+  }
+}
+
+/** Clear the draped coverage overlay and its summary readout. */
+export function clearCoverageGrid(e: EngineCore, store: AppStore): void {
+  e.scene.clearCoverageOverlay();
+  store.setState({ coverageGrid: null });
 }

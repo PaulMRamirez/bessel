@@ -97,6 +97,8 @@ export interface AppState {
   conjunction: ConjunctionResult | null;
   /** Walker constellation summary from the last coverage/constellation run. */
   constellation: ConstellationResult | null;
+  /** Summary of the last coverage-grid overlay run (cell count + area-weighted FOM). */
+  coverageGrid: CoverageGridResult | null;
   /** Eigen-axis slew angle (deg) over time from the last attitude run. */
   slewSeries: Series | null;
   /** Lambert transfer summary (delta-v) from the last maneuver-design run. */
@@ -214,6 +216,15 @@ export interface ConstellationResult {
   /** Inclination (deg) and altitude (km) of the generated Walker pattern. */
   readonly inclinationDeg: number;
   readonly altitudeKm: number;
+}
+
+/** Summary of a coverage-grid overlay run (the overlay itself lives in the scene). */
+export interface CoverageGridResult {
+  /** Number of swept grid cells draped on the globe. */
+  readonly cellCount: number;
+  /** Area-weighted mean percent coverage across the grid, in [0, 1]. */
+  readonly areaWeightedPercentCoverage: number;
+  readonly label: string;
 }
 
 export interface TransferResult {
@@ -351,6 +362,7 @@ export const initialAppState: AppState = {
   linkParams: null,
   conjunction: null,
   constellation: null,
+  coverageGrid: null,
   slewSeries: null,
   transfer: null,
   groundTrack: null,

@@ -176,6 +176,7 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
   const linkParams = useStore(store, (s) => s.linkParams);
   const conjunction = useStore(store, (s) => s.conjunction);
   const constellation = useStore(store, (s) => s.constellation);
+  const coverageGrid = useStore(store, (s) => s.coverageGrid);
   const slewSeries = useStore(store, (s) => s.slewSeries);
   const transfer = useStore(store, (s) => s.transfer);
   const groundTrack = useStore(store, (s) => s.groundTrack);
@@ -384,6 +385,32 @@ export function AnalysisPanel(props: AnalysisPanelProps): JSX.Element {
           }}
         />
         <RunStatusNote status={runStatus['compute-eclipse']} id="compute-eclipse" />
+        <Action
+          status={runStatus['compute-coverage-grid']}
+          onClick={() => void engine?.computeCoverageGrid(span)}
+          testId="compute-coverage-grid"
+        >
+          Show coverage grid
+        </Action>
+        {coverageGrid ? (
+          <p className="bessel-analysis-stat" data-testid="coverage-grid-stat">
+            {coverageGrid.label}: {fmt(coverageGrid.areaWeightedPercentCoverage * 100, 1)}% area-weighted coverage
+            over {coverageGrid.cellCount} cells.
+          </p>
+        ) : (
+          <p className="bessel-loader-hint">
+            Drape a global coverage figure-of-merit grid on the globe, colored by coverage.
+          </p>
+        )}
+        <Action
+          status={runStatus['clear-coverage-grid']}
+          disabled={!coverageGrid}
+          onClick={() => void engine?.clearCoverageGrid()}
+          testId="clear-coverage-grid"
+        >
+          Clear coverage grid
+        </Action>
+        <RunStatusNote status={runStatus['compute-coverage-grid']} id="compute-coverage-grid" />
       </PanelContainer>
 
       <PanelContainer title="Comms" testId="analysis-section-comms">

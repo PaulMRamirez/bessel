@@ -52,6 +52,7 @@ import { buildDirectionVectors, type DirectionSpec } from './direction-vectors.t
 import { buildStarField } from './star-field.ts';
 import { type Star } from './star-catalog.ts';
 import { buildAtmosphere, type AtmosphereParams } from './atmosphere.ts';
+import { buildCoverageOverlayMesh, type CoverageOverlaySpec } from './coverage-overlay.ts';
 import { buildSunLight } from './shadows.ts';
 import { rowMajor3x3ToMatrix4, applyAttitude, applyQuaternion } from './orientation.ts';
 import {
@@ -222,6 +223,9 @@ export class SolarSystemScene {
   private swarmsVisible = true;
   private directionVectors: Object3D | null = null;
   private atmosphere: Object3D | null = null;
+  // The coverage figure-of-merit overlay (a draped vertex-colored mesh), anchored at a
+  // body like the rings and footprint so it tracks the body camera-relative.
+  private coverageOverlay: Mesh | null = null;
   private spacecraftModel: Object3D | null = null;
   // The single sun shadow light (and its target), held so a re-enable removes and
   // disposes the prior one instead of stacking shadow passes; reset/disable free it.
@@ -679,6 +683,31 @@ export class SolarSystemScene {
   }
 
   /**
+   * Drape a coverage figure-of-merit overlay (a vertex-colored mesh) on a body. The
+   * spec is plain data (lat/lon cell centers + a scalar FOM per cell); the overlay is
+   * built body-relative (km scaled by SCALE) and anchored to the body each frame, so it
+   * tracks the body camera-relative and never feeds raw solar-system coordinates to the
+   * GPU. A second call replaces (and disposes) the prior overlay.
+   */
+  setCoverageOverlay(spec: CoverageOverlaySpec): void {
+    const mesh = buildCoverageOverlayMesh(spec);
+    if (this.coverageOverlay) {
+      this.replaceAnchored(this.coverageOverlay, null, '');
+      disposeDeep(this.coverageOverlay);
+    }
+    this.replaceAnchored(null, mesh, spec.anchorBody);
+    this.coverageOverlay = mesh;
+  }
+
+  /** Remove and dispose the coverage overlay, if any. */
+  clearCoverageOverlay(): void {
+    if (!this.coverageOverlay) return;
+    this.replaceAnchored(this.coverageOverlay, null, '');
+    disposeDeep(this.coverageOverlay);
+    this.coverageOverlay = null;
+  }
+
+  /**
    * Render a star field on the celestial sphere. The points are parented to a
    * fixed group (identity rotation, J2000), not to the camera, so render() can
    * copy only the camera position into the group: the sky stays at infinity but
@@ -1129,6 +1158,8 @@ export class SolarSystemScene {
     this.directionVectors = null;
     drop(this.atmosphere);
     this.atmosphere = null;
+    drop(this.coverageOverlay);
+    this.coverageOverlay = null;
     for (const obj of this.axes.values()) drop(obj);
     this.axes.clear();
     for (const obj of this.particleSystems.values()) drop(obj);

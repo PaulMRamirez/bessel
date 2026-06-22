@@ -26,6 +26,15 @@ export {
   type Star,
 } from './star-catalog.ts';
 export { rayleighCoefficients, buildAtmosphereUniforms, buildAtmosphere } from './atmosphere.ts';
+export { viridis } from './colormap.ts';
+export {
+  buildCoverageOverlayMesh,
+  buildCoverageOverlayBuffers,
+  CoverageOverlayError,
+  type CoverageOverlaySpec,
+  type CoverageOverlayCell,
+  type OverlayBuffers,
+} from './coverage-overlay.ts';
 export { computeShadowFrustum, buildSunLight } from './shadows.ts';
 export {
   rowMajor3x3ToMatrix4,
