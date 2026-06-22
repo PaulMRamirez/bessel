@@ -12,9 +12,16 @@
       "!apps/web/dist/assets/app-*.js",
       "!apps/web/dist/assets/vendor-*.js",
       "!apps/web/dist/assets/spice.worker-*.js",
+      "!apps/web/dist/assets/coverage.worker-*.js",
       "!apps/web/dist/assets/ajv-lazy-*.js"
     ],
     "limit": "95 KB",
+    "gzip": true
+  },
+  {
+    "name": "coverage worker (gzip)",
+    "path": "apps/web/dist/assets/coverage.worker-*.js",
+    "limit": "12 KB",
     "gzip": true
   },
   {

@@ -165,6 +165,64 @@ describe('Coverage panel: the Walker -> sweep -> metric-aware contour workflow',
   });
 });
 
+describe('Coverage panel: worker-ized sweep progress + cancel (Phase 3)', () => {
+  it('shows the live progress readout and the cancel control while a sweep is running', () => {
+    const store = createAppStore();
+    store.setState({ coverageSweep: { status: 'running', done: 7, total: 162 } });
+    const out = coverage(store, true);
+    expect(out).toContain('data-testid="coverage-progress"');
+    expect(out).toContain('7/162 cells');
+    expect(out).toContain('data-testid="coverage-cancel"');
+  });
+
+  it('hides the progress + cancel controls when no sweep is running', () => {
+    const out = coverage(createAppStore(), true);
+    expect(out).not.toContain('data-testid="coverage-progress"');
+    expect(out).not.toContain('data-testid="coverage-cancel"');
+  });
+
+  it('surfaces a loud sweep error', () => {
+    const store = createAppStore();
+    store.setState({ coverageSweep: { status: { error: 'no center body' }, done: 0, total: 0 } });
+    const out = coverage(store, true);
+    expect(out).toContain('data-testid="coverage-sweep-error"');
+    expect(out).toContain('no center body');
+  });
+});
+
+describe('Lighting & Geometry: selectable ground-track projection + station overlays (Phase 3)', () => {
+  function seedGroundTrack(store: AppStore): void {
+    store.setState({
+      groundTrack: {
+        et: new Float64Array([0, 1, 2]),
+        lon: new Float64Array([0, 0.1, 0.2]),
+        lat: new Float64Array([0, 0.1, 0.2]),
+        label: 'Sub-spacecraft track',
+      },
+    });
+  }
+
+  it('exposes the projection select once a ground track exists', () => {
+    const store = createAppStore();
+    seedGroundTrack(store);
+    const out = lighting(store, true);
+    expect(out).toContain('data-testid="param-groundtrack-projection"');
+    expect(out).toContain('Polar stereographic');
+  });
+
+  it('drapes scenario stations as overlay markers on the track', () => {
+    const store = createAppStore();
+    seedGroundTrack(store);
+    store.setState((s) => ({
+      scenario: {
+        ...s.scenario,
+        stations: [{ id: 'mad', name: 'Madrid', lonRad: -0.06, latRad: 0.7, altKm: 0.8 }],
+      },
+    }));
+    expect(lighting(store, true)).toContain('data-testid="groundtrack-station-overlay"');
+  });
+});
+
 describe('domain panel tool parameter forms', () => {
   it('renders the link, conjunction, and constellation forms in their expanded cards', () => {
     for (const id of ['param-link-eirp', 'param-link-freq', 'param-link-gt', 'param-link-rate']) {

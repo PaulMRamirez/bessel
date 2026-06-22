@@ -10,6 +10,8 @@ import { DEFAULT_OBJECT_ENTRIES } from '../catalog-load.ts';
 import type { Bookmark } from '../bookmarks.ts';
 import type { SavedScript } from '../scripts.ts';
 import { INITIAL_SCREENING, type ScreeningState } from '../screening-protocol.ts';
+// [ux-p3-coverage] The off-main-thread coverage grid-sweep progress slice (status + done/total).
+import { INITIAL_COVERAGE_SWEEP, type CoverageSweepState } from '../coverage-protocol.ts';
 import { createStore, type Store } from './create-store.ts';
 // [ux-p2-orbit] Type-only imports (erased at build, no runtime store->engine cycle): the
 // porkchop sweep result the Lambert card publishes, and the editable MCS the builder edits and
@@ -226,6 +228,8 @@ export interface AppState {
   designedConstellation: DesignedConstellation | null;
   /** Summary of the last coverage-grid overlay run (cell count + area-weighted FOM). */
   coverageGrid: CoverageGridResult | null;
+  /** [ux-p3-coverage] Off-main-thread coverage grid-sweep progress: status + cells done/total. */
+  coverageSweep: CoverageSweepState;
   /** Eigen-axis slew angle (deg) over time from the last attitude run. */
   slewSeries: Series | null;
   /** Lambert transfer summary (delta-v) from the last maneuver-design run. */
@@ -729,6 +733,7 @@ export const initialAppState: AppState = {
   constellation: null,
   designedConstellation: null,
   coverageGrid: null,
+  coverageSweep: INITIAL_COVERAGE_SWEEP,
   slewSeries: null,
   transfer: null,
   porkchop: null,

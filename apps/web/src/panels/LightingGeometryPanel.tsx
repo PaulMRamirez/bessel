@@ -4,8 +4,8 @@
 // solar intensity), surfaced as collapsible TaskCards. Presentational: it reads result
 // slices and calls engine; the lighting card bodies live in lighting-cards.tsx.
 
-import { type ReactNode } from 'react';
-import { GroundTrackMap } from '@bessel/ui';
+import { useState, type ReactNode } from 'react';
+import { GroundTrackMap, type GroundTrackProjection } from '@bessel/ui';
 import { seriesToCsv } from '@bessel/interop';
 import type { BesselEngine } from '../engine/index.ts';
 import { useStore, type AppStore } from '../store/index.ts';
@@ -35,6 +35,18 @@ export function LightingGeometryPanel(props: LightingGeometryPanelProps): JSX.El
   const betaSeries = useStore(store, (s) => s.betaSeries);
   const solarIntensity = useStore(store, (s) => s.solarIntensitySeries);
   const trayFull = useTrayFull(store);
+  // [ux-p3-coverage] The selectable ground-track projection (the map is presentational; the
+  // select lives here). The scenario station registry is draped as overlay markers in the
+  // SAME projection so the track and the stations stay registered.
+  const [groundTrackProjection, setGroundTrackProjection] =
+    useState<GroundTrackProjection>('equirectangular');
+  const stations = useStore(store, (s) => s.scenario.stations);
+  const stationMarkers = stations.map((s) => ({
+    id: s.id,
+    name: s.name,
+    lonRad: s.lonRad,
+    latRad: s.latRad,
+  }));
 
   const cardCtx = { engine, span, runStatus, runMeta, trayFull };
 
@@ -75,10 +87,24 @@ export function LightingGeometryPanel(props: LightingGeometryPanelProps): JSX.El
       {groundTrack ? (
         <div data-testid="groundtrack-result">
           <div className="bessel-panel-title">{groundTrack.label}</div>
+          <label>
+            Projection
+            <select
+              data-testid="param-groundtrack-projection"
+              value={groundTrackProjection}
+              onChange={(e) => setGroundTrackProjection(e.target.value as GroundTrackProjection)}
+            >
+              <option value="equirectangular">Equirectangular</option>
+              <option value="mercator">Web Mercator</option>
+              <option value="polar-stereographic">Polar stereographic</option>
+            </select>
+          </label>
           <GroundTrackMap
             lon={groundTrack.lon}
             lat={groundTrack.lat}
             label={groundTrack.label}
+            projection={groundTrackProjection}
+            stations={stationMarkers}
             testId="ground-track"
           />
           <ResultCsv

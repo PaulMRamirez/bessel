@@ -6,7 +6,7 @@
 // mutable TLE-state ref) as parameters, so nothing here depends on the BesselEngine class.
 
 import { computeElevationAccess, type Facility } from '@bessel/access';
-import { figureOfMerit, walkerConstellation, sweepCoverageGrid, type GridSpec } from '@bessel/coverage';
+import { figureOfMerit, walkerConstellation, type GridSpec } from '@bessel/coverage';
 import { CoverageOverlayError, type CoverageOverlayCell, type Km3 } from '@bessel/scene';
 import { windowIntersect } from '@bessel/timeline';
 import { linkBudget } from '@bessel/rf';
@@ -77,6 +77,12 @@ import { runOdDemo } from './od.ts';
 import { centerMu } from './center-mu.ts';
 import { ScreeningClient, ScreeningCancelled } from '../screening-client.ts';
 import { reduceScreening, INITIAL_SCREENING } from '../screening-protocol.ts';
+// [ux-p3-coverage] The dedicated coverage-sweep worker client + its progress reducer, co-located
+// with the screening client so the two cancellable-worker surfaces share one pattern. The sweep's
+// per-cell SPICE geometry runs in the worker (replaying the recorded kernel pool), so a 24-sat
+// global sweep no longer blocks the main thread.
+import { CoverageClient, CoverageCancelled } from '../coverage-client.ts';
+import { reduceCoverageSweep, INITIAL_COVERAGE_SWEEP } from '../coverage-protocol.ts';
 // [ux-p1-conjunction] REAL CDM/OEM/TLE ingestion (the pure parse->catalog fn) + the B-plane
 // geometry, co-located in this lazy chunk so they share the conjunction/propagator deps and
 // stay off the first-paint shell.
@@ -1442,6 +1448,13 @@ export interface ConstellationRef {
   assetIds: string[];
 }
 
+/** [ux-p3-coverage] The live dedicated coverage-sweep worker client, held as a mutable ref on the
+ *  engine so the (lazily imported) sweep op can start and cancel a run across separate dynamic-import
+ *  calls (mirroring ScreeningRef). Null until the first sweep constructs the client. */
+export interface CoverageRef {
+  client: CoverageClient | null;
+}
+
 /** The coverage sweep settings the panel form drives (grid resolution, region, metric, k). */
 export interface CoverageSweepOpts {
   readonly spanSec?: number;
@@ -1581,6 +1594,7 @@ export async function sweepCoverage(
   store: AppStore,
   isDisposed: () => boolean,
   ref: ConstellationRef,
+  coverageRef: CoverageRef,
   opts: CoverageSweepOpts = {},
 ): Promise<void> {
   const body = e.identity.centerBody ?? 'EARTH';
@@ -1589,8 +1603,15 @@ export async function sweepCoverage(
     ref.assetIds.length > 0 ? ref.assetIds : e.identity.spacecraftName ? [e.identity.spacecraftName] : [];
   if (assets.length === 0) {
     e.scene.clearCoverageOverlay();
-    store.setState({ coverageGrid: null });
+    store.setState({ coverageGrid: null, coverageSweep: INITIAL_COVERAGE_SWEEP });
     return;
+  }
+  // Fail loud BEFORE the worker run rather than drape the grid at the scene origin: the overlay
+  // is anchored by body name each frame, so an unresolved center body would silently sit at [0,0,0].
+  if (!e.table.byBody.has(body)) {
+    throw new CoverageOverlayError(
+      `center body "${body}" is not in the ephemeris table, so the overlay cannot be anchored`,
+    );
   }
   const bodyFrame = `IAU_${body.toUpperCase()}`;
   const t0 = e.clock.state.et;
@@ -1607,14 +1628,36 @@ export async function sweepCoverage(
     lonMax: (opts.lonMaxDeg ?? 180) * DEG2RAD,
     lonCount: Math.max(1, Math.floor(opts.lonCount ?? 18)),
   };
+  // The body radii are resolved up front (one main-thread round-trip) so the heavy sweep can run
+  // entirely in the worker; the overlay drape only needs them once the cells return.
+  const radii = await e.spice.bodvrd(body, 'RADII').catch(() => [6378.137]);
+  if (isDisposed()) return;
+  const bodyRadiusKm = radii[0] && Number.isFinite(radii[0]) ? radii[0] : 6378.137;
+  const polarRadiusKm = radii[2] && Number.isFinite(radii[2]) ? radii[2] : bodyRadiusKm;
+  // Reuse the held coverage worker client; it supersedes any in-flight sweep on start().
+  const client = coverageRef.client ?? (coverageRef.client = new CoverageClient());
+  const total = grid.latCount * grid.lonCount;
+  store.setState((s) => ({
+    coverageSweep: reduceCoverageSweep(s.coverageSweep, { kind: 'start', total }),
+  }));
   try {
-    const result = await sweepCoverageGrid(e.spice, {
-      grid,
-      assets,
-      span,
-      step: opts.stepSec ?? 300,
-      minElevationRad: (opts.minElevationDeg ?? 5) * DEG2RAD,
-    });
+    // Run the per-cell per-asset SPICE access entirely off the main thread: the worker spawns its
+    // own SPICE worker and replays the recorded kernel pool (base kernels + the published asset SPKs).
+    const result = await client.start(
+      {
+        kernels: e.spice.snapshot(),
+        grid,
+        assets,
+        span,
+        step: opts.stepSec ?? 300,
+        minElevationRad: (opts.minElevationDeg ?? 5) * DEG2RAD,
+      },
+      (p) => {
+        if (!isDisposed()) {
+          store.setState((s) => ({ coverageSweep: reduceCoverageSweep(s.coverageSweep, p) }));
+        }
+      },
+    );
     if (isDisposed()) return;
     // Map every cell to the selected metric's [0, 1] colormap scalar (pure), so the contour
     // colors by the chosen metric and the legend (metric label + units) reads consistently.
@@ -1624,17 +1667,6 @@ export async function sweepCoverage(
       lonRad: c.lonRad,
       fom: scalars[i] ?? 0,
     }));
-    const radii = await e.spice.bodvrd(body, 'RADII').catch(() => [6378.137]);
-    if (isDisposed()) return;
-    const bodyRadiusKm = radii[0] && Number.isFinite(radii[0]) ? radii[0] : 6378.137;
-    const polarRadiusKm = radii[2] && Number.isFinite(radii[2]) ? radii[2] : bodyRadiusKm;
-    // Fail loud rather than drape the grid at the scene origin: the overlay is anchored by body
-    // name each frame, so an unresolved center body would silently sit at [0,0,0].
-    if (!e.table.byBody.has(body)) {
-      throw new CoverageOverlayError(
-        `center body "${body}" is not in the ephemeris table, so the overlay cannot be anchored`,
-      );
-    }
     e.scene.setCoverageOverlay({
       anchorBody: body,
       bodyRadiusKm,
@@ -1644,7 +1676,8 @@ export async function sweepCoverage(
       cells,
     });
     const summary = summarizeCoverage(result.cells, result.areaWeightedPercentCoverage, k);
-    store.setState({
+    store.setState((s) => ({
+      coverageSweep: reduceCoverageSweep(s.coverageSweep, { kind: 'result', cells: result.cells, areaWeightedPercentCoverage: result.areaWeightedPercentCoverage }),
       coverageGrid: {
         cellCount: cells.length,
         areaWeightedPercentCoverage: result.areaWeightedPercentCoverage,
@@ -1653,21 +1686,40 @@ export async function sweepCoverage(
         metric: { id: metric.id, label: metric.label, unit: metric.unit, nFoldK: k },
         summary,
       },
-    });
+    }));
   } catch (err) {
+    // A user cancel (terminated worker) is not a failure: reset the overlay + progress to idle.
+    if (err instanceof CoverageCancelled) {
+      if (!isDisposed()) {
+        e.scene.clearCoverageOverlay();
+        store.setState({ coverageGrid: null, coverageSweep: INITIAL_COVERAGE_SWEEP });
+      }
+      return;
+    }
     if (!isDisposed()) {
       e.scene.clearCoverageOverlay();
-      store.setState({ coverageGrid: null });
+      const message = err instanceof Error ? err.message : String(err);
+      store.setState((s) => ({
+        coverageGrid: null,
+        coverageSweep: reduceCoverageSweep(s.coverageSweep, { kind: 'error', message }),
+      }));
     }
     console.error('coverage sweep failed', err);
     throw err;
   }
 }
 
+/** [ux-p3-coverage] Cancel an in-flight coverage sweep: terminate the worker and reset the
+ *  progress slice to idle (mirrors cancelScreen). The draped overlay is left to clearCoverageGrid. */
+export function cancelCoverageSweep(store: AppStore, coverageRef: CoverageRef): void {
+  coverageRef.client?.cancel();
+  store.setState({ coverageSweep: INITIAL_COVERAGE_SWEEP });
+}
+
 /** Clear the draped coverage overlay and its summary readout. */
 export function clearCoverageGrid(e: EngineCore, store: AppStore): void {
   e.scene.clearCoverageOverlay();
-  store.setState({ coverageGrid: null });
+  store.setState({ coverageGrid: null, coverageSweep: INITIAL_COVERAGE_SWEEP });
 }
 
 // The Lighting & Geometry domain ops live in ops-lighting.ts (so the heavier beta +

@@ -1867,6 +1867,17 @@ button[aria-pressed='true'] {
   stroke-width: 1.5;
 }
 
+.bessel-groundtrack-point {
+  fill: var(--accent);
+}
+
+/* Ground-station overlay markers (Phase 3 selectable projections). */
+.bessel-groundtrack-station {
+  fill: var(--warning, #e0a030);
+  stroke: var(--bg-2);
+  stroke-width: 1;
+}
+
 /* Scripting console ------------------------------------------------------ */
 
 .bessel-script {
