@@ -128,15 +128,25 @@ export interface AppState {
   cameraMode: 'orbit' | 'sync' | 'free' | 'frame';
   /** The SPICE frame the camera basis locks to in 'frame' mode (e.g. IAU_EARTH). */
   cameraFrame: string;
-  /** Eclipse (umbra) intervals from the last lighting analysis, with their span. */
-  eclipseUmbra: readonly (readonly [number, number])[] | null;
-  eclipseSpan: readonly [number, number] | null;
+  /** Full umbra/penumbra/annular/sunlit eclipse phases from the last eclipse run. */
+  eclipsePhases: EclipsePhasesResult | null;
+  /** Beta-angle season series (deg + eclipse-onset threshold) from the last beta run. */
+  betaSeries: BetaSeriesResult | null;
+  /** Solar-intensity (visible-disk fraction, 0..1) series from the last intensity run. */
+  solarIntensitySeries: Series | null;
   /** Range time series (spacecraft to center body) from the last range analysis. */
   rangeSeries: Series | null;
-  /** Line-of-sight access windows (spacecraft to the Sun) from the last access run. */
+  /** Access windows from the last access-stack run (the surviving intersection of the
+   *  enabled constraints). */
   accessResult: IntervalAnalysisResult | null;
-  /** Instrument-target-visibility windows (target within the nadir-pointed FOV). */
+  /** Per-constraint breakdown of the last access-stack run: each enabled constraint's
+   *  figure of merit run alone, so the panel shows how each narrowed the span. */
+  accessBreakdown: readonly AccessConstraintNote[] | null;
+  /** Instrument-target-visibility windows (target within the selected-pointing FOV, the
+   *  FOV-only geometry before the access constraints). */
   fovResult: IntervalAnalysisResult | null;
+  /** The post-constraint surviving in-FOV window (FOV intersected with the access stack). */
+  fovSurviving: IntervalAnalysisResult | null;
   /** Downlink Eb/N0 (dB) time series (spacecraft to Earth) from the last link run. */
   linkSeries: Series | null;
   /** The radio parameters the last link run used, for a reproducible CSV export. */
@@ -147,6 +157,9 @@ export interface AppState {
   screening: ScreeningState;
   /** Walker constellation summary from the last coverage/constellation run. */
   constellation: ConstellationResult | null;
+  /** The designed constellation as the swept ASSET SET (published SPK ids), or null until
+   *  a Walker design publishes its members. The coverage sweep reads this for its assets. */
+  designedConstellation: DesignedConstellation | null;
   /** Summary of the last coverage-grid overlay run (cell count + area-weighted FOM). */
   coverageGrid: CoverageGridResult | null;
   /** Eigen-axis slew angle (deg) over time from the last attitude run. */
@@ -234,6 +247,13 @@ export interface AccessFom {
   readonly maxGapSec: number;
 }
 
+/** One member of an access-stack breakdown: a constraint's label and the figure of merit it
+ *  admits run alone over the span, so the panel can show how much each constraint narrows. */
+export interface AccessConstraintNote {
+  readonly label: string;
+  readonly fom: AccessFom;
+}
+
 export interface ConjunctionResult {
   /** Time of closest approach relative to the current epoch (s). */
   readonly tcaSec: number;
@@ -268,6 +288,42 @@ export interface ConstellationResult {
   readonly altitudeKm: number;
 }
 
+/** A designed Walker constellation surfaced as the swept ASSET SET: the published SPK
+ *  asset ids the coverage sweep runs over, plus the structure for the rings/readout. The
+ *  constellation designer FEEDS the sweep through this slice (design section 4, coverage
+ *  planner: "renders as rings AND becomes the asset set"). */
+export interface DesignedConstellation {
+  /** The published asset SPK ids (one per Walker satellite) the sweep covers over. */
+  readonly assetIds: readonly string[];
+  readonly totalSats: number;
+  readonly planes: number;
+  readonly perPlane: number;
+}
+
+/** The selected figure-of-merit metric a coverage contour colors by (id + display). */
+export interface CoverageMetricSelection {
+  /** Metric id (matches the coverage-metric registry; kept as a string for the store). */
+  readonly id: string;
+  readonly label: string;
+  /** Legend unit string (e.g. "%", "min"). */
+  readonly unit: string;
+  /** N-fold order k the metric/summary was computed for. */
+  readonly nFoldK: number;
+}
+
+/** The regional aggregate FOM summary surfaced as a table + CSV (mirrors CoverageFomSummary). */
+export interface CoverageFomSummaryState {
+  readonly cellCount: number;
+  readonly areaWeightedPercentCoverage: number;
+  readonly minPercentCoverage: number;
+  readonly meanPercentCoverage: number;
+  readonly maxPercentCoverage: number;
+  readonly worstRevisitMaxSec: number;
+  readonly worstResponseTimeSec: number | null;
+  readonly nFoldCellFraction: number;
+  readonly nFoldK: number;
+}
+
 /** Summary of a coverage-grid overlay run (the overlay itself lives in the scene). */
 export interface CoverageGridResult {
   /** Number of swept grid cells draped on the globe. */
@@ -275,6 +331,12 @@ export interface CoverageGridResult {
   /** Area-weighted mean percent coverage across the grid, in [0, 1]. */
   readonly areaWeightedPercentCoverage: number;
   readonly label: string;
+  /** The number of assets swept (the designed asset set size, or 1 for the single asset). */
+  readonly assetCount: number;
+  /** The metric the contour colored by (legend name + units), present on a sweep run. */
+  readonly metric: CoverageMetricSelection | null;
+  /** The regional aggregate FOM summary (the FOM table + CSV source), or null. */
+  readonly summary: CoverageFomSummaryState | null;
 }
 
 export interface TransferResult {
@@ -292,6 +354,28 @@ export interface GroundTrack {
   readonly lon: Float64Array;
   readonly lat: Float64Array;
   readonly label: string;
+}
+
+/** Beta-angle season series (deg over the span) plus the body's eclipse-onset
+ *  threshold: the satellite is in eclipse season while |beta| < onsetDeg. */
+export interface BetaSeriesResult {
+  /** Beta angle (deg) over time; et aligned to valueDeg. */
+  readonly series: Series;
+  /** Eclipse-onset half-angle (deg): |beta| below this puts the orbit in eclipse season. */
+  readonly onsetDeg: number;
+  readonly span: readonly [number, number];
+}
+
+/** Full eclipse phase windows over a span: the four mutually exclusive conditions
+ *  (umbra/penumbra/annular/sunlit) plus the total per-day shadowed duration. */
+export interface EclipsePhasesResult {
+  readonly umbra: readonly (readonly [number, number])[];
+  readonly penumbra: readonly (readonly [number, number])[];
+  readonly annular: readonly (readonly [number, number])[];
+  readonly sunlit: readonly (readonly [number, number])[];
+  readonly span: readonly [number, number];
+  /** Total shadowed (umbra + penumbra + annular) seconds per mean day over the span. */
+  readonly shadowSecPerDay: number;
 }
 
 export interface ReportResult {
@@ -411,16 +495,20 @@ export const initialAppState: AppState = {
   track: false,
   cameraMode: 'orbit',
   cameraFrame: 'IAU_EARTH',
-  eclipseUmbra: null,
-  eclipseSpan: null,
+  eclipsePhases: null,
+  betaSeries: null,
+  solarIntensitySeries: null,
   rangeSeries: null,
   accessResult: null,
+  accessBreakdown: null,
   fovResult: null,
+  fovSurviving: null,
   linkSeries: null,
   linkParams: null,
   conjunction: null,
   screening: INITIAL_SCREENING,
   constellation: null,
+  designedConstellation: null,
   coverageGrid: null,
   slewSeries: null,
   transfer: null,

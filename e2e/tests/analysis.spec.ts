@@ -24,9 +24,13 @@ test('lighting analysis computes and renders eclipse intervals', async ({ page }
   await expandCard(page, 'eclipse');
   await page.getByTestId('compute-eclipse').click();
 
-  // The result (umbra Gantt) appears, with an interval count rendered.
-  await expect(page.getByTestId('eclipse-timeline')).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByTestId('interval-count')).toContainText('interval');
+  // The full-phase result appears: the umbra Gantt (one of the four stacked phase
+  // timelines) with an interval count, plus the per-day shadowed-duration readout.
+  await expect(page.getByTestId('eclipse-umbra-timeline')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('eclipse-penumbra-timeline')).toBeVisible();
+  await expect(page.getByTestId('eclipse-sunlit-timeline')).toBeVisible();
+  await expect(page.getByTestId('eclipse-umbra-timeline').getByTestId('interval-count')).toContainText('interval');
+  await expect(page.getByTestId('eclipse-duration')).toContainText('min/day');
 
   // The range analysis plots the spacecraft-to-center-body distance as a
   // time-series polyline (the second charting primitive, batched spkpos path).
@@ -51,17 +55,21 @@ test('lighting analysis computes and renders eclipse intervals', async ({ page }
   expect(clip).toMatch(/\d/);
   await page.getByTestId('range-result-precision').selectOption('3');
 
-  // The access analysis (Access & Comms tab) finds line-of-sight visibility windows
-  // (spacecraft to the Sun, occulted by the center body) through the geometry-finder.
+  // The access analysis (Access & Comms tab) assembles a constraint stack (line-of-sight on
+  // by default) and finds the surviving spacecraft-to-target window through the geometry-finder.
   await openAnalyze(page, 'access-comms');
   await expandCard(page, 'access');
+  await expect(page.getByTestId('access-constraint-form')).toBeVisible();
+  await expect(page.getByTestId('constraint-los')).toBeChecked();
   await page.getByTestId('compute-access').click();
   await expect(page.getByTestId('access-timeline')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId('access-result').getByTestId('interval-count')).toContainText(
     'interval',
   );
-  // The access run also reduces the window to a figure of merit (@bessel/coverage).
+  // The access run also reduces the window to a figure of merit (@bessel/coverage) and shows a
+  // per-constraint breakdown of how each enabled constraint narrowed the span.
   await expect(page.getByTestId('access-fom')).toContainText('Coverage');
+  await expect(page.getByTestId('access-breakdown')).toBeVisible();
 
   // The communications analysis plots the downlink Eb/N0 to Earth, combining the
   // geometric range with the link-budget physics (@bessel/rf).
@@ -80,7 +88,9 @@ test('lighting analysis computes and renders eclipse intervals', async ({ page }
   await openAnalyze(page, 'coverage');
   await expandCard(page, 'constellation');
   await page.getByTestId('compute-constellation').click();
-  await expect(page.getByTestId('constellation-result')).toContainText('Walker');
+  // The design now publishes each Walker satellite as an SPK asset (the swept asset set),
+  // so allow for the lazy coverage-ops chunk + the per-satellite SPK writes.
+  await expect(page.getByTestId('constellation-result')).toContainText('Walker', { timeout: 20_000 });
 
   // Attitude slew (Orbit & Maneuver tab): an eigen-axis profile plotted over time.
   await openAnalyze(page, 'orbit-maneuver');
@@ -101,6 +111,19 @@ test('lighting analysis computes and renders eclipse intervals', async ({ page }
   await expect(page.getByTestId('ground-track')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId('ground-track').locator('polyline').first()).toBeVisible();
 
+  // Beta-angle season (Lighting & Geometry tab): the beta (deg) plot plus the
+  // eclipse-onset threshold readout.
+  await expandCard(page, 'beta');
+  await page.getByTestId('compute-beta').click();
+  await expect(page.getByTestId('beta-chart')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('beta-onset')).toContainText('Eclipse season');
+
+  // Solar intensity (Lighting & Geometry tab): the visible solar-disk fraction (0..1).
+  await expandCard(page, 'solar-intensity');
+  await page.getByTestId('compute-solar-intensity').click();
+  await expect(page.getByTestId('solar-intensity-chart')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('solar-intensity-hint')).toContainText('full sun');
+
   // Interop (Report & Compare tab): exporting the trajectory downloads a CCSDS OEM file.
   await openAnalyze(page, 'report-compare');
   await expandCard(page, 'export-oem');
@@ -116,13 +139,17 @@ test('the in-FOV tool computes instrument-target visibility windows', async ({ p
   await loadCassiniSample(page);
   await openAnalyze(page, 'access-comms');
 
-  // With the Cassini ISS sensor loaded, the in-FOV tool is enabled; running it
-  // reduces the nadir-pointed FOV sweep to a figure of merit and a located note.
+  // With the Cassini ISS sensor loaded, the in-FOV tool is enabled; the pointing mode is
+  // selectable (nadir | sun), and running it reports the FOV-only window AND the post-constraint
+  // surviving window, each reduced to a figure of merit and a located note.
   await expandCard(page, 'in-fov');
+  await expect(page.getByTestId('param-fov-pointing')).toBeVisible();
+  await page.getByTestId('param-fov-pointing').selectOption('sun');
   const fov = page.getByTestId('compute-fov');
   await expect(fov).toBeEnabled();
   await fov.click();
   await expect(page.getByTestId('fov-fom')).toContainText('In view', { timeout: 20_000 });
+  await expect(page.getByTestId('fov-surviving-fom')).toContainText('Surviving', { timeout: 20_000 });
   await expect(page.getByTestId('compute-fov-status')).toContainText('Done', { timeout: 20_000 });
 });
 

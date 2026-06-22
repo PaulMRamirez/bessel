@@ -5,10 +5,9 @@
 // the engine's core and store (plus a disposed guard and, for the propagator path, a small
 // mutable TLE-state ref) as parameters, so nothing here depends on the BesselEngine class.
 
-import { eclipseIntervals } from '@bessel/events';
-import { computeAccess, computeElevationAccess, type Facility } from '@bessel/access';
+import { computeElevationAccess, type Facility } from '@bessel/access';
 import { figureOfMerit, walkerConstellation, sweepCoverageGrid, type GridSpec } from '@bessel/coverage';
-import { CoverageOverlayError, type CoverageOverlayCell } from '@bessel/scene';
+import { CoverageOverlayError, type CoverageOverlayCell, type Km3 } from '@bessel/scene';
 import { windowIntersect } from '@bessel/timeline';
 import { linkBudget } from '@bessel/rf';
 import { closestApproachLinear, collisionProbability2D } from '@bessel/conjunction';
@@ -22,7 +21,18 @@ import {
   publishEphemeris,
   emptyTable,
   propagateCowell,
+  type ClassicalElements,
+  type EphemerisTable,
 } from '@bessel/propagator';
+import {
+  coverageMetric,
+  meanMotion,
+  metricScalars,
+  summarizeCoverage,
+  walkerSemiMajorAxisKm,
+  walkerStateAt,
+  type CoverageMetricId,
+} from './coverage-metric.ts';
 import { downloadBlob } from '@bessel/ui';
 import { describeProvider, type ProviderKind, type ProviderSpec, type SpiceEngine } from '@bessel/spice';
 import { SAMPLE_TLE } from '../sample-tle.ts';
@@ -37,14 +47,16 @@ import {
 } from './analysis-defaults.ts';
 export { DEFAULT_CONSTELLATION };
 export type { SlewPointing, ConstellationParams };
+// Re-export the per-domain Access-tab ops so the engine reaches them through this same lazy
+// chunk: a single dynamic-import boundary keeps one copy of the @bessel/access geometry-finder
+// reduction in the lazy analysis bundle instead of duplicating it across two chunks.
+export { computeAccessStack, computeFovWindows } from './ops-access.ts';
 import type { AppStore } from '../store/index.ts';
 import type { EngineCore } from './bootstrap.ts';
 import { buildHpopForceModel, HPOP_FORCE_MODEL_LABELS, type HpopForceModel } from './hpop-model.ts';
 import { runMcsDesign as runMcsDesignCore, type McsDesign } from './mcs.ts';
 import { runOdDemo } from './od.ts';
 import { centerMu } from './center-mu.ts';
-import { positionAt } from '../sampler.ts';
-import { fovHalfAngleRad, nadirOffAngleRad, intervalsFromFlags } from '../in-fov.ts';
 import { ScreeningClient, ScreeningCancelled } from '../screening-client.ts';
 import { buildSyntheticCatalog, SYNTHETIC_SCREEN_DEFAULTS } from '../synthetic-catalog.ts';
 import { reduceScreening, INITIAL_SCREENING } from '../screening-protocol.ts';
@@ -149,41 +161,6 @@ function providerFromConfig(cfg: ReportConfig): ProviderSpec {
 }
 
 /**
- * Lighting analysis: compute the spacecraft's umbra (total-shadow) intervals over
- * one day from the current epoch, occulted by the mission center body, and store
- * them for the analysis panel. Requires a loaded spacecraft mission.
- */
-export async function computeEclipse(
-  e: EngineCore,
-  store: AppStore,
-  isDisposed: () => boolean,
-  opts: AnalysisSpan = {},
-): Promise<void> {
-  const sc = e.identity.spacecraftName;
-  const body = e.identity.centerBody;
-  if (!sc || !body) {
-    store.setState({ eclipseUmbra: [], eclipseSpan: null });
-    return;
-  }
-  const t0 = e.clock.state.et;
-  const span: [number, number] = [t0, t0 + (opts.spanSec ?? 86400)];
-  try {
-    const ecl = await eclipseIntervals(e.spice, {
-      observer: sc,
-      body,
-      bodyFrame: `IAU_${body.toUpperCase()}`,
-      span,
-      step: opts.stepSec ?? 120,
-    });
-    if (!isDisposed()) store.setState({ eclipseUmbra: ecl.umbra, eclipseSpan: span });
-  } catch (err) {
-    if (!isDisposed()) store.setState({ eclipseUmbra: [], eclipseSpan: span });
-    console.error('eclipse analysis failed', err);
-    throw err;
-  }
-}
-
-/**
  * Range analysis: sample the spacecraft-to-center-body distance (km) over one day
  * from the current epoch and store it as a time series for the analysis chart.
  * Uses the batched spkpos path (one worker round-trip for all samples). Requires a
@@ -272,129 +249,10 @@ export async function computeLinkBudget(
   }
 }
 
-/**
- * Access analysis: line-of-sight visibility windows from the spacecraft to the Sun
- * over one day, occulted by the mission center body (a true STK-style access run
- * through @bessel/access, the geometry-finder + window-algebra path). The result is
- * the sunlit window; its complement is the eclipse. Requires a spacecraft mission.
- */
-export async function computeAccessTool(
-  e: EngineCore,
-  store: AppStore,
-  isDisposed: () => boolean,
-  opts: AnalysisTargetSpan = {},
-): Promise<void> {
-  const sc = e.identity.spacecraftName;
-  const body = e.identity.centerBody;
-  if (!sc || !body) {
-    store.setState({ accessResult: null });
-    return;
-  }
-  const target = opts.target ?? 'SUN';
-  const t0 = e.clock.state.et;
-  const span: [number, number] = [t0, t0 + (opts.spanSec ?? 86400)];
-  try {
-    const window = await computeAccess(e.spice, {
-      observer: sc,
-      target,
-      span,
-      step: opts.stepSec ?? 120,
-      constraints: [{ kind: 'lineOfSight', body, bodyFrame: `IAU_${body.toUpperCase()}` }],
-    });
-    // Reduce the access window to a figure of merit (@bessel/coverage): the
-    // fraction of the span with line of sight, the access count, and the worst gap.
-    const fom = figureOfMerit(window, span);
-    if (!isDisposed()) {
-      store.setState({
-        accessResult: {
-          window,
-          span,
-          label: `${sc} to ${target}`,
-          fom: {
-            percentCoverage: fom.percentCoverage,
-            accessCount: fom.accessCount,
-            maxGapSec: fom.maxGapSec,
-          },
-        },
-      });
-    }
-  } catch (err) {
-    if (!isDisposed()) store.setState({ accessResult: null });
-    console.error('access analysis failed', err);
-    throw err;
-  }
-}
-
-/**
- * Instrument-target-visibility windows (B22): when a target body falls within the
- * active instrument's field of view, modeling the sensor as nadir-pointed (boresight
- * toward the center body). The FOV half-angle is read from the loaded sensor's
- * boundary rays; a target is in view when its off-boresight angle is within it. The
- * sweep uses the sampled ephemeris table (no extra worker round-trips), so it reuses
- * the same positions the frame loop already holds.
- */
-export async function computeInstrumentFovWindows(
-  e: EngineCore,
-  store: AppStore,
-  isDisposed: () => boolean,
-  opts: AnalysisTargetSpan = {},
-): Promise<void> {
-  const inst = e.instrument;
-  const sc = e.identity.spacecraftName;
-  const center = e.identity.centerBody;
-  const target = opts.target ?? 'Sun';
-  if (
-    !inst ||
-    !sc ||
-    !center ||
-    !e.table.byBody.has(target) ||
-    !e.table.byBody.has(sc) ||
-    !e.table.byBody.has(center)
-  ) {
-    store.setState({ fovResult: null });
-    return;
-  }
-  // Clamp the sweep to the sampled ephemeris window: positionAt clamps out-of-range
-  // epochs to the table edge, so a span running past the data would freeze every body
-  // and fabricate a static in/out result rather than reflecting real geometry.
-  const t0 = e.clock.state.et;
-  const span: [number, number] = [t0, Math.min(t0 + (opts.spanSec ?? 86400), e.table.et1)];
-  const step = opts.stepSec ?? 120;
-  try {
-    const halfAngle = fovHalfAngleRad(inst.fov.boresight, inst.fov.bounds);
-    const times: number[] = [];
-    const flags: boolean[] = [];
-    for (let t = span[0]; t <= span[1]; t += step) {
-      const off = nadirOffAngleRad(
-        positionAt(e.table, sc, t),
-        positionAt(e.table, center, t),
-        positionAt(e.table, target, t),
-      );
-      times.push(t);
-      flags.push(off <= halfAngle);
-    }
-    const window = intervalsFromFlags(times, flags);
-    const fom = figureOfMerit(window, span);
-    if (!isDisposed()) {
-      store.setState({
-        fovResult: {
-          window,
-          span,
-          label: `${inst.descriptor.name} sees ${target}`,
-          fom: {
-            percentCoverage: fom.percentCoverage,
-            accessCount: fom.accessCount,
-            maxGapSec: fom.maxGapSec,
-          },
-        },
-      });
-    }
-  } catch (err) {
-    if (!isDisposed()) store.setState({ fovResult: null });
-    console.error('instrument FOV analysis failed', err);
-    throw err;
-  }
-}
+// The line-of-sight access run and the nadir-pointed in-FOV sweep moved to the per-domain
+// ops-access.ts (analysis-UX Phase 1), where they are generalized to a composable constraint
+// stack and a selectable boresight pointing mode. Keeping them out of this module also keeps a
+// second copy of the @bessel/access geometry-finder reduction out of this chunk.
 
 /**
  * Conjunction analysis: rectilinear closest approach of the center body relative to
@@ -513,36 +371,6 @@ export function cancelScreen(store: AppStore, ref: ScreeningRef): void {
   store.setState((s) => ({ screening: reduceScreening(s.screening, { kind: 'cancel' }) }));
 }
 
-/**
- * Constellation design: generate a Walker Delta 24/3/1 LEO pattern (@bessel/
- * coverage) and report its structure. Pure (element-set generation); independent of
- * the loaded mission, surfacing the constellation designer.
- */
-export function computeConstellation(store: AppStore, params: ConstellationParams = DEFAULT_CONSTELLATION): void {
-  const { totalSats, planes, phasing, inclinationDeg, altitudeKm, pattern } = params;
-  const a = 6378.137 + altitudeKm;
-  const sats = walkerConstellation({
-    a,
-    e: 0,
-    i: inclinationDeg * DEG2RAD,
-    argp: 0,
-    totalSats,
-    planes,
-    phasing,
-    pattern,
-  });
-  store.setState({
-    constellation: {
-      totalSats: sats.length,
-      planes,
-      perPlane: sats.length / planes,
-      pattern,
-      phasing,
-      inclinationDeg,
-      altitudeKm,
-    },
-  });
-}
 
 /**
  * Attitude analysis: an eigen-axis slew from a nadir-pointing to a sun-pointing
@@ -1031,30 +859,173 @@ export async function runReport(
   }
 }
 
-// Default global coverage grid resolution: coarse enough to stay responsive (one
-// elevation-access sweep per cell) while reading as a contoured overlay on the globe.
-const COVERAGE_LAT_COUNT = 9;
-const COVERAGE_LON_COUNT = 18;
-const HALF_PI = Math.PI / 2;
+// COVERAGE & CONSTELLATION: the connected Walker -> sweep -> metric-aware contour workflow.
+// designConstellation generates a Walker element set, publishes each satellite as an SPK ASSET
+// (analytic circular two-body states, one SPK write per satellite, no per-epoch worker calls),
+// renders one orbit ring per plane (camera-relative, @bessel/scene stays SPICE-free), and stores
+// the asset id set the sweep reads. sweepCoverage sweeps that asset set over a configurable grid
+// and colors the draped overlay by the SELECTED figure-of-merit metric, writing the regional FOM
+// summary. Kept in this lazy chunk (alongside the other analysis ops) so the heavy @bessel work
+// stays behind the engine's dynamic-import seam and the deps are shared, not fragmented.
+
+const EARTH_NAIF = 399;
+// Color palette for the per-plane orbit rings (cycled by plane index).
+const RING_COLORS = [0x33ccff, 0xffaa33, 0x66ff99, 0xff66cc, 0xffff66, 0x99aaff] as const;
+
+/** The most recently designed constellation: a sequence counter so each design run gets fresh
+ *  asset SPK ids, and the published asset id list the sweep covers over. A mutable ref on the
+ *  engine so the design and sweep ops share it across separate dynamic-import calls. */
+export interface ConstellationRef {
+  seq: number;
+  assetIds: string[];
+}
+
+/** The coverage sweep settings the panel form drives (grid resolution, region, metric, k). */
+export interface CoverageSweepOpts {
+  readonly spanSec?: number;
+  readonly stepSec?: number;
+  /** Grid resolution: latitude rows and longitude columns. */
+  readonly latCount?: number;
+  readonly lonCount?: number;
+  /** Region bounds (degrees); default global. */
+  readonly latMinDeg?: number;
+  readonly latMaxDeg?: number;
+  readonly lonMinDeg?: number;
+  readonly lonMaxDeg?: number;
+  /** The figure-of-merit metric to color the contour by. */
+  readonly metric?: CoverageMetricId;
+  /** The N-fold order k (>= k simultaneous assets), 1-based. */
+  readonly nFoldK?: number;
+  /** Minimum elevation mask (degrees) for a cell to see an asset. */
+  readonly minElevationDeg?: number;
+}
 
 /**
- * Coverage-grid overlay: sweep a global lat/lon figure-of-merit grid for the loaded
- * spacecraft over the mission center body (@bessel/coverage sweepCoverageGrid, which
- * reuses the @bessel/access elevation engine per cell), reduce each cell's FOM to the
- * 0..1 percentCoverage scalar, and drape it on the globe as a colored overlay
- * (scene.setCoverageOverlay, camera-relative). The heavy sweep + overlay build run only
- * here, behind the engine's dynamic-import boundary, so the first-paint shell is
- * unaffected. Requires a spacecraft mission; a no-op (clears the overlay) otherwise.
+ * Build a circular two-body ephemeris table for one Walker satellite over an ET grid,
+ * analytically (no SPICE round-trip per epoch): for e = 0 the satellite moves at constant
+ * radius a and angular rate n = sqrt(mu / a^3), so the perifocal position/velocity is a
+ * rotating constant-magnitude vector, rotated into J2000 by the inclination then RAAN. This
+ * keeps publishing the whole asset set to one SPK write per satellite. Pure (delegates the
+ * rotation to the tested walkerStateAt kernel).
  */
-export async function computeCoverageGrid(
+function walkerSatTable(el: ClassicalElements, mu: number, etGrid: Float64Array): EphemerisTable {
+  const table = emptyTable('J2000', etGrid);
+  const n = meanMotion(el.a, mu); // e = 0, so the mean motion is the true angular rate
+  const x = table.x as Float64Array;
+  const y = table.y as Float64Array;
+  const z = table.z as Float64Array;
+  const vx = table.vx as Float64Array;
+  const vy = table.vy as Float64Array;
+  const vz = table.vz as Float64Array;
+  for (let k = 0; k < etGrid.length; k++) {
+    const { pos, vel } = walkerStateAt(el, n, el.m0 + el.argp + n * (etGrid[k]! - el.epoch));
+    x[k] = pos[0];
+    y[k] = pos[1];
+    z[k] = pos[2];
+    vx[k] = vel[0];
+    vy[k] = vel[1];
+    vz[k] = vel[2];
+  }
+  return table;
+}
+
+/**
+ * Design a Walker constellation AND make it the swept asset set: generate the T/P/F element
+ * set, publish each satellite as an in-memory SPK segment (a queryable asset, the same path as
+ * TLE propagation), render one orbit ring per plane in the scene (camera-relative), and store
+ * the asset id set + structure. The designed members then feed the coverage sweep through the
+ * store. Earth-centered; fails loud on a non-buildable T/P (walkerConstellation throws).
+ */
+export async function designConstellation(
   e: EngineCore,
   store: AppStore,
   isDisposed: () => boolean,
-  opts: AnalysisSpan = {},
+  ref: ConstellationRef,
+  params: ConstellationParams,
 ): Promise<void> {
-  const sc = e.identity.spacecraftName;
-  const body = e.identity.centerBody;
-  if (!sc || !body) {
+  const { totalSats, planes, phasing, inclinationDeg, altitudeKm, pattern } = params;
+  const a = walkerSemiMajorAxisKm(altitudeKm);
+  const epoch = e.clock.state.et;
+  const elements: ClassicalElements[] = walkerConstellation({
+    a,
+    e: 0,
+    i: inclinationDeg * DEG2RAD,
+    argp: 0,
+    totalSats,
+    planes,
+    phasing,
+    pattern,
+    epoch,
+  });
+  try {
+    // Publish each satellite as an SPK over a day-long arc so the sweep can query it; states
+    // are analytic (circular two-body), so the only worker round-trip is one SPK write per sat.
+    const step = 120; // dense enough for the Type-13 Hermite fit of a ~90 min LEO orbit
+    const n = Math.floor(86400 / step) + 1;
+    const et = new Float64Array(n);
+    for (let i = 0; i < n; i++) et[i] = epoch + i * step;
+    const design = ++ref.seq;
+    const assetIds: string[] = [];
+    for (let s = 0; s < elements.length; s++) {
+      if (isDisposed()) return;
+      const bodyId = -(970000 + design * 1000 + s);
+      const table = walkerSatTable(elements[s]!, EARTH_GM, et);
+      await publishEphemeris(e.spice, table, {
+        name: `walker${design}_${s}.bsp`,
+        body: bodyId,
+        center: EARTH_NAIF,
+        degree: 7,
+      });
+      assetIds.push(String(bodyId));
+    }
+    if (isDisposed()) return;
+    ref.assetIds = assetIds;
+    // One camera-relative orbit ring per plane: a full revolution of the first satellite in
+    // each plane, sampled from the shared circular state kernel (all sats in a plane share it).
+    const perPlaneCount = Math.max(1, Math.floor(elements.length / planes));
+    const ringSamples = 96;
+    const orbits = [];
+    for (let p = 0; p < planes; p++) {
+      const el = elements[p * perPlaneCount];
+      if (!el) continue;
+      const points: Km3[] = [];
+      for (let r = 0; r <= ringSamples; r++) {
+        points.push(walkerStateAt(el, 0, (2 * Math.PI * r) / ringSamples).pos);
+      }
+      orbits.push({ id: `walker-plane-${p}`, anchorBody: 'Earth', points, color: RING_COLORS[p % RING_COLORS.length]! });
+    }
+    e.scene.setOrbits(orbits);
+    const perPlane = elements.length / planes;
+    store.setState({
+      constellation: { totalSats: elements.length, planes, perPlane, pattern, phasing, inclinationDeg, altitudeKm },
+      designedConstellation: { assetIds, totalSats: elements.length, planes, perPlane },
+    });
+  } catch (err) {
+    if (!isDisposed()) store.setState({ designedConstellation: null });
+    console.error('constellation design failed', err);
+    throw err;
+  }
+}
+
+/**
+ * Sweep the coverage grid over the designed asset set (or the loaded spacecraft when no
+ * constellation has been designed), color the draped overlay by the SELECTED figure-of-merit
+ * metric (not just percentCoverage), and write the regional FOM summary. The grid resolution
+ * and region come from the form; the metric->[0,1] colormap mapping is the pure metricScalars.
+ * Requires a center body in the ephemeris table to anchor the overlay (fails loud otherwise).
+ */
+export async function sweepCoverage(
+  e: EngineCore,
+  store: AppStore,
+  isDisposed: () => boolean,
+  ref: ConstellationRef,
+  opts: CoverageSweepOpts = {},
+): Promise<void> {
+  const body = e.identity.centerBody ?? 'EARTH';
+  // The asset set: the designed constellation members, else the loaded spacecraft.
+  const assets =
+    ref.assetIds.length > 0 ? ref.assetIds : e.identity.spacecraftName ? [e.identity.spacecraftName] : [];
+  if (assets.length === 0) {
     e.scene.clearCoverageOverlay();
     store.setState({ coverageGrid: null });
     return;
@@ -1062,40 +1033,41 @@ export async function computeCoverageGrid(
   const bodyFrame = `IAU_${body.toUpperCase()}`;
   const t0 = e.clock.state.et;
   const span: [number, number] = [t0, t0 + (opts.spanSec ?? 86400)];
+  const metric = coverageMetric(opts.metric ?? 'percentCoverage');
+  const k = Math.max(1, Math.floor(opts.nFoldK ?? 1));
   const grid: GridSpec = {
     body,
     bodyFrame,
-    latMin: -HALF_PI * 0.94,
-    latMax: HALF_PI * 0.94,
-    latCount: COVERAGE_LAT_COUNT,
-    lonMin: -Math.PI,
-    lonMax: Math.PI,
-    lonCount: COVERAGE_LON_COUNT,
+    latMin: (opts.latMinDeg ?? -85) * DEG2RAD,
+    latMax: (opts.latMaxDeg ?? 85) * DEG2RAD,
+    latCount: Math.max(1, Math.floor(opts.latCount ?? 9)),
+    lonMin: (opts.lonMinDeg ?? -180) * DEG2RAD,
+    lonMax: (opts.lonMaxDeg ?? 180) * DEG2RAD,
+    lonCount: Math.max(1, Math.floor(opts.lonCount ?? 18)),
   };
   try {
     const result = await sweepCoverageGrid(e.spice, {
       grid,
-      assets: [sc],
+      assets,
       span,
       step: opts.stepSec ?? 300,
-      minElevationRad: 5 * DEG2RAD,
+      minElevationRad: (opts.minElevationDeg ?? 5) * DEG2RAD,
     });
     if (isDisposed()) return;
-    // Reduce each cell to the 0..1 scalar the overlay colors by (percentCoverage).
-    const cells: CoverageOverlayCell[] = result.cells.map((c) => ({
+    // Map every cell to the selected metric's [0, 1] colormap scalar (pure), so the contour
+    // colors by the chosen metric and the legend (metric label + units) reads consistently.
+    const scalars = metricScalars(result.cells, metric, k);
+    const cells: CoverageOverlayCell[] = result.cells.map((c, i) => ({
       latRad: c.latRad,
       lonRad: c.lonRad,
-      fom: c.fom.percentCoverage,
+      fom: scalars[i] ?? 0,
     }));
     const radii = await e.spice.bodvrd(body, 'RADII').catch(() => [6378.137]);
     if (isDisposed()) return;
     const bodyRadiusKm = radii[0] && Number.isFinite(radii[0]) ? radii[0] : 6378.137;
-    // RADII is [a, b, c]; the polar (c) radius drapes the overlay on the (a, a, c) ellipsoid so
-    // an oblate body's pole cells do not detach. Fall back to the equatorial radius (a sphere).
     const polarRadiusKm = radii[2] && Number.isFinite(radii[2]) ? radii[2] : bodyRadiusKm;
-    // Fail loud rather than render the overlay at the scene origin: the overlay is anchored by
-    // body name each frame (positions.get(anchorBody) ?? [0,0,0]), so an unresolved center body
-    // would silently drape the grid at [0,0,0]. The ephemeris table is the scene's anchor set.
+    // Fail loud rather than drape the grid at the scene origin: the overlay is anchored by body
+    // name each frame, so an unresolved center body would silently sit at [0,0,0].
     if (!e.table.byBody.has(body)) {
       throw new CoverageOverlayError(
         `center body "${body}" is not in the ephemeris table, so the overlay cannot be anchored`,
@@ -1109,11 +1081,15 @@ export async function computeCoverageGrid(
       lonCount: grid.lonCount,
       cells,
     });
+    const summary = summarizeCoverage(result.cells, result.areaWeightedPercentCoverage, k);
     store.setState({
       coverageGrid: {
         cellCount: cells.length,
         areaWeightedPercentCoverage: result.areaWeightedPercentCoverage,
-        label: `${sc} over ${body}`,
+        label: `${assets.length} asset${assets.length === 1 ? '' : 's'} over ${body}`,
+        assetCount: assets.length,
+        metric: { id: metric.id, label: metric.label, unit: metric.unit, nFoldK: k },
+        summary,
       },
     });
   } catch (err) {
@@ -1121,7 +1097,7 @@ export async function computeCoverageGrid(
       e.scene.clearCoverageOverlay();
       store.setState({ coverageGrid: null });
     }
-    console.error('coverage grid sweep failed', err);
+    console.error('coverage sweep failed', err);
     throw err;
   }
 }
@@ -1131,3 +1107,10 @@ export function clearCoverageGrid(e: EngineCore, store: AppStore): void {
   e.scene.clearCoverageOverlay();
   store.setState({ coverageGrid: null });
 }
+
+// The Lighting & Geometry domain ops live in ops-lighting.ts (so the heavier beta +
+// intensity @bessel/events paths do not bloat this source file), but are re-exported
+// here so the engine's lazy `import('./analysis-ops.ts')` seam pulls them into this same
+// analysis chunk: that shares the @bessel/events + @bessel/timeline + @bessel/spice
+// substrate with the eclipse/access ops instead of duplicating it in a second chunk.
+export { computeBetaSeries, computeEclipsePhases, computeSolarIntensity } from './ops-lighting.ts';

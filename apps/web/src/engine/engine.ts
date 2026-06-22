@@ -59,6 +59,7 @@ import {
   type AnalyzeTab,
   type RunStatus,
 } from '../store/index.ts';
+import type { AccessConstraintSpec, FovPointingMode } from './analysis-defaults.ts';
 import { bootScene, loadInstrument, type EngineCore } from './bootstrap.ts';
 import { applyViewModel } from './apply-view.ts';
 import { type HpopForceModel } from './hpop-model.ts';
@@ -73,6 +74,8 @@ import type {
   ReportConfig,
   TleState,
   ScreeningRef,
+  ConstellationRef,
+  CoverageSweepOpts,
 } from './analysis-ops.ts';
 
 // True when two optional angles are equal or both absent (within tolerance).
@@ -126,6 +129,7 @@ export type {
   ConstellationParams,
   SlewOpts,
   ReportConfig,
+  CoverageSweepOpts,
 } from './analysis-ops.ts';
 
 /** The outcome of a share/copy action: the link, and whether it reached the clipboard. */
@@ -207,6 +211,10 @@ export class BesselEngine {
   // (inside the dynamic-import op so the worker chunk stays off the first-paint shell) and
   // reused/cancelled across runs. A mutable ref so the lazily-imported screening ops own it.
   private readonly screeningRef: ScreeningRef = { client: null };
+  // The designed-constellation sequence + published asset SPK ids, shared by the (lazily
+  // imported) coverage ops so the Walker design FEEDS the sweep across separate dynamic-import
+  // calls: designConstellation publishes the asset set into it; sweepCoverage reads it.
+  private readonly constellationRef: ConstellationRef = { seq: 0, assetIds: [] };
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -755,13 +763,36 @@ export class BesselEngine {
     this.store.setState({ keptSnapshots: [] });
   }
 
-  /** Lighting analysis: the spacecraft's umbra intervals over a day. */
+  /** Lighting analysis: the spacecraft's full umbra/penumbra/annular/sunlit eclipse
+   *  phases over a day (the lighting ops load with the lazy analysis chunk). */
   async computeEclipse(opts: AnalysisSpan = {}): Promise<void> {
     const e = this.core;
     if (!e) return;
     await this.runTool('compute-eclipse', async () => {
       const ops = await import('./analysis-ops.ts');
-      await ops.computeEclipse(e, this.store, this.isDisposed, opts);
+      await ops.computeEclipsePhases(e, this.store, this.isDisposed, opts);
+    });
+  }
+
+  /** Beta-angle season analysis: the solar beta angle (deg) over the span plus the
+   *  body's eclipse-onset threshold (lighting ops load with the lazy analysis chunk). */
+  async computeBetaSeries(opts: AnalysisSpan = {}): Promise<void> {
+    const e = this.core;
+    if (!e) return;
+    await this.runTool('compute-beta', async () => {
+      const ops = await import('./analysis-ops.ts');
+      await ops.computeBetaSeries(e, this.store, this.isDisposed, opts);
+    });
+  }
+
+  /** Solar-intensity analysis: the visible solar-disk fraction (0..1) over the span
+   *  (lighting ops load with the lazy analysis chunk). */
+  async computeSolarIntensity(opts: AnalysisSpan = {}): Promise<void> {
+    const e = this.core;
+    if (!e) return;
+    await this.runTool('compute-solar-intensity', async () => {
+      const ops = await import('./analysis-ops.ts');
+      await ops.computeSolarIntensity(e, this.store, this.isDisposed, opts);
     });
   }
 
@@ -785,24 +816,32 @@ export class BesselEngine {
     });
   }
 
-  /** Access analysis: line-of-sight windows from the spacecraft to a target over a day. */
-  async computeAccess(opts: AnalysisTargetSpan = {}): Promise<void> {
+  /** Composable access stack: run the assembled constraint array (line-of-sight, range,
+   *  range-rate, sun keep-out) and store the surviving window plus a per-constraint breakdown. */
+  async computeAccessStack(
+    spec: AccessConstraintSpec,
+    opts: AnalysisTargetSpan = {},
+  ): Promise<void> {
     const e = this.core;
     if (!e) return;
     await this.runTool('compute-access', async () => {
       const ops = await import('./analysis-ops.ts');
-      await ops.computeAccessTool(e, this.store, this.isDisposed, opts);
+      await ops.computeAccessStack(e, this.store, this.isDisposed, spec, opts.target, opts);
     });
   }
 
-  /** Instrument-target visibility: windows when a target is within the active sensor's
-   *  nadir-pointed field of view over a day. */
-  async computeInstrumentFov(opts: AnalysisTargetSpan = {}): Promise<void> {
+  /** Selectable-pointing in-FOV sweep: FOV-only windows plus the post-constraint surviving
+   *  window for the chosen boresight pointing mode (nadir or sun). */
+  async computeFovWindows(
+    pointing: FovPointingMode,
+    spec: AccessConstraintSpec,
+    opts: AnalysisTargetSpan = {},
+  ): Promise<void> {
     const e = this.core;
     if (!e) return;
     await this.runTool('compute-fov', async () => {
       const ops = await import('./analysis-ops.ts');
-      await ops.computeInstrumentFovWindows(e, this.store, this.isDisposed, opts);
+      await ops.computeFovWindows(e, this.store, this.isDisposed, pointing, spec, opts.target, opts);
     });
   }
 
@@ -835,22 +874,33 @@ export class BesselEngine {
     this.setRunStatus('screen-catalog', 'idle');
   }
 
-  /** Constellation design: a Walker pattern (mission-independent); defaults to 24/3/1 LEO. */
+  /** Constellation design: generate a Walker pattern, publish each satellite as an SPK
+   *  ASSET, and render one orbit ring per plane so the design FEEDS the coverage sweep.
+   *  The heavy propagation/publish loads with the lazy coverage ops. Defaults to 24/3/1 LEO. */
   async computeConstellation(params?: ConstellationParams): Promise<void> {
+    const e = this.core;
+    if (!e) return;
     await this.runTool('compute-constellation', async () => {
       const ops = await import('./analysis-ops.ts');
-      ops.computeConstellation(this.store, params ?? ops.DEFAULT_CONSTELLATION);
+      await ops.designConstellation(
+        e,
+        this.store,
+        this.isDisposed,
+        this.constellationRef,
+        params ?? ops.DEFAULT_CONSTELLATION,
+      );
     });
   }
 
-  /** Coverage-grid overlay: sweep a global FOM grid for the spacecraft and drape it on
-   *  the globe (camera-relative). The heavy sweep + overlay build load with the lazy ops. */
-  async computeCoverageGrid(opts: AnalysisSpan = {}): Promise<void> {
+  /** Coverage sweep: sweep the designed asset set (or the loaded spacecraft) over a
+   *  configurable grid, color the draped overlay by the SELECTED FOM metric (camera-relative),
+   *  and write the regional FOM summary. The heavy sweep + overlay build load with the lazy ops. */
+  async computeCoverageGrid(opts: CoverageSweepOpts = {}): Promise<void> {
     const e = this.core;
     if (!e) return;
     await this.runTool('compute-coverage-grid', async () => {
       const ops = await import('./analysis-ops.ts');
-      await ops.computeCoverageGrid(e, this.store, this.isDisposed, opts);
+      await ops.sweepCoverage(e, this.store, this.isDisposed, this.constellationRef, opts);
     });
   }
 

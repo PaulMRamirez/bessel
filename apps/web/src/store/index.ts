@@ -10,6 +10,7 @@ export {
   type AnalyzeTab,
   type KeptSnapshot,
   type AccessFom,
+  type AccessConstraintNote,
   type IntervalAnalysisResult,
   type AppState,
   type AppStore,
@@ -20,5 +21,11 @@ export {
   type OdResult,
   type Series,
   type LinkBudgetParams,
+  type BetaSeriesResult,
+  type EclipsePhasesResult,
+  type DesignedConstellation,
+  type CoverageGridResult,
+  type CoverageMetricSelection,
+  type CoverageFomSummaryState,
 } from './app-state.ts';
 export { useStore } from './use-store.ts';
