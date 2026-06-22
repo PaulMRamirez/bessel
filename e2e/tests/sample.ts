@@ -36,3 +36,12 @@ export async function openAnalyze(page: Page, tab: string): Promise<void> {
   }
   await page.getByTestId(`tab-${tab}`).click();
 }
+
+// In the re-slotted workbench each tool lives inside a collapsible TaskCard, and a
+// collapsed card does not render its body. Expand the named card before interacting with
+// its tool. Safe to call when already open: a TaskCard header toggle flips state, so this
+// clicks only when the card is collapsed (its body region is hidden).
+export async function expandCard(page: Page, id: string): Promise<void> {
+  const toggle = page.getByTestId(`taskcard-${id}-toggle`);
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+}

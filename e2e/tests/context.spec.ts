@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { loadCassiniSample, openAnalyze } from './sample.ts';
+import { loadCassiniSample, openAnalyze, expandCard } from './sample.ts';
 
 // The shared analysis context bar at the top of the Analyze dock drives every tab by
 // default: set the span and target once, and a tool run honors them without re-typing.
@@ -12,8 +12,8 @@ test('the shared context drives a tool by default, and the override reveals loca
   await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
   await loadCassiniSample(page);
 
-  await openAnalyze(page, 'access');
-  // The shared context bar is present and the Access tab uses it by default (its own
+  await openAnalyze(page, 'lighting-geometry');
+  // The shared context bar is present and the domain tab uses it by default (its own
   // span/target inputs are hidden behind the override).
   await expect(page.getByTestId('analysis-context-bar')).toBeVisible();
   await expect(page.getByTestId('analysis-shared-indicator')).toBeVisible();
@@ -24,7 +24,8 @@ test('the shared context drives a tool by default, and the override reveals loca
   await page.getByTestId('ctx-target').selectOption('Saturn');
   await expect(page.getByTestId('analysis-shared-indicator')).toContainText('Saturn');
 
-  // Running range from the Access tab honors the shared span/target (a polyline renders).
+  // Running range from this tab honors the shared span/target (a polyline renders).
+  await expandCard(page, 'range');
   await page.getByTestId('compute-range').click();
   await expect(page.getByTestId('range-chart').locator('polyline')).toHaveCount(1, {
     timeout: 20_000,

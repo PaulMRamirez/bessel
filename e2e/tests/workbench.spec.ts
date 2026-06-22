@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { loadCassiniSample, openAnalyze } from './sample.ts';
+import { loadCassiniSample, openAnalyze, expandCard } from './sample.ts';
 
 // The consolidated Analyze dock is pinnable: unlike the former popovers it stays
 // mounted and keeps its results across tab switches, canvas clicks, and timeline
@@ -13,16 +13,19 @@ test('the Analyze dock keeps results across tab switches, canvas clicks, and scr
   await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
   await loadCassiniSample(page);
 
-  // Compute an eclipse on the Access & Coverage tab.
-  await openAnalyze(page, 'access');
+  // Compute an eclipse on the Lighting & Geometry tab (expand its TaskCard first).
+  await openAnalyze(page, 'lighting-geometry');
+  await expandCard(page, 'eclipse');
   await page.getByTestId('compute-eclipse').click();
   await expect(page.getByTestId('eclipse-result')).toBeVisible({ timeout: 20_000 });
 
-  // Switch to another tab and back; the eclipse result is still there (read from the
-  // store, not recomputed).
-  await page.getByTestId('tab-od').click();
+  // Switch to another tab and back; the eclipse result is still in the store (it is not
+  // recomputed). The card collapses on the round trip (panel state resets), so re-expand
+  // it to confirm the result re-renders from state with no recompute.
+  await page.getByTestId('tab-conjunction').click();
   await expect(page.getByTestId('eclipse-result')).toHaveCount(0);
-  await page.getByTestId('tab-access').click();
+  await page.getByTestId('tab-lighting-geometry').click();
+  await expandCard(page, 'eclipse');
   await expect(page.getByTestId('eclipse-result')).toBeVisible();
 
   // Clicking the canvas and scrubbing the timeline do not dismiss the dock or its result.
@@ -39,4 +42,53 @@ test('the Analyze dock keeps results across tab switches, canvas clicks, and scr
   await expect(page.getByTestId('analyze-workbench')).toBeVisible();
   await page.getByTestId('analyze-close').click();
   await expect(page.getByTestId('analyze-workbench')).toHaveCount(0);
+});
+
+test('the workbench exposes the six intent-named domain tabs with keyboard arrow nav', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
+
+  // The dock opens on the default Orbit & Maneuver tab; all six domain tabs are present.
+  await openAnalyze(page, 'orbit-maneuver');
+  const tabs = [
+    'orbit-maneuver',
+    'lighting-geometry',
+    'access-comms',
+    'conjunction',
+    'coverage',
+    'report-compare',
+  ];
+  for (const id of tabs) {
+    await expect(page.getByTestId(`tab-${id}`)).toBeVisible();
+  }
+  await expect(page.getByTestId('tab-orbit-maneuver')).toHaveAttribute('aria-selected', 'true');
+
+  // Roving-tabindex arrow nav: focus the active tab, ArrowRight moves selection forward,
+  // ArrowLeft wraps back. role=tab/tablist/tabpanel machinery is preserved.
+  await page.getByTestId('tab-orbit-maneuver').focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByTestId('tab-lighting-geometry')).toHaveAttribute('aria-selected', 'true');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByTestId('tab-access-comms')).toHaveAttribute('aria-selected', 'true');
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.getByTestId('tab-lighting-geometry')).toHaveAttribute('aria-selected', 'true');
+});
+
+test('the AnalysisLauncher search jumps to the owning tab and expands the card', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
+  await loadCassiniSample(page);
+
+  // From any tab, searching an intent surfaces matching cards; selecting one switches to
+  // the owning tab and expands that card so its tool is ready to run.
+  await openAnalyze(page, 'orbit-maneuver');
+  await page.getByTestId('analysis-launcher').fill('eclipse');
+  await page.getByTestId('launcher-result-eclipse').click();
+  await expect(page.getByTestId('tab-lighting-geometry')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('taskcard-eclipse-toggle')).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByTestId('compute-eclipse')).toBeVisible();
 });

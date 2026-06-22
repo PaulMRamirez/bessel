@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { frameStats } from './frame-stats.ts';
-import { openAnalyze } from './sample.ts';
+import { openAnalyze, expandCard } from './sample.ts';
 
 // Track D (Cosmographia parity): real data-driven spacecraft attitude, SPICE-derived
 // timeline annotations, and an on-screen predicted-versus-actual telemetry overlay.
@@ -66,7 +66,8 @@ test('attitude is data-driven, annotations scrub, and the telemetry overlay rend
   // threshold, and a now-line. SVG primitives are asserted by attachment (a flat
   // polyline has a zero-height bounding box, which Playwright reports as hidden).
   await page.getByRole('button', { name: 'Play' }).click();
-  await openAnalyze(page, 'compare');
+  await openAnalyze(page, 'report-compare');
+  await expandCard(page, 'compare');
   await expect(page.getByTestId('telemetry-overlay')).toBeVisible({ timeout: 10_000 });
   await expect(page.getByTestId('telemetry-residual-line')).toBeAttached();
   await expect(page.getByTestId('telemetry-threshold-line')).toBeAttached();
@@ -90,8 +91,9 @@ test('attitude is data-driven, annotations scrub, and the telemetry overlay rend
   await page.getByTestId('theme-toggle').click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   // The Analyze dock does not auto-dismiss, so the Compare overlay is still mounted on
-  // the compare tab; ensure it is selected for the scoped scan.
-  await openAnalyze(page, 'compare');
+  // the Report & Compare tab; ensure it is selected and its card expanded for the scan.
+  await openAnalyze(page, 'report-compare');
+  await expandCard(page, 'compare');
   await expect(page.getByTestId('telemetry-overlay')).toBeVisible({ timeout: 10_000 });
   const lightResults = await new AxeBuilder({ page })
     .include('[data-testid="telemetry-overlay"]')

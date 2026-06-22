@@ -1,23 +1,27 @@
-// The consolidated analysis workbench: one pinnable, tabbed right-dock that replaces
-// the six former top-bar analysis popovers (Propagate, Mission Design, OD, Report,
-// Analysis, Telemetry). It fills the AppShell 'right' slot, so the canvas reclaims the
-// width when it is closed. Unlike a popover it does NOT auto-dismiss: results survive
-// canvas clicks, timeline scrubbing, and tab switches (each panel reads its result from
-// the store, so switching tabs re-renders from state with no recompute). Each tab body
-// stays lazy (panels/lazy.tsx), so the first-paint shell budget is unaffected.
+// The consolidated analysis workbench: one pinnable, tabbed right-dock that hosts the six
+// intent-named analysis domain tabs of the analysis-UX re-slot (design section 3): Orbit &
+// Maneuver (OD folded in), Lighting & Geometry, Access & Comms, Conjunction, Coverage &
+// Constellation, and the cross-cutting Report & Compare sink. It fills the AppShell 'right'
+// slot, so the canvas reclaims the width when it is closed. Unlike a popover it does NOT
+// auto-dismiss: results survive canvas clicks, timeline scrubbing, and tab switches (each
+// panel reads its result from the store, so switching tabs re-renders from state with no
+// recompute). Each tab body stays lazy (panels/lazy.tsx), so the first-paint shell budget
+// is unaffected. A top-of-dock AnalysisLauncher searches a static card registry and, on a
+// hit, switches to the owning tab and expands the card.
 
-import { useCallback, type KeyboardEvent } from 'react';
+import { useCallback, useState, type KeyboardEvent } from 'react';
 import { AnalysisContextBar } from './AnalysisContextBar.tsx';
+import { AnalysisLauncher, type LauncherEntry } from './AnalysisLauncher.tsx';
 import {
-  AnalysisPanel,
-  CompareTray,
-  MissionPanel,
-  OdPanel,
+  AccessCommsPanel,
+  ConjunctionPanel,
+  CoveragePanel,
+  LightingGeometryPanel,
+  OrbitManeuverPanel,
   PanelSuspense,
-  PropagatePanel,
-  ReportPanel,
-  TelemetryOverlay,
+  ReportComparePanel,
 } from './lazy.tsx';
+import type { ExpandRequest } from './TaskCard.tsx';
 import type { BesselEngine } from '../engine/index.ts';
 import type { AppStore, AnalyzeTab } from '../store/index.ts';
 import type { PredictedVsActual } from '@bessel/state';
@@ -35,16 +39,29 @@ export interface AnalyzeWorkbenchProps {
 }
 
 const TABS: readonly { readonly id: AnalyzeTab; readonly label: string }[] = [
-  { id: 'propagation', label: 'Propagation' },
-  { id: 'maneuver', label: 'Maneuver' },
-  { id: 'od', label: 'OD' },
-  { id: 'access', label: 'Access & Coverage' },
-  { id: 'report', label: 'Report' },
-  { id: 'compare', label: 'Compare' },
+  { id: 'orbit-maneuver', label: 'Orbit & Maneuver' },
+  { id: 'lighting-geometry', label: 'Lighting & Geometry' },
+  { id: 'access-comms', label: 'Access & Comms' },
+  { id: 'conjunction', label: 'Conjunction' },
+  { id: 'coverage', label: 'Coverage & Constellation' },
+  { id: 'report-compare', label: 'Report & Compare' },
 ];
 
 export function AnalyzeWorkbench(props: AnalyzeWorkbenchProps): JSX.Element {
   const { engine, store, activeTab, onTab } = props;
+
+  // The launcher writes a per-tab expand request. The token makes a repeated id re-fire;
+  // we only pass the request to the panel that owns it, so other panels stay untouched.
+  const [launch, setLaunch] = useState<{ tab: AnalyzeTab; req: ExpandRequest } | null>(null);
+  const onLaunch = useCallback(
+    (entry: LauncherEntry): void => {
+      onTab(entry.tab);
+      setLaunch((prev) => ({ tab: entry.tab, req: { id: entry.id, token: (prev?.req.token ?? 0) + 1 } }));
+    },
+    [onTab],
+  );
+  const reqFor = (tab: AnalyzeTab): ExpandRequest | undefined =>
+    launch && launch.tab === tab ? launch.req : undefined;
 
   const onKeyNav = useCallback(
     (ev: KeyboardEvent<HTMLDivElement>): void => {
@@ -96,28 +113,57 @@ export function AnalyzeWorkbench(props: AnalyzeWorkbenchProps): JSX.Element {
         data-testid="analyze-tabpanel"
         tabIndex={0}
       >
+        <AnalysisLauncher onLaunch={onLaunch} />
         <PanelSuspense>
-          {activeTab === 'propagation' && <PropagatePanel engine={engine} store={store} />}
-          {activeTab === 'maneuver' && <MissionPanel engine={engine} store={store} />}
-          {activeTab === 'od' && <OdPanel engine={engine} store={store} />}
-          {activeTab === 'access' && (
-            <AnalysisPanel engine={engine} store={store} hasSpacecraft={props.hasSpacecraft} />
+          {activeTab === 'orbit-maneuver' && (
+            <OrbitManeuverPanel
+              engine={engine}
+              store={store}
+              {...(reqFor('orbit-maneuver') ? { expandRequest: reqFor('orbit-maneuver') } : {})}
+            />
           )}
-          {activeTab === 'report' && <ReportPanel engine={engine} store={store} />}
-          {activeTab === 'compare' && (
-            <>
-              <CompareTray engine={engine} store={store} />
-              {!props.hasSpacecraft ? (
-                <p className="bessel-loader-hint" data-testid="telemetry-empty-notice">
-                  Load a spacecraft to analyze.
-                </p>
-              ) : null}
-              <TelemetryOverlay
-                series={props.telemetryOverlay}
-                nowEt={props.et}
-                fault={props.telemetryFault}
-              />
-            </>
+          {activeTab === 'lighting-geometry' && (
+            <LightingGeometryPanel
+              engine={engine}
+              store={store}
+              hasSpacecraft={props.hasSpacecraft}
+              {...(reqFor('lighting-geometry') ? { expandRequest: reqFor('lighting-geometry') } : {})}
+            />
+          )}
+          {activeTab === 'access-comms' && (
+            <AccessCommsPanel
+              engine={engine}
+              store={store}
+              hasSpacecraft={props.hasSpacecraft}
+              {...(reqFor('access-comms') ? { expandRequest: reqFor('access-comms') } : {})}
+            />
+          )}
+          {activeTab === 'conjunction' && (
+            <ConjunctionPanel
+              engine={engine}
+              store={store}
+              hasSpacecraft={props.hasSpacecraft}
+              {...(reqFor('conjunction') ? { expandRequest: reqFor('conjunction') } : {})}
+            />
+          )}
+          {activeTab === 'coverage' && (
+            <CoveragePanel
+              engine={engine}
+              store={store}
+              hasSpacecraft={props.hasSpacecraft}
+              {...(reqFor('coverage') ? { expandRequest: reqFor('coverage') } : {})}
+            />
+          )}
+          {activeTab === 'report-compare' && (
+            <ReportComparePanel
+              engine={engine}
+              store={store}
+              hasSpacecraft={props.hasSpacecraft}
+              telemetryOverlay={props.telemetryOverlay}
+              et={props.et}
+              telemetryFault={props.telemetryFault}
+              {...(reqFor('report-compare') ? { expandRequest: reqFor('report-compare') } : {})}
+            />
           )}
         </PanelSuspense>
       </div>

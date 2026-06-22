@@ -43,21 +43,27 @@ export function PanelSuspense(props: { children: ReactNode }): JSX.Element {
   return <Suspense fallback={<PanelFallback />}>{props.children}</Suspense>;
 }
 
-export const AnalysisPanel = lazy(() =>
-  import('./AnalysisPanel.tsx').then((m) => ({ default: m.AnalysisPanel })),
+// The six intent-named domain panels of the analysis-UX re-slot. Each is its own
+// on-demand chunk; the propagation / mission / OD / report / compare bodies are imported
+// statically inside the composing domain panels, so they ride in the same lazy chunk and
+// never enter the first-paint shell.
+export const OrbitManeuverPanel = lazy(() =>
+  import('./OrbitManeuverPanel.tsx').then((m) => ({ default: m.OrbitManeuverPanel })),
 );
-export const PropagatePanel = lazy(() =>
-  import('./PropagatePanel.tsx').then((m) => ({ default: m.PropagatePanel })),
+export const LightingGeometryPanel = lazy(() =>
+  import('./LightingGeometryPanel.tsx').then((m) => ({ default: m.LightingGeometryPanel })),
 );
-export const MissionPanel = lazy(() =>
-  import('./MissionPanel.tsx').then((m) => ({ default: m.MissionPanel })),
+export const AccessCommsPanel = lazy(() =>
+  import('./AccessCommsPanel.tsx').then((m) => ({ default: m.AccessCommsPanel })),
 );
-export const OdPanel = lazy(() => import('./OdPanel.tsx').then((m) => ({ default: m.OdPanel })));
-export const ReportPanel = lazy(() =>
-  import('./ReportPanel.tsx').then((m) => ({ default: m.ReportPanel })),
+export const ConjunctionPanel = lazy(() =>
+  import('./ConjunctionPanel.tsx').then((m) => ({ default: m.ConjunctionPanel })),
 );
-export const CompareTray = lazy(() =>
-  import('./CompareTray.tsx').then((m) => ({ default: m.CompareTray })),
+export const CoveragePanel = lazy(() =>
+  import('./CoveragePanel.tsx').then((m) => ({ default: m.CoveragePanel })),
+);
+export const ReportComparePanel = lazy(() =>
+  import('./ReportComparePanel.tsx').then((m) => ({ default: m.ReportComparePanel })),
 );
 
 // The shell menus surfaced from @bessel/ui. They are lightweight but only appear inside
