@@ -47,7 +47,12 @@ export function CoveragePanel(props: CoveragePanelProps): JSX.Element {
   const constellation = useStore(store, (s) => s.constellation);
   const designed = useStore(store, (s) => s.designedConstellation);
   const coverageGrid = useStore(store, (s) => s.coverageGrid);
+  const coverageSweep = useStore(store, (s) => s.coverageSweep);
   const trayFull = useTrayFull(store);
+  // [ux-p3-coverage] The sweep runs on the dedicated coverage worker: while it runs, show a live
+  // cells-done/total readout and a cancel control (the worker, and its nested SPICE worker, are
+  // terminated) so a 24-satellite global sweep never stalls the UI.
+  const sweepRunning = coverageSweep.status === 'running';
 
   const runSweep = (): void => {
     void engine?.computeCoverageGrid({
@@ -137,11 +142,27 @@ export function CoveragePanel(props: CoveragePanelProps): JSX.Element {
       <Action
         variant="primary"
         status={runStatus['compute-coverage-grid']}
+        disabled={sweepRunning}
         onClick={runSweep}
         testId="compute-coverage-grid"
       >
         Run coverage sweep
       </Action>
+      {sweepRunning ? (
+        <>
+          <p className="bessel-analysis-stat" data-testid="coverage-progress">
+            Sweeping {coverageSweep.done}/{coverageSweep.total} cells...
+          </p>
+          <Action onClick={() => void engine?.cancelCoverageGrid()} testId="coverage-cancel">
+            Cancel
+          </Action>
+        </>
+      ) : null}
+      {typeof coverageSweep.status === 'object' ? (
+        <p className="bessel-analysis-error" data-testid="coverage-sweep-error">
+          Coverage sweep failed: {coverageSweep.status.error}
+        </p>
+      ) : null}
       {coverageGrid ? (
         <>
           <p className="bessel-analysis-stat" data-testid="coverage-grid-stat">

@@ -201,6 +201,14 @@ test('lighting analysis computes and renders eclipse intervals', async ({ page }
   // so allow for the lazy coverage-ops chunk + the per-satellite SPK writes.
   await expect(page.getByTestId('constellation-result')).toContainText('Walker', { timeout: 20_000 });
 
+  // [ux-p3-coverage] The coverage sweep now runs on the dedicated coverage worker (its own
+  // chunk, with a nested SPICE worker replaying the kernel pool). Running it shows the live
+  // progress readout, and the run completes with the FOM summary (the worker did not stall).
+  await expandCard(page, 'coverage-grid');
+  await page.getByTestId('compute-coverage-grid').click();
+  await expect(page.getByTestId('coverage-progress')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('coverage-fom-summary')).toBeVisible({ timeout: 60_000 });
+
   // Attitude slew (Orbit & Maneuver tab): an eigen-axis profile plotted over time.
   await openAnalyze(page, 'orbit-maneuver');
   await expandCard(page, 'slew');
@@ -218,6 +226,14 @@ test('lighting analysis computes and renders eclipse intervals', async ({ page }
   await expandCard(page, 'ground-track');
   await page.getByTestId('compute-groundtrack').click();
   await expect(page.getByTestId('ground-track')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('ground-track').locator('polyline').first()).toBeVisible();
+
+  // [ux-p3-coverage] The projection is selectable: switching to polar stereographic re-projects
+  // the same track (the map stays rendered, never blanks). The select drives the @bessel/ui map.
+  await expect(page.getByTestId('param-groundtrack-projection')).toBeVisible();
+  await page.getByTestId('param-groundtrack-projection').selectOption('polar-stereographic');
+  await expect(page.getByTestId('ground-track')).toBeVisible();
+  await page.getByTestId('param-groundtrack-projection').selectOption('mercator');
   await expect(page.getByTestId('ground-track').locator('polyline').first()).toBeVisible();
 
   // Beta-angle season (Lighting & Geometry tab): the beta (deg) plot plus the

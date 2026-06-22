@@ -119,6 +119,29 @@ describe('GroundTrackMap', () => {
     expect((out.match(/bessel-groundtrack-line/g) ?? []).length).toBe(0);
     expect((out.match(/bessel-groundtrack-point/g) ?? []).length).toBe(3);
   });
+
+  it('renders in each selectable projection without throwing', () => {
+    for (const projection of ['equirectangular', 'mercator', 'polar-stereographic'] as const) {
+      const out = html(
+        createElement(GroundTrackMap, { lon: [-0.2, 0, 0.2], lat: [0.1, 0.2, 0.3], projection }),
+      );
+      expect(out).toContain('bessel-groundtrack');
+    }
+  });
+
+  it('drapes a station-overlay marker per visible station', () => {
+    const out = html(
+      createElement(GroundTrackMap, {
+        lon: [0, 0.1],
+        lat: [0, 0.1],
+        stations: [
+          { id: 's1', name: 'Madrid', lonRad: -0.06, latRad: 0.7 },
+          { id: 's2', name: 'Canberra', lonRad: 2.6, latRad: -0.6 },
+        ],
+      }),
+    );
+    expect((out.match(/groundtrack-station-overlay/g) ?? []).length).toBe(2);
+  });
 });
 
 describe('ReportTable', () => {

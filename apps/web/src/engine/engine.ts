@@ -88,6 +88,7 @@ import type {
   TleState,
   ScreeningRef,
   ConstellationRef,
+  CoverageRef,
   CoverageSweepOpts,
   // [ux-p1-conjunction] the ingested-catalog ref + ingest-format/screen-opts types.
   ConjunctionCatalogRef,
@@ -210,6 +211,10 @@ export class BesselEngine {
   // imported) coverage ops so the Walker design FEEDS the sweep across separate dynamic-import
   // calls: designConstellation publishes the asset set into it; sweepCoverage reads it.
   private readonly constellationRef: ConstellationRef = { seq: 0, assetIds: [] };
+  // [ux-p3-coverage] The dedicated coverage-sweep worker client, lazily constructed on first
+  // sweep (inside the dynamic-import op so the coverage worker chunk stays off the first-paint
+  // shell) and reused/cancelled across runs. A mutable ref the lazily-imported coverage ops own.
+  private readonly coverageRef: CoverageRef = { client: null };
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -250,6 +255,8 @@ export class BesselEngine {
     // Terminate any in-flight screening / porkchop workers so they do not outlive the engine.
     this.screeningRef.client?.cancel();
     this.porkchopRef.client?.cancel();
+    // [ux-p3-coverage] Terminate any in-flight coverage worker (and its nested SPICE worker) too.
+    this.coverageRef.client?.dispose();
     if (this.core) {
       cancelAnimationFrame(this.raf);
       this.core.scene.dispose();
@@ -991,8 +998,16 @@ export class BesselEngine {
     if (!e) return;
     await this.runTool('compute-coverage-grid', async () => {
       const ops = await import('./analysis-ops.ts');
-      await ops.sweepCoverage(e, this.store, this.isDisposed, this.constellationRef, opts);
+      await ops.sweepCoverage(e, this.store, this.isDisposed, this.constellationRef, this.coverageRef, opts);
     });
+  }
+
+  /** [ux-p3-coverage] Cancel an in-flight coverage sweep (terminates the worker) and reset the
+   *  run status + progress slice (mirrors cancelScreen). */
+  async cancelCoverageGrid(): Promise<void> {
+    const ops = await import('./analysis-ops.ts');
+    ops.cancelCoverageSweep(this.store, this.coverageRef);
+    this.setRunStatus('compute-coverage-grid', 'idle');
   }
 
   /** Clear the draped coverage overlay (and its summary readout). */

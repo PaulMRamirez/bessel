@@ -7,7 +7,8 @@
 
 import { createWebPlatform } from '@bessel/pal-web';
 import { SolarSystemScene, buildScene } from '@bessel/scene';
-import type { SpiceComputeEngine, SpiceEngine } from '@bessel/spice';
+import type { SpiceEngine } from '@bessel/spice';
+import type { RecordingSpiceEngine } from '../spice-recorder.ts';
 import type { Storage, FileSystem } from '@bessel/pal';
 import { Clock } from '@bessel/timeline';
 import { decodeView } from '@bessel/state';
@@ -33,7 +34,9 @@ export interface EngineCore {
   scene: SolarSystemScene;
   clock: Clock;
   table: EphemerisTable;
-  spice: SpiceComputeEngine;
+  // The recording SPICE engine: a SpiceComputeEngine that also exposes the replayable
+  // kernel-op snapshot the coverage worker uses to reproduce the pool off the main thread.
+  spice: RecordingSpiceEngine;
   // The active mission's instrument, or null for a neutral or instrument-less
   // mission. Mutable so loading a new catalog re-points FOV and footprint.
   instrument: LoadedInstrument | null;

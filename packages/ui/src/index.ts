@@ -45,7 +45,12 @@ export { AppBar, type AppBarProps } from './AppBar.tsx';
 export { PanelContainer, type PanelContainerProps } from './PanelContainer.tsx';
 export { IntervalTimeline, type IntervalTimelineProps } from './IntervalTimeline.tsx';
 export { TimeSeriesChart, type TimeSeriesChartProps } from './TimeSeriesChart.tsx';
-export { GroundTrackMap, type GroundTrackMapProps } from './GroundTrackMap.tsx';
+export {
+  GroundTrackMap,
+  type GroundTrackMapProps,
+  type GroundTrackProjection,
+  type GroundTrackStation,
+} from './GroundTrackMap.tsx';
 export { ReportTable, reportToText, type ReportTableProps } from './ReportTable.tsx';
 export { ThemeToggle, type ThemeToggleProps, type ThemeName } from './ThemeToggle.tsx';
 export { Tooltip, type TooltipProps } from './Tooltip.tsx';
