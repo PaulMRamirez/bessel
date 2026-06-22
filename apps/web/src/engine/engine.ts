@@ -71,6 +71,7 @@ import type {
   FovPointingMode,
   LinkWorksheetSpec,
   SlewFeasibilitySpec,
+  ObservationScheduleSpec,
 } from './analysis-defaults.ts';
 import { bootScene, loadInstrument, type EngineCore } from './bootstrap.ts';
 import { applyViewModel } from './apply-view.ts';
@@ -88,6 +89,7 @@ import type {
   TleState,
   ScreeningRef,
   ConstellationRef,
+  CoverageRef,
   CoverageSweepOpts,
   // [ux-p1-conjunction] the ingested-catalog ref + ingest-format/screen-opts types.
   ConjunctionCatalogRef,
@@ -97,6 +99,8 @@ import type {
   SuppliedCovarianceInput,
   // [ux-p2-orbit] the configurable Lambert porkchop sweep parameters.
   PorkchopParams,
+  // [ux-p3-conjunction] the dedicated porkchop-worker client ref.
+  PorkchopRef,
 } from './analysis-ops.ts';
 
 // True when two optional angles are equal or both absent (within tolerance).
@@ -196,6 +200,10 @@ export class BesselEngine {
   // (inside the dynamic-import op so the worker chunk stays off the first-paint shell) and
   // reused/cancelled across runs. A mutable ref so the lazily-imported screening ops own it.
   private readonly screeningRef: ScreeningRef = { client: null };
+  // [ux-p3-conjunction] The dedicated porkchop-sweep worker client, lazily constructed on first
+  // sweep (inside the dynamic-import op so the worker chunk stays off the first-paint shell) and
+  // reused/cancelled across runs, mirroring screeningRef.
+  private readonly porkchopRef: PorkchopRef = { client: null };
   // [ux-p1-conjunction] The most recently ingested REAL conjunction catalog (CDM/OEM/TLE) +
   // per-object covariances, shared by the ingest/screen/per-event-Pc ops across separate
   // dynamic-import calls. Null until the first ingestion.
@@ -204,6 +212,10 @@ export class BesselEngine {
   // imported) coverage ops so the Walker design FEEDS the sweep across separate dynamic-import
   // calls: designConstellation publishes the asset set into it; sweepCoverage reads it.
   private readonly constellationRef: ConstellationRef = { seq: 0, assetIds: [] };
+  // [ux-p3-coverage] The dedicated coverage-sweep worker client, lazily constructed on first
+  // sweep (inside the dynamic-import op so the coverage worker chunk stays off the first-paint
+  // shell) and reused/cancelled across runs. A mutable ref the lazily-imported coverage ops own.
+  private readonly coverageRef: CoverageRef = { client: null };
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -241,8 +253,11 @@ export class BesselEngine {
   dispose(): void {
     this.disposed = true;
     this.stopTelemetry();
-    // Terminate any in-flight screening worker so it does not outlive the engine.
+    // Terminate any in-flight screening / porkchop workers so they do not outlive the engine.
     this.screeningRef.client?.cancel();
+    this.porkchopRef.client?.cancel();
+    // [ux-p3-coverage] Terminate any in-flight coverage worker (and its nested SPICE worker) too.
+    this.coverageRef.client?.dispose();
     if (this.core) {
       cancelAnimationFrame(this.raf);
       this.core.scene.dispose();
@@ -884,6 +899,22 @@ export class BesselEngine {
     });
   }
 
+  /** [ux-p3-access] Build a conflict-free multi-target observation schedule: per-target in-FOV +
+   *  constraint windows assembled into an ordered, non-overlapping timeline where the attitude slew
+   *  between consecutive targets fits the gap, plus any unscheduled (conflicted) targets. */
+  async computeObservationSchedule(
+    spec: ObservationScheduleSpec,
+    constraints: AccessConstraintSpec,
+    opts: { spanSec?: number; stepSec?: number } = {},
+  ): Promise<void> {
+    const e = this.core;
+    if (!e) return;
+    await this.runTool('compute-observation-schedule', async () => {
+      const ops = await import('./analysis-ops.ts');
+      await ops.computeObservationSchedule(e, this.store, this.isDisposed, spec, constraints, opts);
+    });
+  }
+
   /** Conjunction analysis: closest approach plus a 2D Pc on the loaded pair. */
   async computeConjunction(opts: ConjunctionOpts = {}): Promise<void> {
     const e = this.core;
@@ -984,8 +1015,16 @@ export class BesselEngine {
     if (!e) return;
     await this.runTool('compute-coverage-grid', async () => {
       const ops = await import('./analysis-ops.ts');
-      await ops.sweepCoverage(e, this.store, this.isDisposed, this.constellationRef, opts);
+      await ops.sweepCoverage(e, this.store, this.isDisposed, this.constellationRef, this.coverageRef, opts);
     });
+  }
+
+  /** [ux-p3-coverage] Cancel an in-flight coverage sweep (terminates the worker) and reset the
+   *  run status + progress slice (mirrors cancelScreen). */
+  async cancelCoverageGrid(): Promise<void> {
+    const ops = await import('./analysis-ops.ts');
+    ops.cancelCoverageSweep(this.store, this.coverageRef);
+    this.setRunStatus('compute-coverage-grid', 'idle');
   }
 
   /** Clear the draped coverage overlay (and its summary readout). */
@@ -1019,14 +1058,23 @@ export class BesselEngine {
   }
 
   /** [ux-p2-orbit] Maneuver design: a Lambert PORKCHOP sweep over a departure-epoch and
-   *  time-of-flight grid, publishing the delta-v contour and the marked minimum. */
+   *  time-of-flight grid, publishing the delta-v contour and the marked minimum. [ux-p3-conjunction]
+   *  The CPU-bound grid solve runs on a dedicated cancellable worker (porkchopRef) with progress. */
   async computePorkchop(params: PorkchopParams): Promise<void> {
     const e = this.core;
     if (!e) return;
     await this.runTool('compute-porkchop', async () => {
       const ops = await import('./analysis-ops.ts');
-      await ops.computePorkchop(e, this.store, this.isDisposed, params);
+      await ops.computePorkchop(e, this.store, this.isDisposed, this.porkchopRef, params);
     });
+  }
+
+  /** [ux-p3-conjunction] Cancel an in-flight porkchop sweep (terminates the worker) and reset the
+   *  run status, mirroring cancelScreen. */
+  async cancelPorkchop(): Promise<void> {
+    const ops = await import('./analysis-ops.ts');
+    ops.cancelPorkchop(this.store, this.porkchopRef);
+    this.setRunStatus('compute-porkchop', 'idle');
   }
 
   /** [ux-p2-orbit] Cross-tab carrier: append the porkchop's marked optimum to the editable MCS
@@ -1060,6 +1108,32 @@ export class BesselEngine {
       ops.planAvoidanceBurn(this.store);
       this.setAnalyzeTab('orbit-maneuver');
     });
+  }
+
+  /** [ux-p3-conjunction] Close the maneuver-then-rescreen loop: apply the MCS-solved avoidance burn
+   *  to the selected event's primary, re-screen it against the catalog, and publish the BEFORE vs
+   *  AFTER Pc comparison (and update the pair's watchlist row). Fails loud when there is no selected
+   *  event or ingested catalog. */
+  async rescreenAfterManeuver(): Promise<void> {
+    await this.runTool('rescreen-after-maneuver', async () => {
+      const ops = await import('./analysis-ops.ts');
+      ops.rescreenAfterManeuver(this.store, this.conjunctionCatalogRef);
+    });
+  }
+
+  /** [ux-p3-conjunction] Add the selected conjunction event's pair to the watchlist (seeded with its
+   *  current Pc + miss). Fails loud when no event is selected. */
+  async watchSelectedEvent(): Promise<void> {
+    await this.runTool('watch-event', async () => {
+      const ops = await import('./analysis-ops.ts');
+      ops.watchSelectedEvent(this.store);
+    });
+  }
+
+  /** [ux-p3-conjunction] Remove a watched pair from the watchlist by its row key. */
+  async unwatchEvent(key: string): Promise<void> {
+    const ops = await import('./analysis-ops.ts');
+    ops.unwatchEvent(this.store, { type: 'unwatch', key });
   }
 
   /** Ground-track analysis: sub-spacecraft longitude/latitude over a day. */

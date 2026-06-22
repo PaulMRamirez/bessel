@@ -117,3 +117,26 @@ test('a mission-profile preset switches to its persona home tab and pre-expands 
     'true',
   );
 });
+
+test('the Access & Comms tab surfaces the Phase-3 terrain source + multi-target schedule cards', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
+  await loadCassiniSample(page);
+  await openAnalyze(page, 'access-comms');
+
+  // The constraint-stack access card carries the Phase-3 terrain-source selector that ungates the
+  // terrain-LOS toggle.
+  await expandCard(page, 'access');
+  await expect(page.getByTestId('param-terrain-source')).toBeVisible();
+  await expect(page.getByTestId('constraint-terrainlos')).toBeVisible();
+
+  // The new observation multi-target schedule card is reachable and exposes the target-list input.
+  await expandCard(page, 'observation-schedule');
+  await expect(page.getByTestId('taskcard-observation-schedule-toggle')).toHaveAttribute(
+    'aria-expanded',
+    'true',
+  );
+  await expect(page.getByTestId('param-target-list')).toBeVisible();
+});

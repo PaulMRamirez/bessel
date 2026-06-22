@@ -5,7 +5,12 @@ import { LightingGeometryPanel } from './LightingGeometryPanel.tsx';
 import { betaCard, eclipseCard, solarIntensityCard } from './lighting-cards.tsx';
 import { AccessCommsPanel } from './AccessCommsPanel.tsx';
 import { stationPassesCard, linkWorksheetCard, slewFeasibilityCard } from './access-comms-cards.tsx';
-import { DEFAULT_LINK_WORKSHEET, DEFAULT_SLEW_FEASIBILITY } from '../engine/analysis-defaults.ts';
+import { AccessConstraintForm } from './AccessConstraintForm.tsx';
+import {
+  DEFAULT_LINK_WORKSHEET,
+  DEFAULT_SLEW_FEASIBILITY,
+  DEFAULT_ACCESS_CONSTRAINTS,
+} from '../engine/analysis-defaults.ts';
 import { ConjunctionPanel } from './ConjunctionPanel.tsx';
 import { CoveragePanel } from './CoveragePanel.tsx';
 import { createAppStore, type AppStore } from '../store/index.ts';
@@ -162,6 +167,64 @@ describe('Coverage panel: the Walker -> sweep -> metric-aware contour workflow',
     expect(out).toContain('Max revisit gap');
     expect(out).toContain('data-testid="coverage-fom-summary"');
     expect(out).toContain('data-testid="coverage-fom-csv"');
+  });
+});
+
+describe('Coverage panel: worker-ized sweep progress + cancel (Phase 3)', () => {
+  it('shows the live progress readout and the cancel control while a sweep is running', () => {
+    const store = createAppStore();
+    store.setState({ coverageSweep: { status: 'running', done: 7, total: 162 } });
+    const out = coverage(store, true);
+    expect(out).toContain('data-testid="coverage-progress"');
+    expect(out).toContain('7/162 cells');
+    expect(out).toContain('data-testid="coverage-cancel"');
+  });
+
+  it('hides the progress + cancel controls when no sweep is running', () => {
+    const out = coverage(createAppStore(), true);
+    expect(out).not.toContain('data-testid="coverage-progress"');
+    expect(out).not.toContain('data-testid="coverage-cancel"');
+  });
+
+  it('surfaces a loud sweep error', () => {
+    const store = createAppStore();
+    store.setState({ coverageSweep: { status: { error: 'no center body' }, done: 0, total: 0 } });
+    const out = coverage(store, true);
+    expect(out).toContain('data-testid="coverage-sweep-error"');
+    expect(out).toContain('no center body');
+  });
+});
+
+describe('Lighting & Geometry: selectable ground-track projection + station overlays (Phase 3)', () => {
+  function seedGroundTrack(store: AppStore): void {
+    store.setState({
+      groundTrack: {
+        et: new Float64Array([0, 1, 2]),
+        lon: new Float64Array([0, 0.1, 0.2]),
+        lat: new Float64Array([0, 0.1, 0.2]),
+        label: 'Sub-spacecraft track',
+      },
+    });
+  }
+
+  it('exposes the projection select once a ground track exists', () => {
+    const store = createAppStore();
+    seedGroundTrack(store);
+    const out = lighting(store, true);
+    expect(out).toContain('data-testid="param-groundtrack-projection"');
+    expect(out).toContain('Polar stereographic');
+  });
+
+  it('drapes scenario stations as overlay markers on the track', () => {
+    const store = createAppStore();
+    seedGroundTrack(store);
+    store.setState((s) => ({
+      scenario: {
+        ...s.scenario,
+        stations: [{ id: 'mad', name: 'Madrid', lonRad: -0.06, latRad: 0.7, altKm: 0.8 }],
+      },
+    }));
+    expect(lighting(store, true)).toContain('data-testid="groundtrack-station-overlay"');
   });
 });
 
@@ -444,16 +507,33 @@ describe('Access constraint stack + in-FOV pointing (Phase 1)', () => {
     }
   });
 
-  it('disables the az/el mask + terrain toggles when no ground station is active (Phase 2 ungate)', () => {
+  it('disables the az/el mask (no station) and terrain LOS (no terrain source) toggles by default', () => {
     const out = access(createAppStore());
     expect(out).toContain('data-testid="constraint-azelmask"');
     expect(out).toContain('data-testid="constraint-terrainlos"');
-    // Without an active station the az/el mask is disabled with a select-a-station hint, and the
-    // terrain LOS stays gated (Phase 3, still DEM-bound).
+    // Without an active station the az/el mask is disabled with a select-a-station hint.
     expect(out).toContain('select a ground station');
-    expect(out).toContain('Phase 3');
+    // The terrain-source selector is present (Phase 3 ungate); with the default 'none' source the
+    // terrain LOS toggle is disabled with a choose-a-source hint rather than gated to a later phase.
+    expect(out).toContain('data-testid="param-terrain-source"');
+    expect(out).toContain('choose a terrain source');
     const disabledCount = (out.match(/disabled=""/g) ?? []).length;
     expect(disabledCount).toBeGreaterThanOrEqual(2);
+  });
+
+  it('UNGATES the terrain LOS toggle once a terrain source is chosen (Phase 3)', () => {
+    // Render the constraint form directly with the sample-ridge source selected: the toggle is live
+    // (no disabled attribute) and the sample-data note is shown.
+    const withSource = renderToStaticMarkup(
+      createElement(AccessConstraintForm, {
+        value: { ...DEFAULT_ACCESS_CONSTRAINTS, terrainSource: 'sample-ridge', terrainLosEnabled: true },
+        onChange: () => undefined,
+      }),
+    );
+    expect(withSource).toContain('data-testid="terrain-sample-note"');
+    expect(withSource).toContain('Sample data');
+    // The terrain toggle is not disabled (no disabled="" attribute on its input) once a source is set.
+    expect(withSource).toMatch(/data-testid="constraint-terrainlos"(?![^>]*disabled)/);
   });
 
   it('UNGATES the az/el mask toggle once a ground station is active', () => {

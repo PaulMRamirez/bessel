@@ -4,8 +4,21 @@ import { loadCassiniSample, openAnalyze, expandCard } from './sample.ts';
 // The analysis tools surface real engine results in the UI. The re-slot groups them into
 // six intent-named domain tabs, each tool inside a collapsible TaskCard; the assertions
 // below navigate to the new tab and expand the card before driving the tool. (STK_PARITY F5.)
+//
+// Each domain flow is its OWN independent test that loads the page fresh and asserts its
+// own slice. Splitting the former single mega-test lets the flows parallelize (the CI
+// e2e job runs fullyParallel with default workers), so no one test accumulates dozens of
+// sequential real-SPICE-worker steps and blows the 60 s default under parallel contention.
+// The genuinely heavy real-geometry flows (a full-day eclipse sweep, the multi-screen
+// conjunction flow, the coverage grid sweep) raise THEIR OWN timeout: that compute is
+// legitimately slow on CI, so a per-test setTimeout is the correct lever, not a weaker
+// assertion.
 
 test('lighting analysis computes and renders eclipse intervals', async ({ page }) => {
+  // A full-phase eclipse sweep over a day is real geometry-finder work on the SPICE worker
+  // and is legitimately slow under parallel CI load; give it a safe margin over the default.
+  test.setTimeout(120_000);
+
   await page.goto('/');
   await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
 
@@ -54,6 +67,16 @@ test('lighting analysis computes and renders eclipse intervals', async ({ page }
   expect(clip).toContain('et (s)');
   expect(clip).toMatch(/\d/);
   await page.getByTestId('range-result-precision').selectOption('3');
+});
+
+test('access analysis assembles the constraint stack, link budget, and station worksheet', async ({ page }) => {
+  // The access geometry-finder plus the station-pass rise/set search are real SPICE-worker
+  // sweeps; give the assembled flow a margin over the default under parallel CI load.
+  test.setTimeout(120_000);
+
+  await page.goto('/');
+  await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
+  await loadCassiniSample(page);
 
   // The access analysis (Access & Comms tab) assembles a constraint stack (line-of-sight on
   // by default) and finds the surviving spacecraft-to-target window through the geometry-finder.
@@ -120,6 +143,17 @@ test('lighting analysis computes and renders eclipse intervals', async ({ page }
   expect(y1).toBe(y2);
   expect(y1).toBeGreaterThanOrEqual(2);
   expect(y1).toBeLessThanOrEqual(78);
+});
+
+test('conjunction ingests a CDM, screens it, and runs the full-covariance Pc flows', async ({ page }) => {
+  // CDM ingest -> worker screen -> per-event full-covariance Pc, then the maneuver-then-rescreen
+  // loop and the explicit covariance-input flow. This is the heaviest single domain (multiple
+  // real screens plus an MCS corrector run), so it gets the widest margin.
+  test.setTimeout(150_000);
+
+  await page.goto('/');
+  await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
+  await loadCassiniSample(page);
 
   // Conjunction (Conjunction tab): REAL CDM ingestion -> worker screen -> per-event
   // full-covariance Pc + B-plane (analysis-UX Phase 1). Load the sample CDM, ingest it, screen
@@ -138,6 +172,30 @@ test('lighting analysis computes and renders eclipse intervals', async ({ page }
   await expect(page.getByTestId('bplane-view')).toBeVisible();
   // [ux-p2-conjunction] the CDM event already carries covariance, so the export-CDM action is offered.
   await expect(page.getByTestId('export-cdm')).toBeVisible();
+
+  // [ux-p3-conjunction] Watchlist: add the selected event to the watchlist and see its row appear.
+  await page.getByTestId('watch-event').click();
+  await expandCard(page, 'watchlist');
+  await expect(page.getByTestId('watchlist')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('watchlist-row')).toHaveCount(1);
+
+  // [ux-p3-conjunction] Maneuver-then-rescreen loop: plan the avoidance burn (seeds the editable MCS
+  // and jumps to Orbit & Maneuver), run the MCS corrector, return to Conjunction, and screen after the
+  // maneuver. The before/after Pc readout shows the risk change; the watched row updates with it.
+  await expandCard(page, 'per-event-pc');
+  await page.getByTestId('plan-avoidance-burn').click();
+  // The carrier switched to the Orbit & Maneuver tab; run the seeded MCS through its corrector.
+  await expect(page.getByTestId('tab-orbit-maneuver')).toHaveAttribute('aria-selected', 'true');
+  await expandCard(page, 'mcs');
+  await page.getByTestId('run-mcs').click();
+  await expect(page.getByTestId('mcs-result')).toBeVisible({ timeout: 20_000 });
+  // Back to Conjunction, re-select the event, and screen after the maneuver.
+  await openAnalyze(page, 'conjunction');
+  await expandCard(page, 'per-event-pc');
+  await page.getByTestId('conjunction-event-0').click();
+  await page.getByTestId('rescreen-after-maneuver').click();
+  await expect(page.getByTestId('pc-before-after')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('pc-before-after')).toContainText('Pc before');
 
   // [ux-p2-conjunction] Explicit covariance INPUT flow: ingest a covariance-less catalog (OEM),
   // screen it, select the flagged event, supply an assumed covariance, and read the now-available
@@ -168,14 +226,55 @@ test('lighting analysis computes and renders eclipse intervals', async ({ page }
   await expandCard(page, 'closest-approach');
   await page.getByTestId('compute-conjunction').click();
   await expect(page.getByTestId('conjunction-result')).toContainText('Pc');
+});
 
-  // Constellation design (Coverage & Constellation tab): a Walker pattern, synchronous.
+test('coverage designs a constellation and runs the worker coverage-grid sweep', async ({ page }) => {
+  // This test proves the WORKER PIPELINE (design -> dedicated coverage worker sweep -> live
+  // progress -> contour/FOM summary), not a realistic heavy coverage map. The default 24/3/1
+  // Walker x 9x18 grid is minutes-long under contended CI; deliberately drive the real param
+  // controls to a TINY constellation (4/2/1) and a COARSE grid (3x3) so the same worker path
+  // runs in a few seconds. A 90s budget is ample headroom for the small sweep under CI load.
+  test.setTimeout(90_000);
+
+  await page.goto('/');
+  await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
+  await loadCassiniSample(page);
+
+  // Constellation design (Coverage & Constellation tab): a tiny but valid Walker pattern
+  // (T=4, P=2, F=1; T is a multiple of P so walkerConstellation builds), so the swept asset
+  // set is 4 satellites, not 24. Driven through the real T/P/F controls, not the engine API.
   await openAnalyze(page, 'coverage');
   await expandCard(page, 'constellation');
+  await page.getByTestId('param-const-total').fill('4');
+  await page.getByTestId('param-const-planes').fill('2');
+  await page.getByTestId('param-const-phasing').fill('1');
   await page.getByTestId('compute-constellation').click();
-  // The design now publishes each Walker satellite as an SPK asset (the swept asset set),
-  // so allow for the lazy coverage-ops chunk + the per-satellite SPK writes.
+  // The design publishes each Walker satellite as an SPK asset (the swept asset set), so allow
+  // for the lazy coverage-ops chunk + the per-satellite SPK writes.
   await expect(page.getByTestId('constellation-result')).toContainText('Walker', { timeout: 20_000 });
+
+  // [ux-p3-coverage] The coverage sweep runs on the dedicated coverage worker (its own chunk,
+  // with a nested SPICE worker replaying the kernel pool). Coarsen the grid to 3x3 cells through
+  // the real resolution controls so the worker sweeps 9 cells, not 162: the same pipeline, fast.
+  // Running it shows the live progress readout, and the run completes with the FOM summary (the
+  // worker did not stall).
+  await expandCard(page, 'coverage-grid');
+  await page.getByTestId('param-grid-resolution').fill('3');
+  await page.getByTestId('param-grid-lon-count').fill('3');
+  await page.getByTestId('compute-coverage-grid').click();
+  await expect(page.getByTestId('coverage-progress')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('coverage-fom-summary')).toBeVisible({ timeout: 60_000 });
+});
+
+test('maneuver, map, and lighting plots render their charts and exports', async ({ page }) => {
+  // Slew profile + Lambert transfer + ground track (with re-projection) + beta-angle season +
+  // solar intensity + OEM export. Several moderate real-geometry plots back to back; give a
+  // margin over the default for parallel CI load.
+  test.setTimeout(120_000);
+
+  await page.goto('/');
+  await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
+  await loadCassiniSample(page);
 
   // Attitude slew (Orbit & Maneuver tab): an eigen-axis profile plotted over time.
   await openAnalyze(page, 'orbit-maneuver');
@@ -194,6 +293,14 @@ test('lighting analysis computes and renders eclipse intervals', async ({ page }
   await expandCard(page, 'ground-track');
   await page.getByTestId('compute-groundtrack').click();
   await expect(page.getByTestId('ground-track')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('ground-track').locator('polyline').first()).toBeVisible();
+
+  // [ux-p3-coverage] The projection is selectable: switching to polar stereographic re-projects
+  // the same track (the map stays rendered, never blanks). The select drives the @bessel/ui map.
+  await expect(page.getByTestId('param-groundtrack-projection')).toBeVisible();
+  await page.getByTestId('param-groundtrack-projection').selectOption('polar-stereographic');
+  await expect(page.getByTestId('ground-track')).toBeVisible();
+  await page.getByTestId('param-groundtrack-projection').selectOption('mercator');
   await expect(page.getByTestId('ground-track').locator('polyline').first()).toBeVisible();
 
   // Beta-angle season (Lighting & Geometry tab): the beta (deg) plot plus the
@@ -236,6 +343,53 @@ test('the in-FOV tool computes instrument-target visibility windows', async ({ p
   await expect(page.getByTestId('fov-fom')).toContainText('In view', { timeout: 20_000 });
   await expect(page.getByTestId('fov-surviving-fom')).toContainText('Surviving', { timeout: 20_000 });
   await expect(page.getByTestId('compute-fov-status')).toContainText('Done', { timeout: 20_000 });
+});
+
+test('the terrain-LOS constraint is UNGATED once a terrain source is chosen (Phase 3)', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
+  await loadCassiniSample(page);
+  await openAnalyze(page, 'access-comms');
+  await expandCard(page, 'access');
+
+  // The terrain LOS toggle starts disabled (no terrain source). Choosing the built-in sample-ridge
+  // DEM source UNGATES it: the toggle becomes enabled and the sample-data note appears.
+  const terrain = page.getByTestId('constraint-terrainlos');
+  await expect(terrain).toBeDisabled();
+  await page.getByTestId('param-terrain-source').selectOption('sample-ridge');
+  await expect(page.getByTestId('terrain-sample-note')).toBeVisible();
+  await expect(terrain).toBeEnabled();
+
+  // Enable the terrain LOS constraint and recompute access: the run threads the sample DEM into the
+  // constraint stack and still produces a surviving access window (no error).
+  await terrain.check();
+  await page.getByTestId('compute-access').click();
+  await expect(page.getByTestId('access-timeline')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('compute-access-status')).toContainText('Done', { timeout: 20_000 });
+});
+
+test('the observation multi-target schedule builds a conflict-free timeline', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
+  await loadCassiniSample(page);
+  await openAnalyze(page, 'access-comms');
+
+  // The multi-target schedule card takes a target LIST, the pointing mode, and the constraint stack,
+  // then builds an ordered, non-overlapping schedule with the per-target slew honored, plus any
+  // unscheduled (conflicted) targets.
+  await expandCard(page, 'observation-schedule');
+  await expect(page.getByTestId('param-target-list')).toBeVisible();
+  // Titan and Sun are observation targets; Saturn (the mission center body) is reported unscheduled
+  // gracefully rather than aborting the run, exercising both the scheduled and unscheduled paths.
+  await page.getByTestId('param-target-list').fill('Titan, Sun, Saturn');
+  await page.getByTestId('compute-observation-schedule').click();
+
+  // The schedule surface appears: the timeline (a Gantt of the placed slots) and the unscheduled
+  // list, with a located success note.
+  await expect(page.getByTestId('multi-target-schedule')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('schedule-timeline')).toBeVisible();
+  await expect(page.getByTestId('schedule-unscheduled')).toBeVisible();
+  await expect(page.getByTestId('compute-observation-schedule-status')).toContainText('Done', { timeout: 20_000 });
 });
 
 test('analysis tools honor user-supplied parameters (span, target, secondary)', async ({ page }) => {

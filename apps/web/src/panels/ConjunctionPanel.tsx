@@ -18,6 +18,7 @@ import {
 import { Action, EmptyNotice, Keep, fmt, useAnalysisParams, useTrayFull } from './analysis-shared.tsx';
 import { CatalogIngestCard } from './conjunction/CatalogIngestCard.tsx';
 import { PcCard } from './conjunction/PcCard.tsx';
+import { WatchlistCard } from './conjunction/WatchlistCard.tsx';
 
 export interface ConjunctionPanelProps {
   readonly engine: BesselEngine | null;
@@ -106,6 +107,8 @@ export function ConjunctionPanel(props: ConjunctionPanelProps): JSX.Element {
     </>
   );
 
+  const watchlistCard = (): ReactNode => <WatchlistCard engine={engine} store={store} />;
+
   const cards: readonly TaskCardEntry[] = [
     {
       id: 'catalog-screen',
@@ -120,6 +123,13 @@ export function ConjunctionPanel(props: ConjunctionPanelProps): JSX.Element {
       purpose: 'Full-covariance Pc + Max-Pc and the encounter-plane plot for a flagged event.',
       status: runStatus['compute-event-pc'],
       render: pcCard,
+    },
+    {
+      id: 'watchlist',
+      title: 'Watchlist',
+      purpose: 'Track flagged events and watch their Pc rise or fall on re-screen / covariance.',
+      status: runStatus['watch-event'],
+      render: watchlistCard,
     },
     {
       id: 'closest-approach',

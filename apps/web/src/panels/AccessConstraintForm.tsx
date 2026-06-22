@@ -1,12 +1,19 @@
-// The composable access constraint stack form (analysis-UX Phase 1): per-constraint toggles
+// The composable access constraint stack form (analysis-UX Phase 1/3): per-constraint toggles
 // with their parameter bands, assembled into an AccessConstraintSpec the Access card runs
 // through @bessel/access. The four constraints driven from the current scenario (line-of-sight,
-// range, range-rate, sun keep-out) are live toggles; the facility-bound az/el mask and the
-// terrain LOS are shown as DISABLED advanced toggles with a "needs a ground station / DEM,
-// Phase 2" hint rather than faked, since no facility input exists in this tab yet. Controlled
-// component over a plain spec (value + onChange); the panel owns the state. Presentational.
+// range, range-rate, sun keep-out) are live toggles; the facility-bound az/el mask is UNGATED in
+// Phase 2 against the active ground station; and the terrain LOS is UNGATED in Phase 3 once a
+// terrain SOURCE is chosen (the built-in deterministic SAMPLE ridge DEM, clearly labelled sample
+// data). Controlled component over a plain spec (value + onChange); the panel owns the state.
 
-import type { AccessConstraintSpec } from '../engine/analysis-defaults.ts';
+import type { AccessConstraintSpec, TerrainSource } from '../engine/analysis-defaults.ts';
+
+/** The selectable terrain DEM sources for the terrain-LOS constraint. 'none' leaves the toggle inert;
+ *  'sample-ridge' is the built-in deterministic SAMPLE ridge heightfield (illustrative, not real). */
+const TERRAIN_SOURCE_OPTIONS: readonly { readonly value: TerrainSource; readonly label: string }[] = [
+  { value: 'none', label: 'None (no DEM)' },
+  { value: 'sample-ridge', label: 'Sample ridge DEM (sample data)' },
+];
 
 /** A labelled checkbox toggle for one constraint kind, with the testid the e2e/unit tests read. */
 function ConstraintToggle(props: {
@@ -79,12 +86,14 @@ export interface AccessConstraintFormProps {
   readonly activeStationName?: string | null;
 }
 
-/** The constraint-stack form: four live toggles (each revealing its band when on) plus two
- *  gated advanced toggles. Assembles into the spec the Access card runs through computeAccess. */
+/** The constraint-stack form: four live toggles (each revealing its band when on), the station-bound
+ *  az/el mask, and the terrain LOS (UNGATED once a terrain source is chosen). Assembles into the spec
+ *  the Access card runs through computeAccess. */
 export function AccessConstraintForm(props: AccessConstraintFormProps): JSX.Element {
   const { value, onChange } = props;
   const set = (patch: Partial<AccessConstraintSpec>): void => onChange({ ...value, ...patch });
   const stationActive = !!props.activeStationName;
+  const terrainSourceChosen = value.terrainSource !== 'none';
   return (
     <div className="bessel-constraint-stack" data-testid="access-constraint-form">
       <ConstraintToggle
@@ -167,15 +176,40 @@ export function AccessConstraintForm(props: AccessConstraintFormProps): JSX.Elem
         testId="constraint-azelmask"
       />
 
+      {/* [ux-p3-access] Terrain line of sight: UNGATED in Phase 3. Live once a terrain SOURCE is chosen
+          (the built-in sample ridge DEM); the toggle's effect is inert while the source is 'none'. */}
       <fieldset className="bessel-constraint-advanced" data-testid="access-constraint-advanced">
-        <legend>Advanced (Phase 3)</legend>
+        <legend>Terrain</legend>
+        <label className="bessel-constraint-band">
+          Terrain source
+          <select
+            value={value.terrainSource}
+            data-testid="param-terrain-source"
+            onChange={(ev) => set({ terrainSource: ev.target.value as TerrainSource })}
+          >
+            {TERRAIN_SOURCE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
         <ConstraintToggle
-          label="Terrain line of sight (needs a DEM, Phase 3)"
-          checked={false}
-          disabled
-          onChange={() => undefined}
+          label={
+            terrainSourceChosen
+              ? 'Terrain line of sight (clear of the center body terrain)'
+              : 'Terrain line of sight (choose a terrain source above)'
+          }
+          checked={terrainSourceChosen && value.terrainLosEnabled}
+          disabled={!terrainSourceChosen}
+          onChange={(v) => set({ terrainLosEnabled: v })}
           testId="constraint-terrainlos"
         />
+        {value.terrainSource === 'sample-ridge' ? (
+          <p className="bessel-loader-hint" data-testid="terrain-sample-note">
+            Sample data: a synthetic ridge heightfield, not real terrain.
+          </p>
+        ) : null}
       </fieldset>
     </div>
   );

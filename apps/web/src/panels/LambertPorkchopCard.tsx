@@ -8,6 +8,7 @@
 // engine behind the lazy seam. The legacy single-solve (compute-transfer) stays available below.
 
 import { useMemo, useState } from 'react';
+import { Button } from '@bessel/selene-design';
 import type { BesselEngine } from '../engine/index.ts';
 import { useStore, type AppStore } from '../store/index.ts';
 import { StatResult } from './analysis-result.tsx';
@@ -29,6 +30,8 @@ export function LambertPorkchopCard(props: LambertPorkchopCardProps): JSX.Elemen
   const [form, setForm] = useState<PorkchopFormState>(DEFAULT_PORKCHOP_FORM);
   const runStatus = useStore(store, (s) => s.runStatus);
   const porkchop = useStore(store, (s) => s.porkchop);
+  // [ux-p3-conjunction] The off-main-thread sweep run slice (progress + cancel).
+  const porkchopRun = useStore(store, (s) => s.porkchopRun);
   const transfer = useStore(store, (s) => s.transfer);
   const objects = useStore(store, (s) => s.objects);
   const trayFull = useTrayFull(store);
@@ -51,6 +54,7 @@ export function LambertPorkchopCard(props: LambertPorkchopCardProps): JSX.Elemen
   }, [objects]);
 
   const best = porkchop?.best ?? null;
+  const sweepRunning = porkchopRun.status === 'running';
 
   return (
     <>
@@ -58,7 +62,7 @@ export function LambertPorkchopCard(props: LambertPorkchopCardProps): JSX.Elemen
 
       <Action
         variant="primary"
-        status={runStatus['compute-porkchop']}
+        status={sweepRunning ? 'running' : runStatus['compute-porkchop']}
         onClick={() =>
           void engine?.computePorkchop({
             departureBody: form.departureBody,
@@ -74,8 +78,19 @@ export function LambertPorkchopCard(props: LambertPorkchopCardProps): JSX.Elemen
         }
         testId="compute-porkchop"
       >
-        Sweep porkchop
+        Sweep porkchop (worker)
       </Action>
+      {/* [ux-p3-conjunction] Off-main-thread sweep progress + cancel, mirroring the screening worker UX. */}
+      {sweepRunning ? (
+        <>
+          <p className="bessel-analysis-stat" data-testid="porkchop-progress">
+            Sweeping {porkchopRun.done}/{porkchopRun.total} departure columns...
+          </p>
+          <Button variant="ghost" testId="porkchop-cancel" onClick={() => void engine?.cancelPorkchop()}>
+            Cancel
+          </Button>
+        </>
+      ) : null}
       <RunStatusNote status={runStatus['compute-porkchop']} id="compute-porkchop" />
 
       {porkchop && best ? (

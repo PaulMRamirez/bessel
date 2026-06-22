@@ -10,6 +10,13 @@ import { DEFAULT_OBJECT_ENTRIES } from '../catalog-load.ts';
 import type { Bookmark } from '../bookmarks.ts';
 import type { SavedScript } from '../scripts.ts';
 import { INITIAL_SCREENING, type ScreeningState } from '../screening-protocol.ts';
+// [ux-p3-conjunction] the porkchop worker-run slice (progress/cancel), the maneuver-then-rescreen
+// before/after comparison, and the conjunction watchlist slice, additively lifted into the store.
+import { INITIAL_PORKCHOP_RUN, type PorkchopRunState } from '../porkchop-protocol.ts';
+import { INITIAL_WATCHLIST, type WatchlistState } from '../conjunction/watchlist.ts';
+import type { PcComparison } from '../conjunction/rescreen.ts';
+// [ux-p3-coverage] The off-main-thread coverage grid-sweep progress slice (status + done/total).
+import { INITIAL_COVERAGE_SWEEP, type CoverageSweepState } from '../coverage-protocol.ts';
 import { createStore, type Store } from './create-store.ts';
 // [ux-p2-orbit] Type-only imports (erased at build, no runtime store->engine cycle): the
 // porkchop sweep result the Lambert card publishes, and the editable MCS the builder edits and
@@ -201,6 +208,9 @@ export interface AppState {
   /** [ux-p2-access] The eigen-axis slew-feasibility verdict between the selected pass pair's
    *  pointings (does the slew fit in the gap), or null until a run. */
   slewFeasibility: SlewFeasibilityResult | null;
+  /** [ux-p3-access] The conflict-free multi-target observation schedule (ordered slots across
+   *  targets + the unscheduled/conflicted targets), or null until a run. */
+  observationSchedule: ObservationScheduleResult | null;
   /** Closest-approach + collision-probability summary from the last conjunction run. */
   conjunction: ConjunctionResult | null;
   /** Off-main-thread all-vs-all catalog screening: status, progress, and flagged events. */
@@ -219,6 +229,12 @@ export interface AppState {
    *  (the assumed covariance for an OEM/TLE catalog that carried none). The covariance matrices
    *  live on the engine catalog ref; this is the panel readout of which objects have one. */
   conjunctionSuppliedCovariances: readonly string[];
+  /** [ux-p3-conjunction] The maneuver-then-rescreen before/after Pc comparison for the selected
+   *  event's pair after the solved avoidance maneuver, or null until a rescreen runs. */
+  rescreen: PcComparison | null;
+  /** [ux-p3-conjunction] The conjunction watchlist: flagged pairs the analyst is tracking, each
+   *  with its current Pc/miss and a rose/fell trend that updates on a re-screen or covariance apply. */
+  watchlist: WatchlistState;
   /** Walker constellation summary from the last coverage/constellation run. */
   constellation: ConstellationResult | null;
   /** The designed constellation as the swept ASSET SET (published SPK ids), or null until
@@ -226,6 +242,8 @@ export interface AppState {
   designedConstellation: DesignedConstellation | null;
   /** Summary of the last coverage-grid overlay run (cell count + area-weighted FOM). */
   coverageGrid: CoverageGridResult | null;
+  /** [ux-p3-coverage] Off-main-thread coverage grid-sweep progress: status + cells done/total. */
+  coverageSweep: CoverageSweepState;
   /** Eigen-axis slew angle (deg) over time from the last attitude run. */
   slewSeries: Series | null;
   /** Lambert transfer summary (delta-v) from the last maneuver-design run. */
@@ -233,6 +251,9 @@ export interface AppState {
   /** [ux-p2-orbit] The Lambert porkchop sweep (delta-v over departure x TOF, plus the marked
    *  minimum) from the last configurable-transfer run, or null. */
   porkchop: PorkchopResult | null;
+  /** [ux-p3-conjunction] The porkchop worker-run lifecycle (status + progress) for the off-main-
+   *  thread grid sweep, so the Lambert card shows a progress readout + cancel. */
+  porkchopRun: PorkchopRunState;
   /** [ux-p2-orbit] The editable Mission Control Sequence the MCS builder edits; lifted into the
    *  store so the porkchop "send to MCS" hop appends a Maneuver to the same design. */
   editableMcs: EditableMcs;
@@ -604,6 +625,35 @@ export interface SlewFeasibilityResult {
   readonly label: string;
 }
 
+/** [ux-p3-access] One placed observation slot in the conflict-free multi-target schedule. */
+export interface ObservationScheduleSlot {
+  readonly targetName: string;
+  /** The observation start/stop (ET seconds): start is clamped to the slew-arrival time. */
+  readonly start: number;
+  readonly stop: number;
+  /** The eigen-axis slew angle (deg) + duration (s) from the previous slot (0 for the first slot). */
+  readonly slewFromPrevDeg: number;
+  readonly slewFromPrevSec: number;
+}
+
+/** [ux-p3-access] A target that could not be scheduled, with a located reason (conflict / no window). */
+export interface ObservationScheduleUnscheduled {
+  readonly targetName: string;
+  readonly reason: string;
+}
+
+/** [ux-p3-access] The conflict-free multi-target observation schedule: an ordered set of
+ *  non-overlapping slots across targets where the attitude slew between consecutive targets fits the
+ *  gap, plus the targets that could not be placed. Null until a run. */
+export interface ObservationScheduleResult {
+  readonly span: readonly [number, number];
+  /** The in-FOV pointing mode the schedule's windows were swept under. */
+  readonly pointing: 'nadir' | 'sun';
+  readonly slots: readonly ObservationScheduleSlot[];
+  readonly unscheduled: readonly ObservationScheduleUnscheduled[];
+  readonly label: string;
+}
+
 export interface TleOrbit {
   /** Altitude above the Earth ellipsoid over one day (km vs ET). */
   readonly altitude: Series;
@@ -720,18 +770,23 @@ export const initialAppState: AppState = {
   linkWorksheet: null,
   selectedWindowPair: null,
   slewFeasibility: null,
+  observationSchedule: null,
   conjunction: null,
   screening: INITIAL_SCREENING,
   conjunctionIngest: null,
   conjunctionEvent: null,
   selectedConjunctionEventId: null,
   conjunctionSuppliedCovariances: [],
+  rescreen: null,
+  watchlist: INITIAL_WATCHLIST,
   constellation: null,
   designedConstellation: null,
   coverageGrid: null,
+  coverageSweep: INITIAL_COVERAGE_SWEEP,
   slewSeries: null,
   transfer: null,
   porkchop: null,
+  porkchopRun: INITIAL_PORKCHOP_RUN,
   editableMcs: defaultEditableMcs(),
   groundTrack: null,
   tleOrbit: null,

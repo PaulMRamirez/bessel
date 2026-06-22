@@ -14,10 +14,12 @@ import {
   DEFAULT_ACCESS_CONSTRAINTS,
   DEFAULT_LINK_WORKSHEET,
   DEFAULT_SLEW_FEASIBILITY,
+  DEFAULT_OBSERVATION_SCHEDULE,
   type AccessConstraintSpec,
   type FovPointingMode,
   type LinkWorksheetSpec,
   type SlewFeasibilitySpec,
+  type ObservationScheduleSpec,
 } from '../engine/analysis-defaults.ts';
 import { useStore, type AppStore } from '../store/index.ts';
 import { IntervalResult, SeriesResult } from './analysis-result.tsx';
@@ -26,6 +28,7 @@ import { TaskCardAccordion, type ExpandRequest, type TaskCardEntry } from './Tas
 import { LinkParamsForm, DEFAULT_LINK_PARAMS, type LinkParams } from './analysis-tool-forms.tsx';
 import { AccessConstraintForm } from './AccessConstraintForm.tsx';
 import { stationPassesCard, linkWorksheetCard, slewFeasibilityCard } from './access-comms-cards.tsx';
+import { observationScheduleCard } from './observation-schedule-card.tsx';
 import {
   Action,
   EmptyNotice,
@@ -60,6 +63,9 @@ export function AccessCommsPanel(props: AccessCommsPanelProps): JSX.Element {
   const [pointing, setPointing] = useState<FovPointingMode>('nadir');
   const [worksheetParams, setWorksheetParams] = useState<LinkWorksheetSpec>(DEFAULT_LINK_WORKSHEET);
   const [slewParams, setSlewParams] = useState<SlewFeasibilitySpec>(DEFAULT_SLEW_FEASIBILITY);
+  // [ux-p3-access] The multi-target schedule spec + its raw target-list text (kept as typed).
+  const [scheduleSpec, setScheduleSpec] = useState<ObservationScheduleSpec>(DEFAULT_OBSERVATION_SCHEDULE);
+  const [scheduleTargets, setScheduleTargets] = useState<string>('');
 
   const runStatus = useStore(store, (s) => s.runStatus);
   const accessResult = useStore(store, (s) => s.accessResult);
@@ -273,6 +279,24 @@ export function AccessCommsPanel(props: AccessCommsPanelProps): JSX.Element {
           runStatus: runStatus['compute-slew-feasibility'],
           slewParams,
           setSlewParams,
+        }),
+    },
+    {
+      id: 'observation-schedule',
+      title: 'Observation multi-target schedule',
+      purpose: 'A conflict-free, slew-feasible observation timeline across a target list.',
+      status: runStatus['compute-observation-schedule'],
+      render: () =>
+        observationScheduleCard({
+          engine,
+          store,
+          runStatus: runStatus['compute-observation-schedule'],
+          spec: scheduleSpec,
+          setSpec: setScheduleSpec,
+          constraints,
+          targetText: scheduleTargets,
+          setTargetText: setScheduleTargets,
+          span: { spanSec: targetSpan.spanSec, stepSec: targetSpan.stepSec },
         }),
     },
   ];

@@ -67,8 +67,14 @@ test('porkchop sweeps a delta-v contour and sends the optimum to a new MCS maneu
   await page.getByTestId('param-tof-day0').fill('90');
   await page.getByTestId('param-tof-day1').fill('150');
 
-  // Sweep the window; the delta-v contour and its marked minimum render.
+  // Sweep the window on the dedicated worker; the contour + its marked minimum render. [ux-p3] the
+  // grid solve runs off the main thread with a progress readout + cancel: after clicking, either the
+  // progress readout (the worker is mid-sweep) or the final contour (a fast sweep already finished)
+  // is shown, proving the worker-progress path is wired without flaking on the sub-frame timing.
   await page.getByTestId('compute-porkchop').click();
+  await expect(page.getByTestId('porkchop-progress').or(page.getByTestId('porkchop'))).toBeVisible({
+    timeout: 30_000,
+  });
   await expect(page.getByTestId('porkchop')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('porkchop-min')).toBeVisible();
   await expect(page.getByTestId('porkchop-best')).toContainText('delta-v');
