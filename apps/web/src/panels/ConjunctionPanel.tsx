@@ -85,7 +85,7 @@ export function ConjunctionPanel(props: ConjunctionPanelProps): JSX.Element {
         )}
       </StatResult>
       <RunStatusNote status={runStatus['compute-conjunction']} id="compute-conjunction" />
-      <Keep tool="conjunction" disabled={!conjunction || trayFull} onKeep={() => engine?.keepSnapshot('conjunction')} />
+      <Keep domain="conjunction" disabled={!conjunction || trayFull} onKeep={() => engine?.keepSnapshot('conjunction')} />
     </>
   );
 

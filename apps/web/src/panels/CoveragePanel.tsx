@@ -22,7 +22,7 @@ import {
   type ConstellationFormParams,
   type CoverageSweepFormParams,
 } from './analysis-tool-forms.tsx';
-import { Action, EmptyNotice, fmt, useAnalysisParams } from './analysis-shared.tsx';
+import { Action, EmptyNotice, Keep, fmt, useAnalysisParams, useTrayFull } from './analysis-shared.tsx';
 
 export interface CoveragePanelProps {
   readonly engine: BesselEngine | null;
@@ -47,6 +47,7 @@ export function CoveragePanel(props: CoveragePanelProps): JSX.Element {
   const constellation = useStore(store, (s) => s.constellation);
   const designed = useStore(store, (s) => s.designedConstellation);
   const coverageGrid = useStore(store, (s) => s.coverageGrid);
+  const trayFull = useTrayFull(store);
 
   const runSweep = (): void => {
     void engine?.computeCoverageGrid({
@@ -165,6 +166,11 @@ export function CoveragePanel(props: CoveragePanelProps): JSX.Element {
       >
         Clear coverage grid
       </Action>
+      <Keep
+        domain="coverage"
+        disabled={!coverageGrid || trayFull}
+        onKeep={() => engine?.keepSnapshot('coverage')}
+      />
       <RunStatusNote status={runStatus['compute-coverage-grid']} id="compute-coverage-grid" />
     </>
   );

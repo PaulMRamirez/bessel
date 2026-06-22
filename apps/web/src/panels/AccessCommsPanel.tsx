@@ -115,7 +115,7 @@ export function AccessCommsPanel(props: AccessCommsPanelProps): JSX.Element {
         }
       />
       <RunStatusNote status={runStatus['compute-access']} id="compute-access" />
-      <Keep tool="access" disabled={!accessResult || trayFull} onKeep={() => engine?.keepSnapshot('access')} />
+      <Keep domain="access" disabled={!accessResult || trayFull} onKeep={() => engine?.keepSnapshot('access')} />
     </>
   );
 
@@ -213,7 +213,7 @@ export function AccessCommsPanel(props: AccessCommsPanelProps): JSX.Element {
         }}
       />
       <RunStatusNote status={runStatus['compute-link']} id="compute-link" />
-      <Keep tool="link" disabled={!linkSeries || trayFull} onKeep={() => engine?.keepSnapshot('link')} />
+      <Keep domain="link" disabled={!linkSeries || trayFull} onKeep={() => engine?.keepSnapshot('link')} />
     </>
   );
 

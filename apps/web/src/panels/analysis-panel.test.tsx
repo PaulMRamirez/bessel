@@ -519,6 +519,7 @@ const ctx = (status: Record<string, 'idle' | 'running' | 'ok' | { error: string 
   span: { spanSec: 86400, stepSec: 120 },
   runStatus: status,
   runMeta: {},
+  trayFull: false,
 });
 const renderCard = (node: ReactNode): string => renderToStaticMarkup(createElement('div', null, node));
 

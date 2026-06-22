@@ -54,13 +54,17 @@ import { loadSavedScripts, persistSavedScripts, upsertScript } from '../scripts.
 import {
   KEPT_SNAPSHOT_LIMIT,
   type AppStore,
-  type AppState,
   type AnalysisContext,
   type AnalyzeTab,
   type RunStatus,
   type SpacecraftSource,
   type GroundStation,
 } from '../store/index.ts';
+import {
+  buildSnapshotMetrics,
+  kindDomain,
+  type SnapshotKind,
+} from './snapshot-metrics.ts';
 import { reduceStations, type StationAction } from '../panels/station-registry.ts';
 import type {
   AccessConstraintSpec,
@@ -154,43 +158,6 @@ export type {
 export interface ShareResult {
   readonly url: string;
   readonly copied: boolean;
-}
-
-type Metrics = readonly { readonly label: string; readonly value: string }[];
-
-/** Build the comparable metrics for a tool's current result, or null if there is none. */
-function snapshotMetrics(tool: 'access' | 'conjunction' | 'link', s: AppState): Metrics | null {
-  const n = (v: number, d = 2): string => (Number.isFinite(v) ? v.toFixed(d) : '-');
-  if (tool === 'access') {
-    const f = s.accessResult?.fom;
-    if (!f) return null;
-    return [
-      { label: 'coverage %', value: n(f.percentCoverage * 100, 1) },
-      { label: 'passes', value: String(f.accessCount) },
-      { label: 'max gap (min)', value: n(f.maxGapSec / 60, 1) },
-    ];
-  }
-  if (tool === 'conjunction') {
-    const c = s.conjunction;
-    if (!c) return null;
-    return [
-      { label: 'Pc', value: c.pc.toExponential(2) },
-      { label: 'miss (km)', value: n(c.missKm) },
-      { label: 'rel speed (km/s)', value: n(c.relSpeedKmS, 3) },
-    ];
-  }
-  const link = s.linkSeries;
-  if (!link || link.value.length === 0) return null;
-  let min = Infinity;
-  let sum = 0;
-  for (const v of link.value) {
-    if (v < min) min = v;
-    sum += v;
-  }
-  return [
-    { label: 'min Eb/N0 (dB)', value: n(min, 1) },
-    { label: 'mean Eb/N0 (dB)', value: n(sum / link.value.length, 1) },
-  ];
 }
 
 export class BesselEngine {
@@ -758,13 +725,17 @@ export class BesselEngine {
     this.store.setState((s) => ({ runStatus: { ...s.runStatus, [id]: status } }));
   }
 
-  /** Keep the current result of an analysis tool as a named snapshot for comparison.
-   *  A no-op when the tool has no result yet or the tray is already full. */
-  keepSnapshot(tool: 'access' | 'conjunction' | 'link'): void {
-    const metrics = snapshotMetrics(tool, this.store.getState());
+  /** Keep the current result of an analysis result block as a typed compare snapshot (Wave 2B:
+   *  generalized so EVERY result block across the six domain panels can be kept). The snapshot
+   *  carries its domain, a label, and the decision-relevant metrics for that result kind. A no-op
+   *  when the result is not present yet or the tray is already full. */
+  keepSnapshot(kind: SnapshotKind): void {
+    const metrics = buildSnapshotMetrics(kind, this.store.getState());
     if (!metrics) return;
+    const domain = kindDomain(kind);
     const seq = (this.snapSeq += 1);
-    const snapshot = { id: `snap-${seq}`, tool, name: `${tool} ${seq}`, metrics };
+    const keptAt = this.store.getState().et;
+    const snapshot = { id: `snap-${seq}`, domain, label: `${kind} ${seq}`, metrics, keptAt };
     // One functional update that re-checks the limit against the freshest state: two
     // rapid keeps must not both read a stale length and append past the cap. A no-op
     // (return the same array) when the tray is already full.
@@ -1064,6 +1035,30 @@ export class BesselEngine {
     await this.runTool('send-to-mcs', async () => {
       const ops = await import('./analysis-ops.ts');
       ops.sendPorkchopToMcs(this.store);
+    });
+  }
+
+  /** [ux-p2-wave2b] Cross-tab carrier: write the OD estimate's covariance into the Conjunction
+   *  supplied-covariance store for `objectId`, then switch to the Conjunction tab, so the SSA
+   *  analyst gets the OD covariance into the per-event Pc without re-typing. Fails loud (surfaced
+   *  through runStatus) when there is no OD result, no ingested catalog, or no selected event. */
+  async sendOdCovarianceToConjunction(objectId: string): Promise<void> {
+    await this.runTool('od-to-conjunction', async () => {
+      const ops = await import('./analysis-ops.ts');
+      ops.sendOdCovarianceToConjunction(this.store, this.conjunctionCatalogRef, objectId);
+      this.setAnalyzeTab('conjunction');
+    });
+  }
+
+  /** [ux-p2-wave2b] Cross-tab carrier: seed an impulsive avoidance Maneuver in the editable MCS
+   *  from the selected conjunction event, then switch to the Orbit & Maneuver tab. The rescreen
+   *  loop is Phase 3; here the candidate burn is only carried into the MCS builder. Fails loud
+   *  when no event is selected. */
+  async planAvoidanceBurn(): Promise<void> {
+    await this.runTool('plan-avoidance-burn', async () => {
+      const ops = await import('./analysis-ops.ts');
+      ops.planAvoidanceBurn(this.store);
+      this.setAnalyzeTab('orbit-maneuver');
     });
   }
 

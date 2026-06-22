@@ -33,13 +33,31 @@ export type AnalyzeTab =
 /** Per-tool run status: a compute action is idle, running, succeeded, or failed loudly. */
 export type RunStatus = 'idle' | 'running' | 'ok' | { readonly error: string };
 
-/** A kept analysis result snapshot, for side-by-side trade comparison. */
+/** The analysis domain a kept snapshot came from. Every result block across the six domain
+ *  panels can be kept; the compare tray groups snapshots by this domain. */
+export type SnapshotDomain =
+  | 'lighting'
+  | 'access'
+  | 'conjunction'
+  | 'coverage'
+  | 'orbit'
+  | 'link';
+
+/** A kept analysis result snapshot, for side-by-side trade comparison. Generalized in
+ *  Wave 2B: a snapshot from ANY result block carries its domain, a human label, and the
+ *  decision-relevant metrics for that result kind (a map of metric name -> value, where the
+ *  numbers are pre-formatted strings or raw numbers). The compare tray takes the union of the
+ *  metric keys across a domain's snapshots and tabulates them. */
 export interface KeptSnapshot {
   readonly id: string;
-  /** The tool the snapshot came from (access | conjunction | link); compared same-tool. */
-  readonly tool: string;
-  readonly name: string;
-  readonly metrics: readonly { readonly label: string; readonly value: string }[];
+  /** The domain the snapshot came from; the compare tray groups by this. */
+  readonly domain: SnapshotDomain;
+  /** A human label for the snapshot column (e.g. "access 1", "Walker delta 24/3/1"). */
+  readonly label: string;
+  /** The decision-relevant metrics for the result kind, keyed by metric name. */
+  readonly metrics: Readonly<Record<string, string | number>>;
+  /** The timeline epoch (ET seconds) the snapshot was kept at, for provenance; optional. */
+  readonly keptAt?: number;
 }
 
 /** Maximum number of kept snapshots in the compare tray. */

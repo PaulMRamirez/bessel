@@ -16,7 +16,8 @@ import {
 } from '../store/index.ts';
 import { IntervalResult, SeriesResult } from './analysis-result.tsx';
 import { RunStatusNote } from './RunStatus.tsx';
-import { Action, fmt } from './analysis-shared.tsx';
+import { Action, Keep, fmt } from './analysis-shared.tsx';
+import type { SnapshotKind } from '../engine/snapshot-metrics.ts';
 
 type Meta = Record<string, string | undefined>;
 
@@ -25,6 +26,8 @@ interface CardCtx {
   readonly span: { spanSec: number; stepSec: number };
   readonly runStatus: Readonly<Record<string, RunStatus>>;
   readonly runMeta: Meta;
+  /** Whether the compare tray is full, so the Keep affordances disable at the cap. */
+  readonly trayFull: boolean;
 }
 
 /** Shared shape of the two series-based lighting cards (beta, solar intensity): a run
@@ -43,8 +46,10 @@ function seriesLightingCard(opts: {
   readonly hint: string;
   readonly column: string;
   readonly note?: ReactNode;
+  /** The keep-for-compare affordance: its testid domain stem + the snapshot kind to keep. */
+  readonly keep: { readonly domain: string; readonly kind: SnapshotKind; readonly present: boolean };
 }): ReactNode {
-  const { ctx, id, stem } = opts;
+  const { ctx, id, stem, keep } = opts;
   const status = ctx.runStatus[id];
   return (
     <>
@@ -64,6 +69,7 @@ function seriesLightingCard(opts: {
       />
       {opts.series ? opts.note : null}
       <RunStatusNote status={status} id={id} />
+      <Keep domain={keep.domain} disabled={!keep.present || ctx.trayFull} onKeep={() => ctx.engine?.keepSnapshot(keep.kind)} />
     </>
   );
 }
@@ -86,6 +92,7 @@ export function betaCard(ctx: CardCtx, beta: BetaSeriesResult | null): ReactNode
         Eclipse season while |beta| &lt; {fmt(beta.onsetDeg, 1)} deg (the orbit's eclipse-onset angle).
       </p>
     ) : null,
+    keep: { domain: 'lighting-beta', kind: 'lighting-beta', present: !!beta },
   });
 }
 
@@ -140,6 +147,11 @@ export function eclipseCard(ctx: CardCtx, phases: EclipsePhasesResult | null): R
         </p>
       )}
       <RunStatusNote status={status} id="compute-eclipse" />
+      <Keep
+        domain="lighting-eclipse"
+        disabled={!phases || ctx.trayFull}
+        onKeep={() => ctx.engine?.keepSnapshot('lighting-eclipse')}
+      />
     </>
   );
 }
@@ -161,5 +173,6 @@ export function solarIntensityCard(ctx: CardCtx, series: Series | null): ReactNo
         1 = full sun, 0 = total umbra; values between are the penumbra fraction.
       </p>
     ),
+    keep: { domain: 'lighting-solar', kind: 'lighting-solar', present: !!series },
   });
 }

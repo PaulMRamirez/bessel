@@ -12,7 +12,7 @@ import { useStore, type AppStore } from '../store/index.ts';
 import { ResultCsv, SeriesResult } from './analysis-result.tsx';
 import { RunStatusNote } from './RunStatus.tsx';
 import { TaskCardAccordion, type ExpandRequest, type TaskCardEntry } from './TaskCard.tsx';
-import { Action, EmptyNotice, useAnalysisParams } from './analysis-shared.tsx';
+import { Action, EmptyNotice, useAnalysisParams, useTrayFull } from './analysis-shared.tsx';
 import { betaCard, eclipseCard, solarIntensityCard } from './lighting-cards.tsx';
 import { RAD2DEG } from '../angles.ts';
 
@@ -34,8 +34,9 @@ export function LightingGeometryPanel(props: LightingGeometryPanelProps): JSX.El
   const eclipsePhases = useStore(store, (s) => s.eclipsePhases);
   const betaSeries = useStore(store, (s) => s.betaSeries);
   const solarIntensity = useStore(store, (s) => s.solarIntensitySeries);
+  const trayFull = useTrayFull(store);
 
-  const cardCtx = { engine, span, runStatus, runMeta };
+  const cardCtx = { engine, span, runStatus, runMeta, trayFull };
 
   const rangeCard = (): ReactNode => (
     <>

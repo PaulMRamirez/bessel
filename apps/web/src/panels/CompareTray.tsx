@@ -1,7 +1,8 @@
-// The compare tray: kept analysis snapshots tabulated side by side, grouped by tool
-// (same-tool comparison), so an analyst can weigh trade cases. Presentational: it reads
-// the keptSnapshots slice and calls the engine to remove/clear/export. Lives in the
-// lazy Compare tab of the Analyze dock; reuses ReportTable for the metric grid.
+// The compare tray: kept analysis snapshots tabulated side by side, grouped by domain, so an
+// analyst can weigh trade cases ACROSS every result kind (Wave 2B generalized the snapshot model
+// so EVERY result block can be kept). Each domain group is a table whose columns are the union of
+// that domain's snapshot metric keys; rows are the kept snapshots. Presentational: it reads the
+// keptSnapshots slice and calls the engine to remove/clear/export. Reuses ReportTable for the grid.
 
 import { Button } from '@bessel/selene-design';
 import { ReportTable, downloadBlob } from '@bessel/ui';
@@ -13,19 +14,40 @@ export interface CompareTrayProps {
   readonly store: AppStore;
 }
 
-/** Serialize kept snapshots to CSV, one section per tool. */
+/** A snapshot metric value rendered as a string ('-' for a missing key in the metric union). */
+const cell = (v: string | number | undefined): string => (v === undefined ? '-' : String(v));
+
+/** The distinct domains present, in first-seen order. */
+function domainsOf(snapshots: readonly KeptSnapshot[]): readonly KeptSnapshot['domain'][] {
+  return [...new Set(snapshots.map((s) => s.domain))];
+}
+
+/** The UNION of metric keys across a domain's snapshots, in first-seen order (so two snapshots of
+ *  the same kind share columns, and a kind that carries an extra metric appends it). */
+function metricKeysOf(group: readonly KeptSnapshot[]): readonly string[] {
+  const keys: string[] = [];
+  const seen = new Set<string>();
+  for (const s of group) {
+    for (const k of Object.keys(s.metrics)) {
+      if (!seen.has(k)) {
+        seen.add(k);
+        keys.push(k);
+      }
+    }
+  }
+  return keys;
+}
+
+/** Serialize kept snapshots to CSV, one section per domain (rows = metric, columns = snapshots). */
 function toCsv(snapshots: readonly KeptSnapshot[]): string {
-  const tools = [...new Set(snapshots.map((s) => s.tool))];
   return (
-    tools
-      .map((tool) => {
-        const group = snapshots.filter((s) => s.tool === tool);
-        const labels = group[0]?.metrics.map((m) => m.label) ?? [];
-        const head = ['metric', ...group.map((s) => s.name)].join(',');
-        const rows = labels.map((l) =>
-          [l, ...group.map((s) => s.metrics.find((m) => m.label === l)?.value ?? '')].join(','),
-        );
-        return [`tool: ${tool}`, head, ...rows].join('\n');
+    domainsOf(snapshots)
+      .map((domain) => {
+        const group = snapshots.filter((s) => s.domain === domain);
+        const keys = metricKeysOf(group);
+        const head = ['metric', ...group.map((s) => s.label)].join(',');
+        const rows = keys.map((k) => [k, ...group.map((s) => cell(s.metrics[k]))].join(','));
+        return [`domain: ${domain}`, head, ...rows].join('\n');
       })
       .join('\n\n') + '\n'
   );
@@ -38,12 +60,12 @@ export function CompareTray(props: CompareTrayProps): JSX.Element {
   if (snapshots.length === 0) {
     return (
       <p className="bessel-loader-hint" data-testid="compare-empty">
-        Keep an access, conjunction, or link result to compare trade cases here.
+        Keep any analysis result (lighting, access, conjunction, coverage, orbit, link) to compare
+        trade cases here.
       </p>
     );
   }
 
-  const tools = [...new Set(snapshots.map((s) => s.tool))];
   return (
     <div className="bessel-compare-tray" data-testid="compare-tray">
       <div className="bessel-compare-tools">
@@ -58,29 +80,29 @@ export function CompareTray(props: CompareTrayProps): JSX.Element {
           Clear
         </Button>
       </div>
-      {tools.map((tool) => {
-        const group = snapshots.filter((s) => s.tool === tool);
-        const labels = group[0]?.metrics.map((m) => m.label) ?? [];
+      {domainsOf(snapshots).map((domain) => {
+        const group = snapshots.filter((s) => s.domain === domain);
+        const keys = metricKeysOf(group);
         return (
-          <div key={tool}>
+          <div key={domain} data-testid={`compare-domain-${domain}`}>
             <div className="bessel-compare-chips">
               {group.map((s) => (
                 <button
                   key={s.id}
                   type="button"
                   className="bessel-snapshot-remove"
-                  aria-label={`Remove ${s.name}`}
+                  aria-label={`Remove ${s.label}`}
                   data-testid={`snapshot-remove-${s.id}`}
                   onClick={() => engine?.removeSnapshot(s.id)}
                 >
-                  {s.name} <span aria-hidden="true">✕</span>
+                  {s.label} <span aria-hidden="true">✕</span>
                 </button>
               ))}
             </div>
             <ReportTable
               testId="compare-table"
-              columns={[tool, ...group.map((s) => s.name)]}
-              rows={labels.map((l) => [l, ...group.map((s) => s.metrics.find((m) => m.label === l)?.value ?? '-')])}
+              columns={[domain, ...group.map((s) => s.label)]}
+              rows={keys.map((k) => [k, ...group.map((s) => cell(s.metrics[k]))])}
             />
           </div>
         );

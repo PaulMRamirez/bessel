@@ -9,7 +9,7 @@ import { Button } from '@bessel/selene-design';
 import type { ConjunctionEvent } from '@bessel/conjunction';
 import type { BesselEngine } from '../../engine/index.ts';
 import { useStore, type AppStore } from '../../store/index.ts';
-import { fmt } from '../analysis-shared.tsx';
+import { Keep, fmt, useTrayFull } from '../analysis-shared.tsx';
 import { BPlaneView } from './BPlaneView.tsx';
 import { CovarianceInputForm } from './CovarianceInputForm.tsx';
 
@@ -43,6 +43,7 @@ export function PcCard(props: { readonly engine: BesselEngine | null; readonly s
   // [ux-p2-conjunction] First-class active selection: the table rows, the Pc result, the B-plane,
   // and the covariance-input form all read THIS selected event id.
   const selectedId = useStore(store, (s) => s.selectedConjunctionEventId);
+  const trayFull = useTrayFull(store);
   const [sortKey, setSortKey] = useState<SortKey>('pc');
 
   const events = screening.events ?? [];
@@ -159,6 +160,23 @@ export function PcCard(props: { readonly engine: BesselEngine | null; readonly s
           <Button variant="ghost" testId="export-cdm" onClick={() => void engine?.exportEventCdm()}>
             Export CDM
           </Button>
+
+          {/* [ux-p2-wave2b] Carrier: seed an impulsive avoidance Maneuver in the editable MCS from this
+              event, then switch to the Orbit & Maneuver tab. The rescreen loop lands in Phase 3. */}
+          <Button
+            variant="ghost"
+            testId="plan-avoidance-burn"
+            onClick={() => void engine?.planAvoidanceBurn()}
+          >
+            Plan avoidance burn
+          </Button>
+
+          {/* Keep this per-event Pc result as a compare snapshot (Wave 2B generalized snapshots). */}
+          <Keep
+            domain="conjunction-event"
+            disabled={trayFull}
+            onKeep={() => engine?.keepSnapshot('conjunction-event')}
+          />
         </div>
       ) : null}
     </div>

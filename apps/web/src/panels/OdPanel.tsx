@@ -23,9 +23,18 @@ export function OdPanel(props: OdPanelProps): JSX.Element {
   const result = useStore(store, (s) => s.odResult);
   const objects = useStore(store, (s) => s.objects);
   const runStatus = useStore(store, (s) => s.runStatus);
+  // [ux-p2-wave2b] The carrier targets one object of the SELECTED conjunction event; offer its
+  // primary/secondary as the destination object id. The carrier needs an OD result, a selected
+  // event, and an ingested catalog (the engine op fails loud when any is missing).
+  const conjunctionEvent = useStore(store, (s) => s.conjunctionEvent);
+  const carrierObjects = conjunctionEvent
+    ? [conjunctionEvent.primaryId, conjunctionEvent.secondaryId]
+    : [];
   const isSample = !objects.some((e) => e.kind === 'spacecraft');
   const run = busyLabel(runStatus['run-od'], 'Run batch least squares', 'Computing...');
   const [noise, setNoise] = useState(1);
+  const [carrierObject, setCarrierObject] = useState('');
+  const carrierTarget = carrierObject || carrierObjects[0] || '';
 
   return (
     <div className="bessel-analysis" data-testid="od-panel">
@@ -74,6 +83,36 @@ export function OdPanel(props: OdPanelProps): JSX.Element {
             Covariance (km): 1-sigma position x {fmt(result.sigmaPositionKm[0] * 1000, 1)} m, y{' '}
             {fmt(result.sigmaPositionKm[1] * 1000, 1)} m, z {fmt(result.sigmaPositionKm[2] * 1000, 1)} m
           </p>
+
+          {/* [ux-p2-wave2b] Carrier: send this OD covariance into the Conjunction supplied-covariance
+              store for the chosen object, then switch to the Conjunction tab. Needs a selected
+              conjunction event (the destination object is its primary/secondary). */}
+          <div className="bessel-analysis-params" data-testid="od-carrier">
+            <label>
+              Conjunction object
+              <select
+                value={carrierTarget}
+                data-testid="od-carrier-object"
+                onChange={(ev) => setCarrierObject(ev.target.value)}
+              >
+                {carrierObjects.length === 0 ? <option value="">(select an event first)</option> : null}
+                {carrierObjects.map((id) => (
+                  <option key={id} value={id}>
+                    {id}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <Button
+              variant="secondary"
+              testId="od-to-conjunction"
+              disabled={!carrierTarget}
+              onClick={() => void engine?.sendOdCovarianceToConjunction(carrierTarget)}
+            >
+              Use in Conjunction
+            </Button>
+          </div>
+          <RunStatusNote status={runStatus['od-to-conjunction']} id="od-to-conjunction" />
         </div>
       ) : (
         <p className="bessel-loader-hint">

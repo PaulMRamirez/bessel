@@ -63,7 +63,7 @@ export {
   computeLinkWorksheet,
   computeSlewFeasibility,
 } from './ops-access.ts';
-import type { AppStore } from '../store/index.ts';
+import type { AppStore, OdResult } from '../store/index.ts';
 import type { EngineCore } from './bootstrap.ts';
 import { buildHpopForceModel, HPOP_FORCE_MODEL_LABELS, type HpopForceModel } from './hpop-model.ts';
 import { runMcsDesign as runMcsDesignCore, runEditableMcs, type McsDesign } from './mcs.ts';
@@ -87,6 +87,7 @@ import { buildBPlaneGeometry, combineEncounter, encounterPlanePc } from '../conj
 // that carried none) + the CDM-style export writer, co-located in this lazy chunk.
 import {
   buildSuppliedCovariance,
+  CovarianceInputError,
   type SuppliedCovariance,
   type SuppliedCovarianceInput,
 } from '../conjunction/covariance-input.ts';
@@ -891,12 +892,76 @@ export function sendPorkchopToMcs(store: AppStore): void {
     throw new Error('send to MCS: no solved porkchop optimum to send');
   }
   const dvKmS = result.best.deltaVKmS;
+  appendManeuver(store, dvKmS);
+}
+
+/** Append an impulsive Maneuver of magnitude `dvKmS` to the editable MCS through the pure reducer,
+ *  preserving the prior segments. Shared by the porkchop and avoidance-burn carriers. */
+function appendManeuver(store: AppStore, dvKmS: number): void {
   const current = store.getState().editableMcs;
   const added = mcsEditorReducer(current, { type: 'add', kind: 'Maneuver' });
-  // Set the freshly appended Maneuver's magnitude to the solved departure delta-v.
   const appended = added.segments[added.segments.length - 1]!;
   const next = mcsEditorReducer(added, { type: 'patch', id: appended.id, patch: { dvKmS } });
   store.setState({ editableMcs: next });
+}
+
+/** The default along-track delta-v (km/s) seeded for a conjunction avoidance burn: a small,
+ *  conservative tangential impulse the analyst then tunes in the MCS builder (Phase 3 closes the
+ *  rescreen loop). A named constant, not a magic number, so the seed is one obvious place. */
+export const DEFAULT_AVOIDANCE_DV_KMS = 0.01;
+
+/**
+ * Cross-tab carrier (analysis-UX Phase 2, section 5.2, B.2): seed an impulsive avoidance Maneuver
+ * in the editable MCS from the SELECTED conjunction event, so the SSA analyst carries the candidate
+ * burn into the trajectory designer without re-typing. The EditableManeuver model carries a scalar
+ * along-track (prograde) magnitude, so the seeded burn is a small default along-track delta-v. Pure
+ * store mutation through the MCS reducer (a no-op-free append); fails loud when no event is selected.
+ * The actual rescreen-after-maneuver loop is Phase 3; here the burn is only carried into the builder.
+ */
+export function planAvoidanceBurn(store: AppStore): void {
+  const ev = store.getState().conjunctionEvent;
+  if (!ev) {
+    throw new Error('plan avoidance burn: select a conjunction event before planning an avoidance burn');
+  }
+  appendManeuver(store, DEFAULT_AVOIDANCE_DV_KMS);
+}
+
+/**
+ * Build the analyst-supplied covariance INPUT (inertial-frame, diagonal) from an OD estimate's
+ * 1-sigma position uncertainties: C = diag(sigma^2) in km^2. Pure; fails loud (CovarianceInputError)
+ * when the OD covariance is degenerate (a non-finite or non-positive sigma), matching the conjunction
+ * covariance-input contract. The OD covariance is referenced in the inertial frame (the OD state is
+ * inertial), so no RTN rotation is needed.
+ */
+export function odCovarianceInput(odResult: OdResult): SuppliedCovarianceInput {
+  const [sx, sy, sz] = odResult.sigmaPositionKm;
+  for (const [axis, s] of [['x', sx], ['y', sy], ['z', sz]] as const) {
+    if (!Number.isFinite(s)) throw new CovarianceInputError(`OD sigma ${axis} must be finite (got ${s})`);
+    if (s <= 0) throw new CovarianceInputError(`OD sigma ${axis} must be positive (got ${s})`);
+  }
+  return {
+    matrix3: [sx * sx, 0, 0, 0, sy * sy, 0, 0, 0, sz * sz],
+    frame: 'inertial',
+  };
+}
+
+/**
+ * Cross-tab carrier (analysis-UX Phase 2, section 5.2, B.1): write the OD estimate's covariance into
+ * the Conjunction supplied-covariance store for a chosen object id, so the SSA analyst gets the OD
+ * covariance into the per-event Pc without re-typing. Routes the OD covariance through the same
+ * setSuppliedCovariance path the manual covariance-input form uses (validate -> store on the catalog
+ * ref -> recompute the selected event Pc), so it writes the conjunctionSuppliedCovariances slice.
+ * Fails loud when there is no OD result, no ingested catalog, or no selected event.
+ */
+export function sendOdCovarianceToConjunction(
+  store: AppStore,
+  catalogRef: ConjunctionCatalogRef,
+  objectId: string,
+): void {
+  const odResult = store.getState().odResult;
+  if (!odResult) throw new Error('send OD covariance: run orbit determination before sending its covariance');
+  const input = odCovarianceInput(odResult);
+  setSuppliedCovariance(store, catalogRef, objectId, input);
 }
 
 /**

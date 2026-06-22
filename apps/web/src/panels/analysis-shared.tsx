@@ -78,10 +78,12 @@ export function Action(props: {
   );
 }
 
-/** A "Keep for compare" button that snapshots a result into the compare tray. */
-export function Keep(props: { tool: string; disabled: boolean; onKeep: () => void }): JSX.Element {
+/** A "Keep for compare" button that snapshots a result into the compare tray. The `domain` drives
+ *  the testid (keep-<domain>) so every result block's Keep affordance is addressable; pass a
+ *  distinct `domain` per result block within a panel (e.g. keep-lighting-beta, keep-access-passes). */
+export function Keep(props: { domain: string; disabled: boolean; onKeep: () => void }): JSX.Element {
   return (
-    <Button variant="ghost" testId={`keep-${props.tool}`} disabled={props.disabled} onClick={props.onKeep}>
+    <Button variant="ghost" testId={`keep-${props.domain}`} disabled={props.disabled} onClick={props.onKeep}>
       Keep for compare
     </Button>
   );
