@@ -12,8 +12,9 @@ drives geometry from CSPICE compiled to WebAssembly, and renders with Three.js.
 
 Beyond visualization, Bessel ships a validated mission-analysis engine layer
 (orbit propagation, access, lighting, communications, conjunction, attitude,
-coverage, maneuver design, and CCSDS interop) surfaced in three interactive
-workbenches. It also runs headless: special-perturbations propagation (NxN gravity,
+coverage, maneuver design, and CCSDS interop) surfaced in a single task-framed
+six-tab Analyze workbench (see docs/analysis-workbench.md and
+docs/analysis-personas.md). It also runs headless: special-perturbations propagation (NxN gravity,
 drag, SRP) with dense output, event detection, and the State Transition Matrix; an
 Astrogator-class Mission Control Sequence with a differential corrector, nested
 targeting, finite burns, and a fuel-optimal gradient optimizer; orbit determination
@@ -98,36 +99,43 @@ Copy and edit the sample file as a starting point for your own mission; the
 kernels its bodies need must be furnished (the bundled demo kernels cover the
 inner system, Saturn, and Cassini).
 
-## Mission analysis workbenches
+## Mission analysis workbench
 
-Menus in the app shell run the analysis engines and render the results as
-Gantt timelines, time-series charts, ground-track overlays, report tables, and
-file exports. Full reference: docs/analysis-tools.md.
+The **Analyze** toggle in the app shell opens one task-framed, pinnable analysis dock.
+It is organized into six domain tabs, each surfacing its engines as collapsible
+TaskCards over a shared Scenario context (epoch, span/step, target, observer, frame,
+and a ground-station registry), with an intent search box and mission-profile presets
+as accelerators. Results render as Gantt timelines, time-series charts, ground-track
+overlays, report tables, and file exports. Full reference: docs/analysis-workbench.md,
+docs/analysis-personas.md, and docs/analysis-tools.md.
 
-- Analysis (appears once a spacecraft mission is loaded): eclipse/umbra
-  intervals, range time series, Sun line-of-sight access with a coverage figure
-  of merit, downlink Eb/N0 link budget, conjunction time-of-closest-approach and
-  2D collision probability, Walker-Delta constellation design, eigen-axis
-  attitude slew, Lambert transfer delta-v, ground track, and CCSDS OEM export.
-- Propagate (always available): propagate a bundled sample TLE with SGP4 into an
-  in-memory SPK and read back altitude, ground track, and period; find
-  ground-station access; and propagate the same state numerically with the native
-  Cowell HPOP, choosing the force model (point-mass / J2 / NxN gravity / drag / SRP).
-- Mission Design (always available): assemble a Mission Control Sequence (initial
-  state, propagate, impulsive maneuver, target), run the differential corrector, and
-  render the resulting trajectory plus the corrector convergence report.
-- Orbit Determination (always available): run the batch least-squares estimator on
-  synthetic range/range-rate/angle tracking and read back the estimated state, the
-  residual RMS, and the covariance.
-- Report: pick a data provider (range, range rate, speed, position, velocity, sub
-  point) for an observer/target pair over a time grid, run one cancellable
-  evalSeries job, read the unit-tagged report table, and export CSV.
+- Orbit & Maneuver: propagate a user spacecraft source (paste a TLE or pick a scene
+  object) with SGP4 vs the numerical HPOP integrator (selectable force model:
+  point-mass / J2 / NxN gravity / drag / SRP); build and run an editable Mission
+  Control Sequence with a differential corrector; orbit determination (batch
+  least-squares with residual RMS and covariance); an eigen-axis attitude slew; and a
+  worker-swept Lambert transfer + porkchop that sends the best transfer to the MCS.
+- Lighting & Geometry: range, ground track (selectable projection with station
+  overlays), solar beta-angle season, four-phase eclipse windows, and solar intensity.
+- Access & Comms: a composable constraint-stack access window (line of sight / range /
+  range rate / sun keepout / az-el mask / terrain) with a per-constraint breakdown;
+  ground-station passes; in-FOV observation windows; an itemized link-budget worksheet
+  with modcod margin; slew feasibility; and a conflict-free multi-target observation
+  schedule.
+- Conjunction: ingest real CCSDS CDM / OEM / TLE data, run an all-vs-all worker screen,
+  and triage a Pc-colored event table with full-covariance Pc, a Max-Pc bound, an SVG
+  B-plane plot, an avoidance-burn carrier into the MCS, a screen-after-maneuver
+  before/after Pc, a watchlist, and CDM export.
+- Coverage & Constellation: design a Walker constellation that publishes its members
+  as the swept asset set, then sweep a figure-of-merit grid on a worker into a
+  metric-aware contour with a legend and a regional FOM summary.
+- Report & Compare: run a data-provider report (range, range rate, speed, position,
+  velocity, sub point) over an observer/target grid; export the trajectory as a CCSDS
+  OEM; and compare kept snapshots side by side in the compare tray.
 
-The Analysis and Propagate buttons use fixed demonstration parameters (one-day
-spans, a representative DSN/Goldstone station, the bundled sample TLE, and an
-illustrative conjunction covariance) to exercise each engine end to end; the
-Report workbench is the parameterized path. Every engine is validated against an
-independent reference (docs/STK_PARITY_SPEC.md, REFERENCES.md).
+Long sweeps (catalog screening, the coverage grid, the porkchop) run on cancellable
+workers with progress. Every engine is validated against an independent reference
+(docs/STK_PARITY_SPEC.md, REFERENCES.md).
 
 The shell also carries Cosmographia-style interaction menus: a Script console (run a
 BesselScript program against the live viewer), a Plugins loader (load a registered

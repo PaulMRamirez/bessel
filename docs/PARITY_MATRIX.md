@@ -1,14 +1,16 @@
 # Bessel vs Cosmographia: Parity Matrix
 
-Status: Draft v1.3 (analysis-engine refresh)
-Date: 2026-06-21
+Status: Draft v1.4 (analysis-engine refresh)
+Date: 2026-06-22
 
 > Scope: this matrix tracks parity against the **Cosmographia visualizer** only.
 > The separate STK-class mission-analysis engine layer (propagation, access,
 > lighting, communications, conjunction, attitude, coverage, maneuver design,
 > interop) landed afterward and is tracked in docs/STK_PARITY_SPEC.md §9; rows
 > below that touch analysis or scripting cross-reference it rather than
-> duplicating that tracking.
+> duplicating that tracking. Those analysis-engine capabilities are now surfaced
+> in the task-framed six-tab Analyze workbench (see docs/analysis-workbench.md and
+> STK_PARITY_SPEC §9), not the old flat analysis panel.
 
 > Closure pass (2026-06-14): the Section 15 closure plan was executed. The
 > headline gap (arbitrary-mission load into the rendered scene) is closed, image

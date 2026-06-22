@@ -678,15 +678,30 @@ pthreads / web.dev WebAssembly threads / Pyodide Fortran-to-WASM notes.
 
 ---
 
-## 9. Implementation status (2026-06-19)
+## 9. Implementation status (2026-06-22)
 
 The analytical **engine layer**, the actual gap vs STK, is implemented as
-validated headless core packages, and every Phase B/C analysis domain is now
-**surfaced into the app UI and proven by an end-to-end test**. Every quantity is
-asserted against an independent numeric reference (NAIF SPK/`occult`, Vallado
-SGP4-VER and Lambert, EPSG:3857, analytic Pc/eclipse/footprint forms, ITU/textbook
-RF anchors). 711 unit/contract tests and 31 Playwright e2e; `pnpm verify` and
-`pnpm e2e` green; initial JS and WASM within budget.
+validated headless core packages, and the analysis layer is now surfaced into a
+**task-framed, six-tab Analyze workbench** rather than the old flat
+`AnalysisPanel.tsx` (deleted). The workbench tabs are **Orbit & Maneuver**,
+**Lighting & Geometry**, **Access & Comms**, **Conjunction**, **Coverage &
+Constellation**, and **Report & Compare**; each surfaces its analysis domain as
+collapsible **TaskCards** (an intent name, a config form, a run button, and an
+inline result you can Keep or Export) over a shared **Scenario context bar**
+(epoch, span/step, target, observer, frame, and a first-class ground-station
+registry), with an **AnalysisLauncher** search box and mission-profile **presets**
+(SSA, Comms, Coverage, Mission design, Observation) as accelerators. The deep
+capabilities (full-covariance Pc, B-plane, beta angle, az/el mask, sun keepout,
+terrain line-of-sight, range rate, area-weighted figure of merit, modcod margin)
+are parameters and toggles on intent-named tasks, not separate top-level tools.
+See docs/analysis-workbench.md (structure and shared controls) and
+docs/analysis-personas.md (per-perspective walkthroughs).
+
+Every quantity is asserted against an independent numeric reference (NAIF
+SPK/`occult`, Vallado SGP4-VER and Lambert, EPSG:3857, analytic Pc/eclipse/footprint
+forms, ITU/textbook RF anchors). 1407 unit/contract tests and ~64 Playwright e2e
+(63 chromium + the Electron DSK render); `pnpm verify` and `pnpm e2e` green; initial
+JS and WASM within budget.
 
 The numerical substrate, the higher-fidelity force models (NxN gravity, drag, SRP),
 the Astrogator-class Mission Control Sequence (now with nested targeting and finite
@@ -694,61 +709,64 @@ burns), orbit determination, the EOP-aware TEME to J2000 transform, and the head
 automation SDK/BCL (the formerly pending items below) have all landed; see the
 updated rows and §10.
 
-Near-term roadmap progress (the F3 foundation and the shadowed-core wiring) is
-landed: the **F3 cancellable-job protocol, EvalSpec interpreter, and worker pool**
-ship in `@bessel/spice` (`eval-series.ts`, `pool.ts`) and the range and ground-track
-tools now run as one-round-trip `evalSeries` jobs; the **propagator is wired into a
-Propagate workbench** (TLE -> SGP4 -> SPK-13 -> altitude + ground track + a composable
-ground-station access window), the **footprint moved into core `@bessel/sensors`**,
-and **CSV/CZML export plus a real-data CCSDS OEM fixture** landed in `@bessel/interop`.
+The F3 foundation and the shadowed-core wiring are landed: the **F3 cancellable-job
+protocol, EvalSpec interpreter, and worker pool** ship in `@bessel/spice`
+(`eval-series.ts`, `pool.ts`) and the report and ground-track tools now run as
+one-round-trip `evalSeries` jobs; the **propagator is wired into the Orbit &
+Maneuver tab** (a user spacecraft source -> SGP4/HPOP -> SPK-13 -> altitude + ground
+track, plus a composable ground-station access window in Access & Comms), the
+**footprint moved into core `@bessel/sensors`**, and **CSV/CZML export plus a
+real-data CCSDS OEM fixture** landed in `@bessel/interop`.
 
 | Domain | Package | Status (validated cores) |
 |---|---|---|
-| Foundations (F1/F2/F3) | `@bessel/spice`, `@bessel/timeline` | GF + SpiceCell + propagation/attitude/SPK-write bindings; `SpiceWindow` algebra; batched zero-copy `spkposBatch`; **F3 EvalSpec interpreter + cancellable-job protocol + worker pool** (partition a sweep across workers). **Done.** |
-| Propagation | `@bessel/propagator` | TLE parse (vs Vallado), **SGP4 (vs SGP4-VER, sub-meter)**, two-body (`prop2b`), J2/J4 mean-element, SPK Type-13 publish, batch, **a native Cowell HPOP: adaptive DOPRI5 integrator + pluggable ForceModel, validated against prop2b (sub-meter) and secularRatesJ2; the force model spans point-mass, full NxN spherical harmonics (sectoral + tesseral, Cunningham/Gottlieb recursion), third-body, atmospheric drag (co-rotating, pluggable exponential density), and cannonball solar radiation pressure with cylindrical shadow; drag density is pluggable behind a `DensityModel` seam with an exponential model, a Harris-Priester (Montenbruck & Gill Table 3.8, diurnal bulge) model, and an F10.7/Ap-driven Jacchia-1971 thermospheric model (vs the SatelliteToolbox jr1971 reference)**, **plus the numerical substrate: dense (continuous Hermite) output, switching-function event detection with Brent root-finding and terminal stops, and the co-integrated 42-state variational State Transition Matrix (`propagateCowellEx`, `dense.ts`, `events.ts`, `stm.ts`)**. **Done + UI** (Propagate workbench: SGP4 and HPOP both render altitude/ground-track with a point-mass/J2/NxN/drag/SRP force-model selector; publish pipeline tested). The full multi-species NRLMSISE-00 is pending (Jacchia-1971 is the driver-aware MSIS-class model in place). |
-| Mission Control Sequence | `@bessel/propagator` (`mcs/`) | **Astrogator-class MCS: a pure JSON mission IR (InitialState/Propagate/Maneuver/Target/Sequence/Stop), an immutable executor reusing `propagateCowellEx` with event-driven stop conditions, impulsive VNB/inertial burns AND finite (continuous-thrust) burns with co-integrated mass depletion, and a differential corrector with an STM-analytic Jacobian (zero finite-difference when STM-served + analytic goal + fixed-time stop) falling back to finite difference, with damped Newton, trust region, NESTED multi-level targeting, and loud typed failures**. Validated against the vis-viva delta-v, a flight-path-angle null, a pure-STM downrange-radius oracle, the rocket-equation/impulsive-limit for finite burns, and a nested inner/outer corrector. An OPTIMIZER mode (`minimizeDeltaV`) offers both a projected-gradient (reduced-gradient) method and a higher-order SQP (sequential quadratic programming) method with constraint restoration over a redundant control set, both validated to the closed-form Hohmann tangential-burn optimum (SQP converging in fewer outer iterations). **Core done + UI** (Mission Design workbench: build a sequence, run, render the arc + corrector convergence). A full SNOPT-class active-set/interior-point solver is pending. |
+| Foundations (F1/F2/F3) | `@bessel/spice`, `@bessel/timeline` | GF + SpiceCell + propagation/attitude/SPK-write bindings, **now including the `gfsep` (angular-separation) and `gfposc` (coordinate) geometry finders** that back sun-keepout and az/el-mask access; `SpiceWindow` algebra; batched zero-copy `spkposBatch`; **F3 EvalSpec interpreter + cancellable-job protocol + worker pool** (partition a sweep across workers). **Done.** |
+| Propagation | `@bessel/propagator` | TLE parse (vs Vallado), **SGP4 (vs SGP4-VER, sub-meter)**, two-body (`prop2b`), J2/J4 mean-element, SPK Type-13 publish, batch, **a native Cowell HPOP: adaptive DOPRI5 integrator + pluggable ForceModel, validated against prop2b (sub-meter) and secularRatesJ2; the force model spans point-mass, full NxN spherical harmonics (sectoral + tesseral, Cunningham/Gottlieb recursion), third-body, atmospheric drag (co-rotating, pluggable exponential density), and cannonball solar radiation pressure with cylindrical shadow; drag density is pluggable behind a `DensityModel` seam with an exponential model, a Harris-Priester (Montenbruck & Gill Table 3.8, diurnal bulge) model, and an F10.7/Ap-driven Jacchia-1971 thermospheric model (vs the SatelliteToolbox jr1971 reference)**, **plus the numerical substrate: dense (continuous Hermite) output, switching-function event detection with Brent root-finding and terminal stops, and the co-integrated 42-state variational State Transition Matrix (`propagateCowellEx`, `dense.ts`, `events.ts`, `stm.ts`)**. **Done + UI** (the Orbit & Maneuver tab, Propagate orbit card: SGP4 and HPOP both render altitude/ground-track from a USER spacecraft source (paste a TLE or pick a scene object; the former hardcoded `SAMPLE_TLE` was deleted) with a point-mass/J2/NxN/drag/SRP force-model selector; publish pipeline tested). The full multi-species NRLMSISE-00 is pending (Jacchia-1971 is the driver-aware MSIS-class model in place). |
+| Mission Control Sequence | `@bessel/propagator` (`mcs/`) | **Astrogator-class MCS: a pure JSON mission IR (InitialState/Propagate/Maneuver/Target/Sequence/Stop), an immutable executor reusing `propagateCowellEx` with event-driven stop conditions, impulsive VNB/inertial burns AND finite (continuous-thrust) burns with co-integrated mass depletion, and a differential corrector with an STM-analytic Jacobian (zero finite-difference when STM-served + analytic goal + fixed-time stop) falling back to finite difference, with damped Newton, trust region, NESTED multi-level targeting, and loud typed failures**. Validated against the vis-viva delta-v, a flight-path-angle null, a pure-STM downrange-radius oracle, the rocket-equation/impulsive-limit for finite burns, and a nested inner/outer corrector. An OPTIMIZER mode (`minimizeDeltaV`) offers both a projected-gradient (reduced-gradient) method and a higher-order SQP (sequential quadratic programming) method with constraint restoration over a redundant control set, both validated to the closed-form Hohmann tangential-burn optimum (SQP converging in fewer outer iterations). **Core done + UI** (the Orbit & Maneuver tab, Mission control sequence card: an EDITABLE segment builder, add/edit/reorder/remove InitialState / Propagate / Maneuver / Target segments, run the differential corrector to residual convergence, and render the solved arc + corrector convergence in 3D). A full SNOPT-class active-set/interior-point solver is pending. |
 | Frames | `@bessel/propagator` (`frames/`) | **EOP-aware TEME to J2000 (EME2000/GCRF): IAU-1976 precession, the full 106-term IAU-1980 nutation, the equation of the equinoxes, and the celestial-pole offset (ddpsi/ddeps) corrections**, validated to sub-meter against the Vallado teme2eci worked example. **Core done** (wired into the SDK SGP4 propagate path). |
-| Access | `@bessel/access` | Line-of-sight (`gfoclt`), range (`gfdist`), chains, facility elevation. **Done + UI** (composable ground-station passes: elevation mask intersected with a range gate, FOM + CSV). |
-| Lighting/eclipse | `@bessel/events` | Umbra/penumbra/annular/sunlit (vs `occult`). **Done.** |
-| Mission/maneuver | `@bessel/mission`, `@bessel/propagator` (`mcs/`) | Lambert (vs Vallado 7-5), impulsive maneuvers in VNB/RIC/LVLH. **Core done + UI** (`Solve Lambert transfer`). The MCS executor + differential corrector (above) now provides Astrogator-class targeting. |
-| Coverage | `@bessel/coverage` | Figure-of-Merit reduction, Walker generation, **plus a lat/lon grid-sweep over access (`sweepCoverageGrid`): per-cell access time, revisit, and exact N-fold simultaneous coverage reduced to a FOM grid, reusing `@bessel/access` per cell**. **Core done + UI** (access FOM readout + `Design Walker constellation`). |
-| Comms/RF | `@bessel/rf` | Friis, antenna gain, BER, link budget, Doppler, **plus ITU-R rain (P.618/P.838) + gaseous slant-path attenuation and a typed comm-entity schema (Transmitter/Receiver/Antenna -> EIRP, G/T)**. **Done + UI** (downlink Eb/N0 chart). Full P.676 line-by-line pending. |
-| Attitude | `@bessel/attitude`, `@bessel/interop` | Two-vector laws (`twovec`), eigen-axis slew, **pointing keep-out (exclusion) constraints with a windowed analysis, plus an attitude read/write path: AEM write (`writeAem`, round-trips `parseAem` scalar-first) and an `attitudeHistory` / `pxformAt` body-orientation sampler (the CK Type 3 analog), with `quaternionToMatrix` pinned against CSPICE `q2m`; plus CK-binary write/read now that CSPICE-WASM exports `ckw03`/`ckopn`/`ckcls`/`ckgp`/`sce2c`/`sct2e` (`@bessel/spice`), validated by a write/`ckgp`/`pxform` round-trip against `q2m` and wired into the viewer's CK-driven attitude demo**. **Core done + UI** (`Compute attitude slew` chart; bundled CK-driven spacecraft attitude). |
-| Sensors | `@bessel/sensors` | Conic FOV in/out, boundary, footprint on a body, the SPICE ellipsoid footprint + FOV cone (moved into core), **plus a typed sensor schema and time-evolving swath accumulation + coverage metric**. **Core done + UI** (FOV cone + footprint render in-scene). Rectangular FOV + spherical-polygon swath union pending. |
-| Conjunction/SSA | `@bessel/conjunction` | 2D Pc (Foster, vs analytic), TCA/miss, **plus all-vs-all screening (`screenAllVsAll`): a two-stage smart sieve (apogee/perigee radial-shell band + a coarse conjunction-box) before fine TCA/miss/Pc refinement of flagged pairs**, validated to flag exactly a known crossing pair against decoys. **Core done + UI** (`Compute closest approach` readout). |
-| Orbit determination | `@bessel/od` | **A Gauss-Newton batch least-squares estimator and a sequential extended Kalman filter (Joseph-form update), with analytic range, range-rate, and angle (RA/Dec, Az/El) measurement models, seeded by the propagator STM (`H_i = (dh/dx)_i Phi(t_i, t0)`); returns the estimated state, covariance, and residual RMS, with loud typed failures**. Validated against a synthetic-truth oracle: perfect measurements recover the truth state to sub-meter / sub-mm-per-s, a noisy case stays within covariance bounds, and measurement partials match finite differences. **Light-time/aberration** (`predictLightTime`, iterated down-leg solve with the STM-referred Jacobian) and **consider parameters** (a `consider`-covariance augmentation `Pc = Pxx + Sxc Pcc Sxc^T`), **Bennett tropospheric refraction** in the elevation/angle model, and **state-noise compensation (SNC) process noise** in the EKF (which keeps the filter consistent on a mismodeled truth where the no-Q filter diverges) have all landed. **Core done + UI** (Orbit Determination workbench: estimate from synthetic tracking, show state, residual RMS, and covariance). |
-| Reporting/Workbench | `@bessel/analysis`, `@bessel/spice` | Vector-geometry tool, data-provider series + stats, **plus a unit-tagged provider registry (`PROVIDER_CATALOG`) + the F3 EvalSpec interpreter**. **Core done + UI** (the Report workbench: pick a provider + observer/target + grid, run one evalSeries job, read a `ReportTable`, export CSV; plus the fixed Analysis tools + charting primitives). Calculation/Time derived-column tools pending. |
-| Interop | `@bessel/interop`, `@bessel/propagator` | CCSDS **OEM** parse/write (+ real-data MGS fixture) and **OEM->SPK import** (`publishOem`, renders via spkpos), **OMM** parse + `ommToTle` (drives SGP4, validated vs the catalog-5 TLE), **CDM** parse (SSA), **AEM** parse (attitude; quaternion records normalized scalar-first), **CSV and CZML export**. Frame/time: **recgeo + et2lst bindings**. **Core done + UI** (`Export CCSDS OEM`, per-result `Export CSV`). The EOP-aware TEME->J2000 transform (Frames row) and the automation SDK/BCL (Automation row) have since landed. |
+| Access | `@bessel/access` | Line-of-sight (`gfoclt`), range (`gfdist`), chains, facility elevation, **plus a range-rate constraint (LOS-projected relative velocity), an az/el-mask station constraint via `gfposc`, a sun-exclusion keepout via `gfsep`, and a terrain-masked LOS constraint over a DEM source**. **Done + UI** (the Access & Comms tab: a composable constraint-stack form, line of sight / range / range rate / sun keepout / az-el mask / terrain, with a per-constraint breakdown of what each constraint alone admits; a first-class ground-station registry with az/el-mask station passes (rise/set, max elevation); in-FOV windows with a selectable pointing mode; slew feasibility between consecutive passes; and a conflict-free, slew-feasible multi-target observation schedule). |
+| Lighting/eclipse | `@bessel/events` | Umbra/penumbra/annular/sunlit (vs `occult`), **plus a solar beta-angle series and a solar-intensity / penumbra-fraction (visible solar-disk fraction) series**. **Done + UI** (the Lighting & Geometry tab: beta-angle season against the eclipse-onset threshold, four-phase eclipse windows with per-day duration, and solar-intensity cards). |
+| Mission/maneuver | `@bessel/mission`, `@bessel/propagator` (`mcs/`) | Lambert (vs Vallado 7-5), impulsive maneuvers in VNB/RIC/LVLH. **Core done + UI** (the Orbit & Maneuver tab, Lambert transfer + porkchop card: a configurable departure x time-of-flight delta-v contour swept on a worker, with the minimum marked and a send-to-MCS handoff). The MCS executor + differential corrector (above) now provides Astrogator-class targeting. |
+| Coverage | `@bessel/coverage` | Figure-of-Merit reduction, Walker generation, a lat/lon grid-sweep over access (`sweepCoverageGrid`): per-cell access time, revisit, and exact N-fold simultaneous coverage reduced to a FOM grid, reusing `@bessel/access` per cell, **plus revisit / response-time and access-duration statistics, an area-weighted FOM, and a metric-aware contour overlay**. **Core done + UI** (the Coverage & Constellation tab: the Walker designer publishes its members as the swept asset set; a worker-backed grid sweep colors a metric-aware contour with a legend and a regional FOM summary table + CSV). |
+| Comms/RF | `@bessel/rf` | Friis, antenna gain, BER, link budget, Doppler, ITU-R rain (P.618/P.838) + gaseous slant-path attenuation, a typed comm-entity schema (Transmitter/Receiver/Antenna -> EIRP, G/T), **plus an off-axis antenna pattern with pointing loss, a polarization-mismatch loss, a rain sky-noise temperature, and M-PSK / M-QAM BER with a modcod table**. **Done + UI** (the Access & Comms tab: a downlink Eb/N0 chart, plus an itemized line-by-line link-budget worksheet, EIRP through margin, with a selectable modcod and a margin-vs-time threshold, bound to a selected station pass). Full P.676 line-by-line pending. |
+| Attitude | `@bessel/attitude`, `@bessel/interop` | Two-vector laws (`twovec`), eigen-axis slew, **pointing keep-out (exclusion) constraints with a windowed analysis, plus an attitude read/write path: AEM write (`writeAem`, round-trips `parseAem` scalar-first) and an `attitudeHistory` / `pxformAt` body-orientation sampler (the CK Type 3 analog), with `quaternionToMatrix` pinned against CSPICE `q2m`; plus CK-binary write/read now that CSPICE-WASM exports `ckw03`/`ckopn`/`ckcls`/`ckgp`/`sce2c`/`sct2e` (`@bessel/spice`), validated by a write/`ckgp`/`pxform` round-trip against `q2m` and wired into the viewer's CK-driven attitude demo**. **Core done + UI** (the Orbit & Maneuver tab's Attitude slew card: an eigen-axis slew profile between two pointing modes; plus the bundled CK-driven spacecraft attitude). |
+| Sensors | `@bessel/sensors` | Conic FOV in/out, boundary, footprint on a body, the SPICE ellipsoid footprint + FOV cone (moved into core), **plus a typed sensor schema and time-evolving swath accumulation + coverage metric**. **Core done + UI** (FOV cone + footprint render in-scene; the Access & Comms tab's in-FOV observation windows expose a SELECTABLE pointing mode). Rectangular FOV + spherical-polygon swath union pending. |
+| Conjunction/SSA | `@bessel/conjunction` | 2D Pc (Foster, vs analytic), TCA/miss, all-vs-all screening (`screenAllVsAll`): a two-stage smart sieve (apogee/perigee radial-shell band + a coarse conjunction-box) before fine TCA/miss/Pc refinement of flagged pairs (validated to flag exactly a known crossing pair against decoys), **plus full-covariance Pc via the Mahalanobis encounter-plane integral, a B-plane (encounter-plane) projection, a Max-Pc (Alfano) bound, and 6x6 covariance STM propagation to TCA (Monte-Carlo validated)**. **Core done + UI** (the Conjunction tab: ingest a real pasted CCSDS CDM / CCSDS OEM / TLE set via `@bessel/interop` + the propagator, run an all-vs-all screen on a cancellable worker, read a Pc-colored sortable event table, click a row for the full-covariance Pc + Max-Pc + an SVG B-plane plot, supply explicit RTN/inertial covariance when the catalog carried none, plan an avoidance burn into the MCS, screen-after-maneuver for a before/after Pc, track a watchlist, and export a CDM). |
+| Orbit determination | `@bessel/od` | **A Gauss-Newton batch least-squares estimator and a sequential extended Kalman filter (Joseph-form update), with analytic range, range-rate, and angle (RA/Dec, Az/El) measurement models, seeded by the propagator STM (`H_i = (dh/dx)_i Phi(t_i, t0)`); returns the estimated state, covariance, and residual RMS, with loud typed failures**. Validated against a synthetic-truth oracle: perfect measurements recover the truth state to sub-meter / sub-mm-per-s, a noisy case stays within covariance bounds, and measurement partials match finite differences. **Light-time/aberration** (`predictLightTime`, iterated down-leg solve with the STM-referred Jacobian) and **consider parameters** (a `consider`-covariance augmentation `Pc = Pxx + Sxc Pcc Sxc^T`), **Bennett tropospheric refraction** in the elevation/angle model, and **state-noise compensation (SNC) process noise** in the EKF (which keeps the filter consistent on a mismodeled truth where the no-Q filter diverges) have all landed. **Core done + UI** (the Orbit & Maneuver tab's Orbit determination card: estimate from synthetic tracking, show state, residual RMS, and covariance). |
+| Reporting/Workbench | `@bessel/analysis`, `@bessel/spice` | Vector-geometry tool, data-provider series + stats, **plus a unit-tagged provider registry (`PROVIDER_CATALOG`) + the F3 EvalSpec interpreter**. **Core done + UI** (the Report & Compare tab's Data-provider report card: pick a provider + observer/target + grid, run one evalSeries job, read a `ReportTable`, export CSV; plus the charting primitives and the whole-variant compare tray). Calculation/Time derived-column tools pending. |
+| Interop | `@bessel/interop`, `@bessel/propagator` | CCSDS **OEM** parse/write (+ real-data MGS fixture) and **OEM->SPK import** (`publishOem`, renders via spkpos), **OMM** parse + `ommToTle` (drives SGP4, validated vs the catalog-5 TLE), **CDM** parse (SSA), **AEM** parse (attitude; quaternion records normalized scalar-first), **CSV and CZML export**. Frame/time: **recgeo + et2lst bindings**. **Core done + UI** (the Report & Compare tab's Export trajectory (OEM) card; per-result CSV export across the workbench; CDM ingest/export in the Conjunction tab). The EOP-aware TEME->J2000 transform (Frames row) and the automation SDK/BCL (Automation row) have since landed. |
 | Automation/BCL | `@bessel/sdk`, `@bessel/pal-node`, `apps/cli` | **A headless, deterministic batch runner: a schema-validated JSON batch-job IR + `defineJob` builder, and `runJob` (3-pass validate/reference/execute) over furnish/loadCatalog/propagate(sgp4 with TEME->J2000, twobody)/runMcs/analyze(range, eclipse, access, linkBudget)/report/exportOem/exportCsv, with CI-grade exit codes and a provenance manifest (sha256 kernel and output digests, canonical JSON)**, a shipped JSON Schema kept in lockstep with the hand validator, an in-memory test PAL, a Node directory PAL (`@bessel/pal-node`), and the `bessel` CLI. **Core done** (each op end-to-end tested with the real SPICE engine and byte-stable output). Coverage/conjunction ops and a live provenance dashboard pending. |
-| 2D map | `@bessel/map-projection` | Equirectangular, Web Mercator (vs EPSG:3857), polar stereographic. **Done + UI** (`GroundTrackMap` overlay). |
-| Terrain | `@bessel/terrain` | Terrain-masked line-of-sight. **Core done.** |
+| 2D map | `@bessel/map-projection` | Equirectangular, Web Mercator (vs EPSG:3857), polar stereographic. **Done + UI** (the Lighting & Geometry tab's ground-track map: a SELECTABLE projection, equirectangular / Web Mercator / polar stereographic, with the scenario ground stations draped as overlay markers in the same projection). |
+| Terrain | `@bessel/terrain` | Terrain-masked line-of-sight. **Core done + UI** (now SURFACED as a terrain-masked-LOS access constraint over a sample DEM source in the Access & Comms constraint stack). |
 
-UI surfacing is **complete for every Phase B/C analysis domain**: the charting
-primitives (`IntervalTimeline` Gantt, `TimeSeriesChart`, `GroundTrackMap`, spec F5)
-ship in `@bessel/ui`, and the viewer's Analysis workbench (`apps/web/src/panels/
-AnalysisPanel.tsx`) wires **ten tools** end-to-end, all proven by one e2e test on
-the Cassini sample (`e2e/tests/analysis.spec.ts`):
+UI surfacing is **complete for every Phase B/C analysis domain**, now consolidated
+into the single task-framed six-tab Analyze workbench (the old flat
+`AnalysisPanel.tsx` is deleted). The charting primitives (`IntervalTimeline` Gantt,
+`TimeSeriesChart`, `GroundTrackMap`, spec F5) ship in `@bessel/ui`, and the workbench
+surfaces every analysis domain as configurable TaskCards over the engine and
+lazy-ops seam, with:
 
-- **Lighting**, `computeEclipse` -> `@bessel/events` -> umbra Gantt;
-- **Range**, `computeRange` -> batched `spkpos` -> range chart;
-- **Access + FOM**, `computeAccess` -> `@bessel/access` geometry-finder + window
-  algebra -> visibility Gantt, reduced to a `@bessel/coverage` Figure-of-Merit;
-- **Communications**, `computeLinkBudget` -> batched `spkpos` + `@bessel/rf` -> Eb/N0 chart;
-- **Conjunction**, `computeConjunction` -> `@bessel/conjunction` TCA/miss + Pc readout;
-- **Constellation**, `computeConstellation` -> `@bessel/coverage` Walker pattern;
-- **Attitude**, `computeSlew` -> `@bessel/attitude` eigen-axis slew -> angle chart;
-- **Maneuver**, `computeTransfer` -> `@bessel/mission` Lambert arc delta-v readout;
-- **2D map**, `computeGroundTrack` -> body-fixed sub-point -> `GroundTrackMap` overlay;
-- **Interop**, `exportOem` -> `@bessel/interop` `writeOem` -> CCSDS OEM download.
+- **whole-variant Compare**, the compare tray on Report & Compare tabulates kept
+  snapshots side by side, grouped by domain, across access, link, conjunction,
+  coverage, orbit, and lighting;
+- **active-selection bindings**, a selected station pass binds the link-budget
+  worksheet, a consecutive pass pair feeds the slew check, and a screened event
+  drives the Pc / B-plane view;
+- **cross-tab carriers**, an OD covariance feeds the Conjunction covariance input,
+  and a conjunction event plans an avoidance burn into the MCS;
+- a **unified export** (CSV with a run-metadata header, OEM trajectory, link
+  worksheet CSV, coverage FOM CSV, and a CCSDS-CDM record); and
+- dedicated **cancellable worker chunks** for catalog screening, the coverage grid
+  sweep, and the porkchop sweep, each with its own size budget.
 
-This exercises all three panel types over both the interval (window-algebra) and
-sampled (batched-ephemeris) engine paths, plus the scalar-readout and file-export
-paths. Three further workbenches surface the numerical engines directly, each proven
-by its own e2e: a **Mission Design** panel builds an MCS, runs `runMission`, and
-renders the arc plus corrector convergence; an **Orbit Determination** panel runs the
-`@bessel/od` batch estimator on synthetic tracking and shows the state, residual RMS,
-and covariance; and the **Propagate** panel gained an HPOP force-model selector
-(point-mass / J2 / NxN / drag / SRP) and a TEME->J2000 frame note.
+These are proven end-to-end by the workbench e2e suite (`e2e/tests/workbench.spec.ts`,
+`context.spec.ts`, the `mission-design`/`od`/`propagate`/`report` specs, and the
+per-domain flows in `e2e/tests/analysis.spec.ts`, which now cover lighting, the
+access constraint stack, conjunction CDM ingest + full-covariance Pc, the worker
+coverage-grid sweep, maneuver/map plots, in-FOV windows, the terrain-LOS constraint,
+and the multi-target observation schedule), exercising the interval (window-algebra)
+and sampled (batched-ephemeris) engine paths, the scalar-readout and file-export
+paths, and the worker job paths.
 
 The F3 cancellable-job worker pool, OMM/CDM interop, time-evolving sensor swaths,
 attitude pointing keep-out, the integrator substrate (dense output + event

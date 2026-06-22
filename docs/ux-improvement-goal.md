@@ -1,5 +1,13 @@
 # Bessel UX Improvement Goal
 
+> Status (2026-06-22): HISTORICAL, partially superseded. The analysis-tools
+> usability addressed here was carried out by the separate analysis-UX effort
+> (docs/analysis-ux-goal.md), which delivered the task-framed six-tab Analyze
+> workbench (docs/analysis-workbench.md, docs/analysis-personas.md), replacing the
+> flat top-bar analysis popovers this goal diagnosed. The personas and the broader
+> shell/onboarding findings below remain useful context; treat the analysis-tool
+> portions as delivered. The goal body is left unchanged as a record.
+
 Goal: improve the usability of the Bessel UI and analysis tools for the real set of
 end users (flight dynamics analyst, mission operations engineer, mission planner,
 payload/science observation planner, educator/outreach/first-run, power user/scripter),

@@ -27,8 +27,8 @@ The shell has four regions:
 - Center: the 3D viewport, a status line, instrument/track/share controls, a
   Layers popover and a `?` help button (top-right), and, when something is
   selected, an inspector card (identity, readouts, measurement).
-- Top bar: the Mission, Capture, Views, Propagate, and Report menus, the Analysis
-  menu (which appears once a spacecraft mission is loaded), and the theme toggle.
+- Top bar: the Mission, Plugins, Capture, Script, and Views menus, the **Analyze**
+  toggle (which opens the right-side analysis dock), and the theme toggle.
 - Bottom: the timeline (play/pause, rate, scrub, event annotations).
 
 Press `?` (or the help button) for the keyboard-shortcut overlay.
@@ -70,27 +70,41 @@ inner system, Saturn, and Cassini). See docs/catalog-schema.md to author your ow
 
 ## 5. Run your first analysis
 
-The Propagate menu works without a loaded mission, so start there:
+All analysis lives in one dock. Click the **Analyze** toggle in the top bar to open
+the right-side Analyze workbench. It is pinnable and tabbed (it does not auto-dismiss,
+so results survive canvas clicks and timeline scrubbing). It has six domain tabs,
+**Orbit & Maneuver**, **Lighting & Geometry**, **Access & Comms**, **Conjunction**,
+**Coverage & Constellation**, and **Report & Compare**, and every analysis follows the
+same flow: set the Scenario context once, pick a tab, expand a TaskCard, configure,
+run, and interpret the inline result.
 
-1. Open Propagate and click "Propagate sample TLE (SGP4)". Bessel parses the
-   bundled two-line element set, runs SGP4, publishes the arc as an in-memory SPK,
-   and reads it back as an altitude time series and a ground track, with the orbit
-   period.
-2. Click "Ground-station access" to find the visible passes over a representative
-   station (an elevation mask intersected with a range gate), with a pass count
-   and coverage figure of merit. Export them with the CSV button.
-3. Click "Propagate numerically (HPOP)" to integrate the same initial state with
-   the native Cowell propagator (adaptive DOPRI5, point-mass + J2) and compare its
-   altitude against SGP4.
+1. **Set the Scenario context.** The context bar at the top of the dock drives every
+   tab: it shows the live timeline epoch (toggle UTC vs TDB), the analysis Span (days)
+   and Step (s), the default Target and Observer (from the loaded objects), the SPICE
+   Frame, and a ground-station registry (add a station by name, lon, lat, alt, and
+   min-elevation mask, then select the active one). Set these once; the tasks read
+   them by role.
+2. **First analysis, eclipse.** Open the **Lighting & Geometry** tab and expand the
+   "Eclipse phases" TaskCard. Run it: Bessel computes the umbra / penumbra / annular /
+   sunlit windows over the span and shows them as a timeline with per-day duration.
+   Use "Show in scene" or scrub to an event boundary to see it on the globe.
+3. **Or propagate.** Open the **Orbit & Maneuver** tab and expand "Propagate orbit
+   (SGP4 / HPOP)". On the spacecraft-source control either paste your own two-line
+   element set (it is parsed and validated on apply; a bad TLE surfaces a located
+   error, this replaces the former hardcoded sample TLE) or pick a loaded scene
+   object. Run "Propagate (SGP4)" and "Propagate numerically (HPOP)" with a force-model
+   selector (point-mass / J2 / NxN gravity / drag / SRP); the two altitude series
+   overlay so you can read the divergence, alongside the ground track and orbit period.
+4. **Keep, compare, export.** Each result block has a Keep control (it lands in the
+   compare tray on the Report & Compare tab) and a CSV export; the trajectory exports
+   to a CCSDS OEM and a screened conjunction event exports a CDM.
 
-With a spacecraft mission loaded (step 3), the Analysis menu appears: eclipse
-intervals, range, Sun access with a coverage figure of merit, downlink Eb/N0,
-conjunction, constellation design, attitude slew, Lambert transfer, ground track,
-and CCSDS OEM export. Each result has an Export CSV button.
-
-The Report menu is the parameterized path: pick a provider (range, range rate,
-speed, position, velocity, sub point), an observer/target pair, a frame, and a
-time grid, then run one job to get a unit-tagged report table and a CSV.
+For depth, the **Report & Compare** tab's Data-provider report card is the
+parameterized path: pick a provider (range, range rate, speed, position, velocity,
+sub point), an observer/target pair, a frame, and a time grid, then run one job to get
+a unit-tagged report table and a CSV. For the full per-card walkthroughs see
+docs/analysis-workbench.md (structure and shared controls) and
+docs/analysis-personas.md (per-perspective use cases).
 
 ## 6. Save and share
 
