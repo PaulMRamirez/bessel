@@ -5,7 +5,6 @@
 // the engine's core and store (plus a disposed guard and, for the propagator path, a small
 // mutable TLE-state ref) as parameters, so nothing here depends on the BesselEngine class.
 
-import { eclipseIntervals } from '@bessel/events';
 import { computeElevationAccess, type Facility } from '@bessel/access';
 import { figureOfMerit, walkerConstellation, sweepCoverageGrid, type GridSpec } from '@bessel/coverage';
 import { CoverageOverlayError, type CoverageOverlayCell } from '@bessel/scene';
@@ -147,41 +146,6 @@ function providerFromConfig(cfg: ReportConfig): ProviderSpec {
       return { kind: 'velocity', observer, target, frame };
     case 'subPointLonLat':
       return { kind: 'subPointLonLat', observer, target, frame };
-  }
-}
-
-/**
- * Lighting analysis: compute the spacecraft's umbra (total-shadow) intervals over
- * one day from the current epoch, occulted by the mission center body, and store
- * them for the analysis panel. Requires a loaded spacecraft mission.
- */
-export async function computeEclipse(
-  e: EngineCore,
-  store: AppStore,
-  isDisposed: () => boolean,
-  opts: AnalysisSpan = {},
-): Promise<void> {
-  const sc = e.identity.spacecraftName;
-  const body = e.identity.centerBody;
-  if (!sc || !body) {
-    store.setState({ eclipseUmbra: [], eclipseSpan: null });
-    return;
-  }
-  const t0 = e.clock.state.et;
-  const span: [number, number] = [t0, t0 + (opts.spanSec ?? 86400)];
-  try {
-    const ecl = await eclipseIntervals(e.spice, {
-      observer: sc,
-      body,
-      bodyFrame: `IAU_${body.toUpperCase()}`,
-      span,
-      step: opts.stepSec ?? 120,
-    });
-    if (!isDisposed()) store.setState({ eclipseUmbra: ecl.umbra, eclipseSpan: span });
-  } catch (err) {
-    if (!isDisposed()) store.setState({ eclipseUmbra: [], eclipseSpan: span });
-    console.error('eclipse analysis failed', err);
-    throw err;
   }
 }
 
@@ -1014,3 +978,10 @@ export function clearCoverageGrid(e: EngineCore, store: AppStore): void {
   e.scene.clearCoverageOverlay();
   store.setState({ coverageGrid: null });
 }
+
+// The Lighting & Geometry domain ops live in ops-lighting.ts (so the heavier beta +
+// intensity @bessel/events paths do not bloat this source file), but are re-exported
+// here so the engine's lazy `import('./analysis-ops.ts')` seam pulls them into this same
+// analysis chunk: that shares the @bessel/events + @bessel/timeline + @bessel/spice
+// substrate with the eclipse/access ops instead of duplicating it in a second chunk.
+export { computeBetaSeries, computeEclipsePhases, computeSolarIntensity } from './ops-lighting.ts';

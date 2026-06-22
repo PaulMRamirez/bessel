@@ -1,17 +1,19 @@
 // The Lighting & Geometry domain tab (analysis-UX re-slot, design section 3, tab 2):
-// the geometry tools (spacecraft range, sub-point ground track) plus eclipse, surfaced as
-// collapsible TaskCards. The tool JSX is moved verbatim from the former AnalysisPanel; no
-// engine capability changes here. Presentational: it reads result slices and calls engine.
+// the geometry tools (spacecraft range, sub-point ground track) plus the lighting-season
+// capabilities (beta-angle season, full umbra/penumbra/annular/sunlit eclipse phases,
+// solar intensity), surfaced as collapsible TaskCards. Presentational: it reads result
+// slices and calls engine; the lighting card bodies live in lighting-cards.tsx.
 
 import { type ReactNode } from 'react';
 import { GroundTrackMap } from '@bessel/ui';
-import { seriesToCsv, intervalsToCsv } from '@bessel/interop';
+import { seriesToCsv } from '@bessel/interop';
 import type { BesselEngine } from '../engine/index.ts';
 import { useStore, type AppStore } from '../store/index.ts';
-import { IntervalResult, ResultCsv, SeriesResult } from './analysis-result.tsx';
+import { ResultCsv, SeriesResult } from './analysis-result.tsx';
 import { RunStatusNote } from './RunStatus.tsx';
 import { TaskCardAccordion, type ExpandRequest, type TaskCardEntry } from './TaskCard.tsx';
 import { Action, EmptyNotice, useAnalysisParams } from './analysis-shared.tsx';
+import { betaCard, eclipseCard, solarIntensityCard } from './lighting-cards.tsx';
 import { RAD2DEG } from '../angles.ts';
 
 export interface LightingGeometryPanelProps {
@@ -29,8 +31,11 @@ export function LightingGeometryPanel(props: LightingGeometryPanelProps): JSX.El
   const runStatus = useStore(store, (s) => s.runStatus);
   const rangeSeries = useStore(store, (s) => s.rangeSeries);
   const groundTrack = useStore(store, (s) => s.groundTrack);
-  const eclipseUmbra = useStore(store, (s) => s.eclipseUmbra);
-  const eclipseSpan = useStore(store, (s) => s.eclipseSpan);
+  const eclipsePhases = useStore(store, (s) => s.eclipsePhases);
+  const betaSeries = useStore(store, (s) => s.betaSeries);
+  const solarIntensity = useStore(store, (s) => s.solarIntensitySeries);
+
+  const cardCtx = { engine, span, runStatus, runMeta };
 
   const rangeCard = (): ReactNode => (
     <>
@@ -98,33 +103,6 @@ export function LightingGeometryPanel(props: LightingGeometryPanelProps): JSX.El
     </>
   );
 
-  const eclipseCard = (): ReactNode => (
-    <>
-      <Action
-        status={runStatus['compute-eclipse']}
-        onClick={() => void engine?.computeEclipse(span)}
-        testId="compute-eclipse"
-      >
-        Compute eclipse
-      </Action>
-      <IntervalResult
-        intervals={eclipseUmbra}
-        span={eclipseSpan}
-        title="Umbra intervals"
-        label="Eclipse umbra"
-        resultTestId="eclipse-result"
-        timelineTestId="eclipse-timeline"
-        hint="Compute the spacecraft eclipse over the next day."
-        csv={{
-          testId: 'eclipse-csv',
-          filename: 'eclipse-umbra.csv',
-          build: (i) => intervalsToCsv(i, { meta: runMeta }),
-        }}
-      />
-      <RunStatusNote status={runStatus['compute-eclipse']} id="compute-eclipse" />
-    </>
-  );
-
   const cards: readonly TaskCardEntry[] = [
     {
       id: 'range',
@@ -141,11 +119,25 @@ export function LightingGeometryPanel(props: LightingGeometryPanelProps): JSX.El
       render: groundTrackCard,
     },
     {
+      id: 'beta',
+      title: 'Beta-angle season',
+      purpose: 'Solar beta angle over the span vs the eclipse-onset threshold.',
+      status: runStatus['compute-beta'],
+      render: () => betaCard(cardCtx, betaSeries),
+    },
+    {
       id: 'eclipse',
-      title: 'Eclipse intervals',
-      purpose: 'Umbra entry/exit windows over the span.',
+      title: 'Eclipse phases',
+      purpose: 'Umbra/penumbra/annular/sunlit windows + per-day duration.',
       status: runStatus['compute-eclipse'],
-      render: eclipseCard,
+      render: () => eclipseCard(cardCtx, eclipsePhases),
+    },
+    {
+      id: 'solar-intensity',
+      title: 'Solar intensity',
+      purpose: 'Visible solar-disk fraction (0..1) for power/thermal.',
+      status: runStatus['compute-solar-intensity'],
+      render: () => solarIntensityCard(cardCtx, solarIntensity),
     },
   ];
 

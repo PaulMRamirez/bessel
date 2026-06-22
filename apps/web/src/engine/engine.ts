@@ -756,13 +756,36 @@ export class BesselEngine {
     this.store.setState({ keptSnapshots: [] });
   }
 
-  /** Lighting analysis: the spacecraft's umbra intervals over a day. */
+  /** Lighting analysis: the spacecraft's full umbra/penumbra/annular/sunlit eclipse
+   *  phases over a day (the lighting ops load with the lazy analysis chunk). */
   async computeEclipse(opts: AnalysisSpan = {}): Promise<void> {
     const e = this.core;
     if (!e) return;
     await this.runTool('compute-eclipse', async () => {
       const ops = await import('./analysis-ops.ts');
-      await ops.computeEclipse(e, this.store, this.isDisposed, opts);
+      await ops.computeEclipsePhases(e, this.store, this.isDisposed, opts);
+    });
+  }
+
+  /** Beta-angle season analysis: the solar beta angle (deg) over the span plus the
+   *  body's eclipse-onset threshold (lighting ops load with the lazy analysis chunk). */
+  async computeBetaSeries(opts: AnalysisSpan = {}): Promise<void> {
+    const e = this.core;
+    if (!e) return;
+    await this.runTool('compute-beta', async () => {
+      const ops = await import('./analysis-ops.ts');
+      await ops.computeBetaSeries(e, this.store, this.isDisposed, opts);
+    });
+  }
+
+  /** Solar-intensity analysis: the visible solar-disk fraction (0..1) over the span
+   *  (lighting ops load with the lazy analysis chunk). */
+  async computeSolarIntensity(opts: AnalysisSpan = {}): Promise<void> {
+    const e = this.core;
+    if (!e) return;
+    await this.runTool('compute-solar-intensity', async () => {
+      const ops = await import('./analysis-ops.ts');
+      await ops.computeSolarIntensity(e, this.store, this.isDisposed, opts);
     });
   }
 
