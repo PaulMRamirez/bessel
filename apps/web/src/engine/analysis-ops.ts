@@ -69,14 +69,26 @@ import { buildHpopForceModel, HPOP_FORCE_MODEL_LABELS, type HpopForceModel } fro
 import { runMcsDesign as runMcsDesignCore, runEditableMcs, type McsDesign } from './mcs.ts';
 import { compileEditableMcs } from './mcs-compile.ts';
 import { type EditableMcs, mcsEditorReducer } from './mcs-editor.ts';
-// [ux-p2-orbit] The pure Lambert porkchop sweep (co-located in this lazy analysis chunk so the
-// CPU-bound grid solve stays behind the dynamic-import seam, never in the first-paint shell).
-import { linspace, sweepPorkchop, type SampledState } from './porkchop.ts';
+// [ux-p2-orbit] The Lambert porkchop axis builder + state type (co-located in this lazy analysis
+// chunk). [ux-p3-conjunction] The CPU-bound grid solve moved to a dedicated worker, so the sweep no
+// longer runs here; only the SPICE body-state sampling stays on the main thread.
+import { linspace, type SampledState } from './porkchop.ts';
 import type { SpacecraftSource } from '../store/index.ts';
 import { runOdDemo } from './od.ts';
 import { centerMu } from './center-mu.ts';
 import { ScreeningClient, ScreeningCancelled } from '../screening-client.ts';
 import { reduceScreening, INITIAL_SCREENING } from '../screening-protocol.ts';
+// [ux-p3-conjunction] The dedicated porkchop worker client + run-slice reducer (mirrors the
+// screening worker/client), the maneuver-then-rescreen pure helpers, and the watchlist reducer.
+import { PorkchopClient, PorkchopCancelled } from '../porkchop-client.ts';
+import { reducePorkchopRun, INITIAL_PORKCHOP_RUN } from '../porkchop-protocol.ts';
+import {
+  buildManeuveredEphemeris,
+  screenManeuveredPrimary,
+  findPairEvent,
+  comparePcBeforeAfter,
+} from '../conjunction/rescreen.ts';
+import { reduceWatchlist, type WatchlistAction } from '../conjunction/watchlist.ts';
 // [ux-p1-conjunction] REAL CDM/OEM/TLE ingestion (the pure parse->catalog fn) + the B-plane
 // geometry, co-located in this lazy chunk so they share the conjunction/propagator deps and
 // stay off the first-paint shell.
@@ -174,6 +186,13 @@ export interface TleState {
  *  calls. Null until the first screen constructs the client. */
 export interface ScreeningRef {
   client: ScreeningClient | null;
+}
+
+/** [ux-p3-conjunction] The live dedicated-porkchop worker client, held as a mutable ref on the
+ *  engine so the (lazily imported) porkchop ops can start and cancel a sweep across separate
+ *  dynamic-import calls. Null until the first sweep constructs the client. */
+export interface PorkchopRef {
+  client: PorkchopClient | null;
 }
 
 /** [ux-p1-conjunction] The most recently ingested REAL conjunction catalog (CDM/OEM/TLE),
@@ -573,6 +592,9 @@ export function computeEventPc(store: AppStore, catalogRef: ConjunctionCatalogRe
         extentKm: geom.extentKm,
       },
     });
+    // [ux-p3-conjunction] If the pair is watched, fold the recomputed Pc into its row (e.g. after an
+    // OD covariance is applied the full-covariance Pc becomes available and the trend updates).
+    syncWatchlistFromEvent(store, ev.primaryId, ev.secondaryId, pcFull, enc.missKm);
     return;
   }
 
@@ -597,6 +619,23 @@ export function computeEventPc(store: AppStore, catalogRef: ConjunctionCatalogRe
       extentKm,
     },
   });
+  // [ux-p3-conjunction] Keep a watched row in sync with the recomputed Pc (here the max-Pc bound).
+  syncWatchlistFromEvent(store, ev.primaryId, ev.secondaryId, pcMax, ev.missKm);
+}
+
+/** [ux-p3-conjunction] Update a watched pair's row with a freshly computed Pc/miss (a no-op when the
+ *  pair is not on the watchlist, by reduceWatchlist's 'update' contract). The tracked Pc is the
+ *  full-covariance Pc when available, else the max-Pc bound, matching what the row was seeded with. */
+function syncWatchlistFromEvent(
+  store: AppStore,
+  primaryId: string,
+  secondaryId: string,
+  pc: number | null,
+  missKm: number,
+): void {
+  store.setState((s) => ({
+    watchlist: reduceWatchlist(s.watchlist, { type: 'update', primaryId, secondaryId, pc, missKm }),
+  }));
 }
 
 // [ux-p2-conjunction] Explicit covariance input + CDM-style export ops.
@@ -831,16 +870,20 @@ const PORKCHOP_MAX_SAMPLES = 24;
 
 /**
  * Maneuver design: a Lambert PORKCHOP sweep. Samples the departure and arrival body states about
- * the central body across a departure-epoch range crossed with a time-of-flight range, solves
- * Lambert at every grid node, and publishes a contour of total departure delta-v with the marked
- * minimum (the candidate burn the "send to MCS" hop consumes). The body-state sampling (spkezr)
- * happens once per axis node here; the inner grid solve is the pure sweepPorkchop. Fails loud on
- * an unresolved body or a missing central-body GM.
+ * the central body across a departure-epoch range crossed with a time-of-flight range, then
+ * [ux-p3-conjunction] hands the (pre-sampled) grid to a DEDICATED worker that runs the CPU-bound
+ * Lambert grid solve off the main thread (so a larger grid never stalls the UI), forwarding a
+ * per-departure-column progress tick and reducing the porkchopRun slice (status + progress) the way
+ * the screening worker reduces its slice. The body-state sampling (spkezr) still happens once per
+ * axis node here, because only the SPICE worker touches CSPICE; the worker is SPICE-free. The sweep
+ * is cancellable (cancelPorkchop terminates the worker). Fails loud on an unresolved body, a missing
+ * central-body GM, or a grid that produces no Lambert solution.
  */
 export async function computePorkchop(
   e: EngineCore,
   store: AppStore,
   isDisposed: () => boolean,
+  porkchopRef: PorkchopRef,
   params: PorkchopParams,
 ): Promise<void> {
   const nd = Math.max(2, Math.min(PORKCHOP_MAX_SAMPLES, Math.floor(params.departureSamples)));
@@ -853,30 +896,63 @@ export async function computePorkchop(
   const et0 = e.clock.state.et;
   const departureEt = linspace(et0 + params.departureDay0 * DAY_SEC, et0 + params.departureDay1 * DAY_SEC, nd);
   const tofSec = linspace(params.tofDay0 * DAY_SEC, params.tofDay1 * DAY_SEC, nt);
-  try {
-    // Sample the departure body once per departure epoch, and the arrival body at every
-    // (departure + TOF) so each grid node has its real boundary states, all about the center.
-    const departureStates: SampledState[] = [];
-    const arrivalStates: SampledState[][] = [];
-    for (let i = 0; i < nd; i++) {
-      const dEt = departureEt[i]!;
-      const dep = await e.spice.spkezr(params.departureBody, dEt, 'J2000', 'NONE', params.centerBody);
-      departureStates.push({ position: dep.position, velocity: dep.velocity });
-      const row: SampledState[] = [];
-      for (let j = 0; j < nt; j++) {
-        const arr = await e.spice.spkezr(params.arrivalBody, dEt + tofSec[j]!, 'J2000', 'NONE', params.centerBody);
-        row.push({ position: arr.position, velocity: arr.velocity });
-      }
-      arrivalStates.push(row);
+  // Sample the departure body once per departure epoch, and the arrival body at every
+  // (departure + TOF) so each grid node has its real boundary states, all about the center. This
+  // is the only SPICE-touching step; the solve itself runs in the worker.
+  const departureStates: SampledState[] = [];
+  const arrivalStates: SampledState[][] = [];
+  for (let i = 0; i < nd; i++) {
+    const dEt = departureEt[i]!;
+    const dep = await e.spice.spkezr(params.departureBody, dEt, 'J2000', 'NONE', params.centerBody);
+    departureStates.push({ position: dep.position, velocity: dep.velocity });
+    const row: SampledState[] = [];
+    for (let j = 0; j < nt; j++) {
+      const arr = await e.spice.spkezr(params.arrivalBody, dEt + tofSec[j]!, 'J2000', 'NONE', params.centerBody);
+      row.push({ position: arr.position, velocity: arr.velocity });
     }
-    const label = `${params.departureBody} -> ${params.arrivalBody} departure delta-v (km/s)`;
-    const result = sweepPorkchop({ departureEt, tofSec }, mu, departureStates, arrivalStates, label);
-    if (!isDisposed()) store.setState({ porkchop: result });
+    arrivalStates.push(row);
+  }
+  const label = `${params.departureBody} -> ${params.arrivalBody} departure delta-v (km/s)`;
+  const client = porkchopRef.client ?? (porkchopRef.client = new PorkchopClient());
+  store.setState((s) => ({
+    porkchop: null,
+    porkchopRun: reducePorkchopRun(s.porkchopRun, { kind: 'start', total: nd }),
+  }));
+  try {
+    const result = await client.start(
+      { grid: { departureEt, tofSec }, mu, departureStates, arrivalStates, label },
+      (p) => {
+        if (!isDisposed()) store.setState((s) => ({ porkchopRun: reducePorkchopRun(s.porkchopRun, p) }));
+      },
+    );
+    if (!isDisposed()) {
+      store.setState((s) => ({
+        porkchop: result,
+        porkchopRun: reducePorkchopRun(s.porkchopRun, { kind: 'result', result }),
+      }));
+    }
   } catch (err) {
-    if (!isDisposed()) store.setState({ porkchop: null });
+    if (err instanceof PorkchopCancelled) {
+      if (!isDisposed()) store.setState({ porkchop: null, porkchopRun: INITIAL_PORKCHOP_RUN });
+      return;
+    }
+    if (!isDisposed()) {
+      const message = err instanceof Error ? err.message : String(err);
+      store.setState((s) => ({
+        porkchop: null,
+        porkchopRun: reducePorkchopRun(s.porkchopRun, { kind: 'error', message }),
+      }));
+    }
     console.error('porkchop analysis failed', err);
     throw err;
   }
+}
+
+/** [ux-p3-conjunction] Cancel an in-flight porkchop sweep (terminate the worker) and reset the
+ *  porkchop-run slice to idle, mirroring cancelScreen. */
+export function cancelPorkchop(store: AppStore, ref: PorkchopRef): void {
+  ref.client?.cancel();
+  store.setState((s) => ({ porkchopRun: reducePorkchopRun(s.porkchopRun, { kind: 'cancel' }) }));
 }
 
 /**
@@ -924,6 +1000,81 @@ export function planAvoidanceBurn(store: AppStore): void {
     throw new Error('plan avoidance burn: select a conjunction event before planning an avoidance burn');
   }
   appendManeuver(store, DEFAULT_AVOIDANCE_DV_KMS);
+}
+
+/** Default rescreen thresholds (km): generous so a now-larger post-maneuver miss is still captured
+ *  as an event (otherwise a successful avoidance drops the pair below the flag and the after-miss is
+ *  unknown). The screen-tab thresholds drive the BEFORE Pc; these frame the AFTER geometry. */
+const RESCREEN_THRESHOLD_KM = 200;
+const RESCREEN_PAD_KM = 200;
+
+/**
+ * [ux-p3-conjunction] Close the maneuver-then-rescreen loop. Takes the solved avoidance delta-v from
+ * the MCS corrector (mcsResult.solvedDvKmS, or the seeded along-track default when no corrector ran),
+ * applies it as an along-track impulse to the SELECTED event's primary ephemeris (buildManeuveredEph),
+ * re-screens that maneuvered primary against the rest of the ingested catalog (screenManeuveredPrimary),
+ * finds the same pair's re-screened event, and publishes the BEFORE vs AFTER Pc comparison (rescreen
+ * slice) so the analyst reads the risk reduction. When the pair is on the watchlist, the row updates to
+ * the after Pc/miss (the trend reflects the drop). Fails loud when there is no selected event, no
+ * ingested catalog, or the primary is not in the catalog.
+ */
+export function rescreenAfterManeuver(store: AppStore, catalogRef: ConjunctionCatalogRef): void {
+  const ev = store.getState().conjunctionEvent;
+  if (!ev) throw new Error('rescreen: select a conjunction event before screening after the maneuver');
+  const result = catalogRef.result;
+  if (!result) throw new Error('rescreen: no ingested catalog to re-screen after the maneuver');
+  // The original screened event for the pair (the BEFORE side: its 2D screen Pc + miss).
+  const before = selectScreenedEvent(store, ev.index);
+  const primary = result.catalog.find((o) => o.id === before.primaryId);
+  if (!primary) throw new Error(`rescreen: primary "${before.primaryId}" is not in the ingested catalog`);
+  // The avoidance delta-v: the MCS-solved value when a corrector ran, else the seeded default the
+  // plan-avoidance-burn carrier appended (so the loop closes even before the corrector converges).
+  const solved = store.getState().mcsResult?.solvedDvKmS;
+  const dvKmS = solved !== null && solved !== undefined ? solved : DEFAULT_AVOIDANCE_DV_KMS;
+  // Burn at the catalog epoch (the start of the screening window), so the along-track drift has the
+  // full window to open the miss before the encounter.
+  const maneuvered = buildManeuveredEphemeris(primary, { dvKmS, burnEt: primary.et[0]! });
+  const rescreened = screenManeuveredPrimary(result.catalog, maneuvered, RESCREEN_THRESHOLD_KM, RESCREEN_PAD_KM);
+  const after = findPairEvent(rescreened, before.primaryId, before.secondaryId);
+  const comparison = comparePcBeforeAfter(before, after);
+  store.setState({ rescreen: comparison });
+  // If the pair is being watched, fold the post-maneuver Pc/miss into its watchlist row.
+  const afterPc = comparison.afterPc;
+  const afterMiss = comparison.afterMissKm ?? comparison.beforeMissKm;
+  store.setState((s) => ({
+    watchlist: reduceWatchlist(s.watchlist, {
+      type: 'update',
+      primaryId: before.primaryId,
+      secondaryId: before.secondaryId,
+      pc: afterPc,
+      missKm: afterMiss,
+    }),
+  }));
+}
+
+/**
+ * [ux-p3-conjunction] Watchlist: add the SELECTED conjunction event's pair to the watchlist, seeding
+ * the row with its current per-event Pc (the full-covariance Pc when available, else the max-Pc bound)
+ * and screened miss. Pure store mutation through reduceWatchlist; fails loud when no event is selected.
+ */
+export function watchSelectedEvent(store: AppStore): void {
+  const ev = store.getState().conjunctionEvent;
+  if (!ev) throw new Error('watch: select a conjunction event before adding it to the watchlist');
+  const pc = ev.pcFull ?? ev.pcMax;
+  store.setState((s) => ({
+    watchlist: reduceWatchlist(s.watchlist, {
+      type: 'watch',
+      primaryId: ev.primaryId,
+      secondaryId: ev.secondaryId,
+      pc,
+      missKm: ev.missKm,
+    }),
+  }));
+}
+
+/** [ux-p3-conjunction] Remove one watched pair (by key) from the watchlist. Pure store mutation. */
+export function unwatchEvent(store: AppStore, action: Extract<WatchlistAction, { type: 'unwatch' }>): void {
+  store.setState((s) => ({ watchlist: reduceWatchlist(s.watchlist, action) }));
 }
 
 /**

@@ -10,6 +10,11 @@ import { DEFAULT_OBJECT_ENTRIES } from '../catalog-load.ts';
 import type { Bookmark } from '../bookmarks.ts';
 import type { SavedScript } from '../scripts.ts';
 import { INITIAL_SCREENING, type ScreeningState } from '../screening-protocol.ts';
+// [ux-p3-conjunction] the porkchop worker-run slice (progress/cancel), the maneuver-then-rescreen
+// before/after comparison, and the conjunction watchlist slice, additively lifted into the store.
+import { INITIAL_PORKCHOP_RUN, type PorkchopRunState } from '../porkchop-protocol.ts';
+import { INITIAL_WATCHLIST, type WatchlistState } from '../conjunction/watchlist.ts';
+import type { PcComparison } from '../conjunction/rescreen.ts';
 import { createStore, type Store } from './create-store.ts';
 // [ux-p2-orbit] Type-only imports (erased at build, no runtime store->engine cycle): the
 // porkchop sweep result the Lambert card publishes, and the editable MCS the builder edits and
@@ -219,6 +224,12 @@ export interface AppState {
    *  (the assumed covariance for an OEM/TLE catalog that carried none). The covariance matrices
    *  live on the engine catalog ref; this is the panel readout of which objects have one. */
   conjunctionSuppliedCovariances: readonly string[];
+  /** [ux-p3-conjunction] The maneuver-then-rescreen before/after Pc comparison for the selected
+   *  event's pair after the solved avoidance maneuver, or null until a rescreen runs. */
+  rescreen: PcComparison | null;
+  /** [ux-p3-conjunction] The conjunction watchlist: flagged pairs the analyst is tracking, each
+   *  with its current Pc/miss and a rose/fell trend that updates on a re-screen or covariance apply. */
+  watchlist: WatchlistState;
   /** Walker constellation summary from the last coverage/constellation run. */
   constellation: ConstellationResult | null;
   /** The designed constellation as the swept ASSET SET (published SPK ids), or null until
@@ -233,6 +244,9 @@ export interface AppState {
   /** [ux-p2-orbit] The Lambert porkchop sweep (delta-v over departure x TOF, plus the marked
    *  minimum) from the last configurable-transfer run, or null. */
   porkchop: PorkchopResult | null;
+  /** [ux-p3-conjunction] The porkchop worker-run lifecycle (status + progress) for the off-main-
+   *  thread grid sweep, so the Lambert card shows a progress readout + cancel. */
+  porkchopRun: PorkchopRunState;
   /** [ux-p2-orbit] The editable Mission Control Sequence the MCS builder edits; lifted into the
    *  store so the porkchop "send to MCS" hop appends a Maneuver to the same design. */
   editableMcs: EditableMcs;
@@ -726,12 +740,15 @@ export const initialAppState: AppState = {
   conjunctionEvent: null,
   selectedConjunctionEventId: null,
   conjunctionSuppliedCovariances: [],
+  rescreen: null,
+  watchlist: INITIAL_WATCHLIST,
   constellation: null,
   designedConstellation: null,
   coverageGrid: null,
   slewSeries: null,
   transfer: null,
   porkchop: null,
+  porkchopRun: INITIAL_PORKCHOP_RUN,
   editableMcs: defaultEditableMcs(),
   groundTrack: null,
   tleOrbit: null,
