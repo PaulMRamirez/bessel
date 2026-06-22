@@ -133,10 +133,17 @@ export interface AppState {
   eclipseSpan: readonly [number, number] | null;
   /** Range time series (spacecraft to center body) from the last range analysis. */
   rangeSeries: Series | null;
-  /** Line-of-sight access windows (spacecraft to the Sun) from the last access run. */
+  /** Access windows from the last access-stack run (the surviving intersection of the
+   *  enabled constraints). */
   accessResult: IntervalAnalysisResult | null;
-  /** Instrument-target-visibility windows (target within the nadir-pointed FOV). */
+  /** Per-constraint breakdown of the last access-stack run: each enabled constraint's
+   *  figure of merit run alone, so the panel shows how each narrowed the span. */
+  accessBreakdown: readonly AccessConstraintNote[] | null;
+  /** Instrument-target-visibility windows (target within the selected-pointing FOV, the
+   *  FOV-only geometry before the access constraints). */
   fovResult: IntervalAnalysisResult | null;
+  /** The post-constraint surviving in-FOV window (FOV intersected with the access stack). */
+  fovSurviving: IntervalAnalysisResult | null;
   /** Downlink Eb/N0 (dB) time series (spacecraft to Earth) from the last link run. */
   linkSeries: Series | null;
   /** The radio parameters the last link run used, for a reproducible CSV export. */
@@ -232,6 +239,13 @@ export interface AccessFom {
   readonly percentCoverage: number;
   readonly accessCount: number;
   readonly maxGapSec: number;
+}
+
+/** One member of an access-stack breakdown: a constraint's label and the figure of merit it
+ *  admits run alone over the span, so the panel can show how much each constraint narrows. */
+export interface AccessConstraintNote {
+  readonly label: string;
+  readonly fom: AccessFom;
 }
 
 export interface ConjunctionResult {
@@ -415,7 +429,9 @@ export const initialAppState: AppState = {
   eclipseSpan: null,
   rangeSeries: null,
   accessResult: null,
+  accessBreakdown: null,
   fovResult: null,
+  fovSurviving: null,
   linkSeries: null,
   linkParams: null,
   conjunction: null,

@@ -231,6 +231,56 @@ describe('domain panel result tables (B18)', () => {
   });
 });
 
+describe('Access constraint stack + in-FOV pointing (Phase 1)', () => {
+  it('renders the constraint-stack form with a toggle for each live constraint kind', () => {
+    const out = access(createAppStore());
+    expect(out).toContain('data-testid="access-constraint-form"');
+    for (const id of ['constraint-los', 'constraint-range', 'constraint-rangerate', 'constraint-sunkeepout']) {
+      expect(out, `toggle ${id}`).toContain(`data-testid="${id}"`);
+    }
+  });
+
+  it('gates the facility/DEM constraints as disabled advanced toggles (Phase 2)', () => {
+    const out = access(createAppStore());
+    expect(out).toContain('data-testid="constraint-azelmask"');
+    expect(out).toContain('data-testid="constraint-terrainlos"');
+    expect(out).toContain('Phase 2');
+    // Both advanced toggles render disabled (not faked from the current scenario).
+    const disabledCount = (out.match(/disabled=""/g) ?? []).length;
+    expect(disabledCount).toBeGreaterThanOrEqual(2);
+  });
+
+  it('shows the surviving window plus a per-constraint breakdown once seeded', () => {
+    const store = createAppStore();
+    store.setState({
+      accessResult: {
+        window: [[0, 100]],
+        span: [0, 200],
+        label: 'Probe to SUN',
+        fom: { percentCoverage: 0.5, accessCount: 1, maxGapSec: 100 },
+      },
+      accessBreakdown: [
+        {
+          label: 'Line of sight (not occulted by Earth)',
+          fom: { percentCoverage: 0.6, accessCount: 1, maxGapSec: 80 },
+        },
+      ],
+    });
+    const out = access(store, true);
+    expect(out).toContain('data-testid="access-breakdown"');
+    expect(out).toContain('data-testid="access-breakdown-item"');
+    expect(out).toContain('Line of sight');
+  });
+
+  it('keeps the in-FOV card reachable via its toggle (collapsed by default)', () => {
+    // The in-fov card is collapsed by default (only access + link are default-expanded), but it
+    // is reachable via its toggle; its body (pointing select) renders when expanded, asserted e2e.
+    const out = access(createAppStore());
+    expect(out).toContain('data-testid="taskcard-in-fov-toggle"');
+    expect(out).not.toContain('data-testid="param-fov-pointing"');
+  });
+});
+
 describe('the empty notice surfaces when no spacecraft is loaded', () => {
   it('shows the load-a-spacecraft notice on the domain panels', () => {
     expect(lighting(createAppStore(), false)).toContain('data-testid="analysis-empty-notice"');

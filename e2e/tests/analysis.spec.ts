@@ -51,17 +51,21 @@ test('lighting analysis computes and renders eclipse intervals', async ({ page }
   expect(clip).toMatch(/\d/);
   await page.getByTestId('range-result-precision').selectOption('3');
 
-  // The access analysis (Access & Comms tab) finds line-of-sight visibility windows
-  // (spacecraft to the Sun, occulted by the center body) through the geometry-finder.
+  // The access analysis (Access & Comms tab) assembles a constraint stack (line-of-sight on
+  // by default) and finds the surviving spacecraft-to-target window through the geometry-finder.
   await openAnalyze(page, 'access-comms');
   await expandCard(page, 'access');
+  await expect(page.getByTestId('access-constraint-form')).toBeVisible();
+  await expect(page.getByTestId('constraint-los')).toBeChecked();
   await page.getByTestId('compute-access').click();
   await expect(page.getByTestId('access-timeline')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId('access-result').getByTestId('interval-count')).toContainText(
     'interval',
   );
-  // The access run also reduces the window to a figure of merit (@bessel/coverage).
+  // The access run also reduces the window to a figure of merit (@bessel/coverage) and shows a
+  // per-constraint breakdown of how each enabled constraint narrowed the span.
   await expect(page.getByTestId('access-fom')).toContainText('Coverage');
+  await expect(page.getByTestId('access-breakdown')).toBeVisible();
 
   // The communications analysis plots the downlink Eb/N0 to Earth, combining the
   // geometric range with the link-budget physics (@bessel/rf).
@@ -116,13 +120,17 @@ test('the in-FOV tool computes instrument-target visibility windows', async ({ p
   await loadCassiniSample(page);
   await openAnalyze(page, 'access-comms');
 
-  // With the Cassini ISS sensor loaded, the in-FOV tool is enabled; running it
-  // reduces the nadir-pointed FOV sweep to a figure of merit and a located note.
+  // With the Cassini ISS sensor loaded, the in-FOV tool is enabled; the pointing mode is
+  // selectable (nadir | sun), and running it reports the FOV-only window AND the post-constraint
+  // surviving window, each reduced to a figure of merit and a located note.
   await expandCard(page, 'in-fov');
+  await expect(page.getByTestId('param-fov-pointing')).toBeVisible();
+  await page.getByTestId('param-fov-pointing').selectOption('sun');
   const fov = page.getByTestId('compute-fov');
   await expect(fov).toBeEnabled();
   await fov.click();
   await expect(page.getByTestId('fov-fom')).toContainText('In view', { timeout: 20_000 });
+  await expect(page.getByTestId('fov-surviving-fom')).toContainText('Surviving', { timeout: 20_000 });
   await expect(page.getByTestId('compute-fov-status')).toContainText('Done', { timeout: 20_000 });
 });
 

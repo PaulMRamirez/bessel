@@ -59,6 +59,7 @@ import {
   type AnalyzeTab,
   type RunStatus,
 } from '../store/index.ts';
+import type { AccessConstraintSpec, FovPointingMode } from './analysis-defaults.ts';
 import { bootScene, loadInstrument, type EngineCore } from './bootstrap.ts';
 import { applyViewModel } from './apply-view.ts';
 import { type HpopForceModel } from './hpop-model.ts';
@@ -785,24 +786,32 @@ export class BesselEngine {
     });
   }
 
-  /** Access analysis: line-of-sight windows from the spacecraft to a target over a day. */
-  async computeAccess(opts: AnalysisTargetSpan = {}): Promise<void> {
+  /** Composable access stack: run the assembled constraint array (line-of-sight, range,
+   *  range-rate, sun keep-out) and store the surviving window plus a per-constraint breakdown. */
+  async computeAccessStack(
+    spec: AccessConstraintSpec,
+    opts: AnalysisTargetSpan = {},
+  ): Promise<void> {
     const e = this.core;
     if (!e) return;
     await this.runTool('compute-access', async () => {
       const ops = await import('./analysis-ops.ts');
-      await ops.computeAccessTool(e, this.store, this.isDisposed, opts);
+      await ops.computeAccessStack(e, this.store, this.isDisposed, spec, opts.target, opts);
     });
   }
 
-  /** Instrument-target visibility: windows when a target is within the active sensor's
-   *  nadir-pointed field of view over a day. */
-  async computeInstrumentFov(opts: AnalysisTargetSpan = {}): Promise<void> {
+  /** Selectable-pointing in-FOV sweep: FOV-only windows plus the post-constraint surviving
+   *  window for the chosen boresight pointing mode (nadir or sun). */
+  async computeFovWindows(
+    pointing: FovPointingMode,
+    spec: AccessConstraintSpec,
+    opts: AnalysisTargetSpan = {},
+  ): Promise<void> {
     const e = this.core;
     if (!e) return;
     await this.runTool('compute-fov', async () => {
       const ops = await import('./analysis-ops.ts');
-      await ops.computeInstrumentFovWindows(e, this.store, this.isDisposed, opts);
+      await ops.computeFovWindows(e, this.store, this.isDisposed, pointing, spec, opts.target, opts);
     });
   }
 

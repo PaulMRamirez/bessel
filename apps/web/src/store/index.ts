@@ -10,6 +10,7 @@ export {
   type AnalyzeTab,
   type KeptSnapshot,
   type AccessFom,
+  type AccessConstraintNote,
   type IntervalAnalysisResult,
   type AppState,
   type AppStore,

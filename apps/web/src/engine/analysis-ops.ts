@@ -6,7 +6,7 @@
 // mutable TLE-state ref) as parameters, so nothing here depends on the BesselEngine class.
 
 import { eclipseIntervals } from '@bessel/events';
-import { computeAccess, computeElevationAccess, type Facility } from '@bessel/access';
+import { computeElevationAccess, type Facility } from '@bessel/access';
 import { figureOfMerit, walkerConstellation, sweepCoverageGrid, type GridSpec } from '@bessel/coverage';
 import { CoverageOverlayError, type CoverageOverlayCell } from '@bessel/scene';
 import { windowIntersect } from '@bessel/timeline';
@@ -37,14 +37,16 @@ import {
 } from './analysis-defaults.ts';
 export { DEFAULT_CONSTELLATION };
 export type { SlewPointing, ConstellationParams };
+// Re-export the per-domain Access-tab ops so the engine reaches them through this same lazy
+// chunk: a single dynamic-import boundary keeps one copy of the @bessel/access geometry-finder
+// reduction in the lazy analysis bundle instead of duplicating it across two chunks.
+export { computeAccessStack, computeFovWindows } from './ops-access.ts';
 import type { AppStore } from '../store/index.ts';
 import type { EngineCore } from './bootstrap.ts';
 import { buildHpopForceModel, HPOP_FORCE_MODEL_LABELS, type HpopForceModel } from './hpop-model.ts';
 import { runMcsDesign as runMcsDesignCore, type McsDesign } from './mcs.ts';
 import { runOdDemo } from './od.ts';
 import { centerMu } from './center-mu.ts';
-import { positionAt } from '../sampler.ts';
-import { fovHalfAngleRad, nadirOffAngleRad, intervalsFromFlags } from '../in-fov.ts';
 import { ScreeningClient, ScreeningCancelled } from '../screening-client.ts';
 import { buildSyntheticCatalog, SYNTHETIC_SCREEN_DEFAULTS } from '../synthetic-catalog.ts';
 import { reduceScreening, INITIAL_SCREENING } from '../screening-protocol.ts';
@@ -272,129 +274,10 @@ export async function computeLinkBudget(
   }
 }
 
-/**
- * Access analysis: line-of-sight visibility windows from the spacecraft to the Sun
- * over one day, occulted by the mission center body (a true STK-style access run
- * through @bessel/access, the geometry-finder + window-algebra path). The result is
- * the sunlit window; its complement is the eclipse. Requires a spacecraft mission.
- */
-export async function computeAccessTool(
-  e: EngineCore,
-  store: AppStore,
-  isDisposed: () => boolean,
-  opts: AnalysisTargetSpan = {},
-): Promise<void> {
-  const sc = e.identity.spacecraftName;
-  const body = e.identity.centerBody;
-  if (!sc || !body) {
-    store.setState({ accessResult: null });
-    return;
-  }
-  const target = opts.target ?? 'SUN';
-  const t0 = e.clock.state.et;
-  const span: [number, number] = [t0, t0 + (opts.spanSec ?? 86400)];
-  try {
-    const window = await computeAccess(e.spice, {
-      observer: sc,
-      target,
-      span,
-      step: opts.stepSec ?? 120,
-      constraints: [{ kind: 'lineOfSight', body, bodyFrame: `IAU_${body.toUpperCase()}` }],
-    });
-    // Reduce the access window to a figure of merit (@bessel/coverage): the
-    // fraction of the span with line of sight, the access count, and the worst gap.
-    const fom = figureOfMerit(window, span);
-    if (!isDisposed()) {
-      store.setState({
-        accessResult: {
-          window,
-          span,
-          label: `${sc} to ${target}`,
-          fom: {
-            percentCoverage: fom.percentCoverage,
-            accessCount: fom.accessCount,
-            maxGapSec: fom.maxGapSec,
-          },
-        },
-      });
-    }
-  } catch (err) {
-    if (!isDisposed()) store.setState({ accessResult: null });
-    console.error('access analysis failed', err);
-    throw err;
-  }
-}
-
-/**
- * Instrument-target-visibility windows (B22): when a target body falls within the
- * active instrument's field of view, modeling the sensor as nadir-pointed (boresight
- * toward the center body). The FOV half-angle is read from the loaded sensor's
- * boundary rays; a target is in view when its off-boresight angle is within it. The
- * sweep uses the sampled ephemeris table (no extra worker round-trips), so it reuses
- * the same positions the frame loop already holds.
- */
-export async function computeInstrumentFovWindows(
-  e: EngineCore,
-  store: AppStore,
-  isDisposed: () => boolean,
-  opts: AnalysisTargetSpan = {},
-): Promise<void> {
-  const inst = e.instrument;
-  const sc = e.identity.spacecraftName;
-  const center = e.identity.centerBody;
-  const target = opts.target ?? 'Sun';
-  if (
-    !inst ||
-    !sc ||
-    !center ||
-    !e.table.byBody.has(target) ||
-    !e.table.byBody.has(sc) ||
-    !e.table.byBody.has(center)
-  ) {
-    store.setState({ fovResult: null });
-    return;
-  }
-  // Clamp the sweep to the sampled ephemeris window: positionAt clamps out-of-range
-  // epochs to the table edge, so a span running past the data would freeze every body
-  // and fabricate a static in/out result rather than reflecting real geometry.
-  const t0 = e.clock.state.et;
-  const span: [number, number] = [t0, Math.min(t0 + (opts.spanSec ?? 86400), e.table.et1)];
-  const step = opts.stepSec ?? 120;
-  try {
-    const halfAngle = fovHalfAngleRad(inst.fov.boresight, inst.fov.bounds);
-    const times: number[] = [];
-    const flags: boolean[] = [];
-    for (let t = span[0]; t <= span[1]; t += step) {
-      const off = nadirOffAngleRad(
-        positionAt(e.table, sc, t),
-        positionAt(e.table, center, t),
-        positionAt(e.table, target, t),
-      );
-      times.push(t);
-      flags.push(off <= halfAngle);
-    }
-    const window = intervalsFromFlags(times, flags);
-    const fom = figureOfMerit(window, span);
-    if (!isDisposed()) {
-      store.setState({
-        fovResult: {
-          window,
-          span,
-          label: `${inst.descriptor.name} sees ${target}`,
-          fom: {
-            percentCoverage: fom.percentCoverage,
-            accessCount: fom.accessCount,
-            maxGapSec: fom.maxGapSec,
-          },
-        },
-      });
-    }
-  } catch (err) {
-    if (!isDisposed()) store.setState({ fovResult: null });
-    console.error('instrument FOV analysis failed', err);
-    throw err;
-  }
-}
+// The line-of-sight access run and the nadir-pointed in-FOV sweep moved to the per-domain
+// ops-access.ts (analysis-UX Phase 1), where they are generalized to a composable constraint
+// stack and a selectable boresight pointing mode. Keeping them out of this module also keeps a
+// second copy of the @bessel/access geometry-finder reduction out of this chunk.
 
 /**
  * Conjunction analysis: rectilinear closest approach of the center body relative to
