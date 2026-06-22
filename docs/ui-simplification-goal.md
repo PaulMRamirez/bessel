@@ -1,6 +1,34 @@
 # Goal: simplify the Bessel UI and improve the UX
 
-Status: PLANNED (2026-06-22). Source: the `ui-ux-simplification-review` workflow
+Status: IMPLEMENTED (2026-06-22). 37 of the 45 findings are implemented on the
+feat/ui-simplification branch across 10 commits, each green through `pnpm verify`
+plus targeted `pnpm e2e`. Done: every non-dismissable-window finding (F01/F02/F03/F12
+plus the shared CloseButton dismiss-model unification F39), every clean icon
+conversion (F05/F06/F09/F10/F11/F38), the copy/reset/export/empty-state parity
+(F14/F15/F16/F17/F19/F22/F23/F25/F27/F31/F36/F41), the consistency fixes
+(F24/F37/F40/F42/F43), ground-track legend/enlarge (F28/F29), station edit (F30),
+script history (F18), keyboard re-run (F13), the HUD telemetry link (F32), and the
+pinnable Script console (F46 MVP).
+
+Deferred with rationale (not silently dropped):
+- F07/F08/F35 (iconify/de-dup the FOV/Footprint/Share viewcontrols strip): needs a
+  real cone/footprint icon set; ambiguous unicode glyphs would hurt the
+  recognizability the review prioritizes, and the inline toggles are a contextual
+  affordance the instruments e2e asserts. A deliberate strip redesign, not a quick win.
+- F44 (extract one shared override control): the premise does not hold on inspection.
+  The override is already default-collapsed behind "Use shared context"; CoveragePanel
+  genuinely consumes params.span; ReportPanel's override has different semantics
+  (observer + minutes + grid). A single generic control would add generality, not
+  simplicity.
+- F34 (cooperative cancel for span tools): the span tools are single batched WORKER
+  calls, not interruptible main-thread loops, so a real cancel needs a cancellable
+  worker-job protocol (infra change). The long sweeps that need cancel (screening,
+  coverage, porkchop) already have it. A discard-result cancel would be partly fake.
+- F26 (coverage fork): subsumed by F24 (coverage snapshots now capture the Walker
+  design, so comparing variants works via run/Keep/edit/run).
+- F45 (camera disclosure) and the jump-to-card half of F33: low value.
+
+Source: the `ui-ux-simplification-review` workflow
 (6 analyst personas, flight-dynamics analyst, mission-ops engineer, mission planner,
 observation planner, educator/first-run, power-user/scripter, plus a senior UI/UX
 expert; findings deduped, then adversarially verified against the source, then
