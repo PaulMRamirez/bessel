@@ -75,6 +75,12 @@ describe('exportAnalysis routing', () => {
     expect(text).toBe(writeOem(oem));
   });
 
+  it('routes a cdm spec by passing the pre-serialized KVN text through', () => {
+    const text = 'CCSDS_CDM_VERS = 1.0\nTCA = 2026-06-22T00:00:00.000Z\n';
+    const spec: ExportSpec = { kind: 'cdm', text, filename: 'cdm.txt' };
+    expect(exportAnalysis(spec, () => undefined)).toBe(text);
+  });
+
   it('fails loudly with a typed, located error on an unknown kind', () => {
     // Force an off-union value past the type checker to exercise the runtime guard.
     const bad = { kind: 'bogus', filename: 'x.csv' } as unknown as ExportSpec;

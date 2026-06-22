@@ -45,8 +45,22 @@ export interface OemExportSpec {
   readonly filename: string;
 }
 
+/** Export a conjunction event as a CCSDS-CDM-style (KVN) record. The text is serialized by the
+ *  co-located conjunction CDM writer (the @bessel/interop package ships a parser, not a writer),
+ *  so this spec carries the already-built KVN text and the exporter only routes the download. */
+export interface CdmExportSpec {
+  readonly kind: 'cdm';
+  readonly text: string;
+  readonly filename: string;
+}
+
 /** The discriminated union of analysis results the unified exporter can serialize. */
-export type ExportSpec = SeriesExportSpec | IntervalsExportSpec | TableExportSpec | OemExportSpec;
+export type ExportSpec =
+  | SeriesExportSpec
+  | IntervalsExportSpec
+  | TableExportSpec
+  | OemExportSpec
+  | CdmExportSpec;
 
 /** A located, typed error for an export the service cannot serialize (fail-loudly). */
 export class ExportAnalysisError extends Error {
@@ -59,9 +73,9 @@ export class ExportAnalysisError extends Error {
   }
 }
 
-/** MIME type per export kind: CSV for the tabular kinds, plain text for the OEM KVN. */
+/** MIME type per export kind: CSV for the tabular kinds, plain text for the OEM/CDM KVN. */
 function mimeFor(spec: ExportSpec): string {
-  return spec.kind === 'oem' ? 'text/plain' : 'text/csv';
+  return spec.kind === 'oem' || spec.kind === 'cdm' ? 'text/plain' : 'text/csv';
 }
 
 /** Serialize an export spec to its file text via the matching @bessel/interop builder. */
@@ -75,6 +89,9 @@ function serialize(spec: ExportSpec): string {
       return tableToCsv(spec.headers, spec.rows, spec.meta ? { meta: spec.meta } : {});
     case 'oem':
       return writeOem(spec.oem);
+    case 'cdm':
+      // The CDM KVN is already serialized by the conjunction CDM writer; route the text as-is.
+      return spec.text;
     default: {
       // Exhaustiveness guard: a new kind that is not handled fails loudly, not silently.
       const unknown: never = spec;

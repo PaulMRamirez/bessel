@@ -101,6 +101,8 @@ export function ConjunctionPanel(props: ConjunctionPanelProps): JSX.Element {
     <>
       <PcCard engine={engine} store={store} />
       <RunStatusNote status={runStatus['compute-event-pc']} id="compute-event-pc" />
+      <RunStatusNote status={runStatus['supply-covariance']} id="supply-covariance" />
+      <RunStatusNote status={runStatus['export-cdm']} id="export-cdm" />
     </>
   );
 

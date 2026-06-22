@@ -93,6 +93,33 @@ test('lighting analysis computes and renders eclipse intervals', async ({ page }
   await expect(page.getByTestId('pc-full')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId('pc-max')).toBeVisible();
   await expect(page.getByTestId('bplane-view')).toBeVisible();
+  // [ux-p2-conjunction] the CDM event already carries covariance, so the export-CDM action is offered.
+  await expect(page.getByTestId('export-cdm')).toBeVisible();
+
+  // [ux-p2-conjunction] Explicit covariance INPUT flow: ingest a covariance-less catalog (OEM),
+  // screen it, select the flagged event, supply an assumed covariance, and read the now-available
+  // full-covariance Pc. Re-ingesting supersedes the prior CDM catalog.
+  await expandCard(page, 'catalog-screen');
+  await page.getByTestId('ingest-format').selectOption('oem');
+  await page.getByTestId('ingest-sample').click();
+  await page.getByTestId('ingest-run').click();
+  await expect(page.getByTestId('ingest-summary')).toContainText('0 with covariance', { timeout: 20_000 });
+  await page.getByTestId('screen-catalog').click();
+  await expandCard(page, 'per-event-pc');
+  await expect(page.getByTestId('conjunction-event-0')).toBeVisible({ timeout: 20_000 });
+  await page.getByTestId('conjunction-event-0').click();
+  // The selected row is marked, and the covariance-input form appears (no covariance in this catalog).
+  await expect(page.getByTestId('conjunction-event-0')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('covariance-input')).toBeVisible();
+  await expect(page.getByTestId('pc-full')).toContainText('n/a');
+  // Supply an assumed RTN covariance for both objects, then read the full-covariance Pc.
+  await page.getByTestId('param-cov-sigma').fill('1');
+  await page.getByTestId('cov-apply').click();
+  await expect(page.getByTestId('cov-supplied-summary')).toBeVisible({ timeout: 20_000 });
+  await page.getByTestId('cov-object').selectOption({ index: 1 });
+  await page.getByTestId('cov-apply').click();
+  await expect(page.getByTestId('pc-full')).not.toContainText('n/a', { timeout: 20_000 });
+  await page.getByTestId('export-cdm').click();
 
   // The single-pair closest-approach card is kept (now collapsed by default): expand and run it.
   await expandCard(page, 'closest-approach');

@@ -5,11 +5,13 @@
 // result off conjunctionEvent. Presentational; the engine ops do the math.
 
 import { useMemo, useState } from 'react';
+import { Button } from '@bessel/selene-design';
 import type { ConjunctionEvent } from '@bessel/conjunction';
 import type { BesselEngine } from '../../engine/index.ts';
 import { useStore, type AppStore } from '../../store/index.ts';
 import { fmt } from '../analysis-shared.tsx';
 import { BPlaneView } from './BPlaneView.tsx';
+import { CovarianceInputForm } from './CovarianceInputForm.tsx';
 
 type SortKey = 'tca' | 'missKm' | 'pc';
 
@@ -38,6 +40,9 @@ export function PcCard(props: { readonly engine: BesselEngine | null; readonly s
   const eventResult = useStore(store, (s) => s.conjunctionEvent);
   const ingest = useStore(store, (s) => s.conjunctionIngest);
   const runStatus = useStore(store, (s) => s.runStatus);
+  // [ux-p2-conjunction] First-class active selection: the table rows, the Pc result, the B-plane,
+  // and the covariance-input form all read THIS selected event id.
+  const selectedId = useStore(store, (s) => s.selectedConjunctionEventId);
   const [sortKey, setSortKey] = useState<SortKey>('pc');
 
   const events = screening.events ?? [];
@@ -88,14 +93,22 @@ export function PcCard(props: { readonly engine: BesselEngine | null; readonly s
           <tbody>
             {sorted.map((ev) => {
               const i = indexOf(ev);
-              const active = eventResult?.index === i;
+              const active = selectedId === i;
               return (
                 <tr
                   key={`${ev.primaryId}-${ev.secondaryId}-${i}`}
                   className={active ? 'bessel-event-row-active' : ''}
                   data-testid={`conjunction-event-${i}`}
                   data-active={active ? 'true' : 'false'}
+                  aria-selected={active}
+                  tabIndex={0}
                   onClick={() => void engine?.computeEventPc(i)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      void engine?.computeEventPc(i);
+                    }
+                  }}
                 >
                   <td>{fmt((ev.tca - epoch) / 60, 1)}</td>
                   <td>
@@ -130,6 +143,22 @@ export function PcCard(props: { readonly engine: BesselEngine | null; readonly s
             Max Pc (Alfano bound): {eventResult.pcMax.toExponential(3)}
           </p>
           <BPlaneView event={eventResult} />
+
+          {/* Explicit covariance input: shown when the selected pair carried no covariance (OEM/TLE),
+              so the analyst can supply an assumed one and get a full-covariance Pc. */}
+          {eventResult.hasCovariance ? null : (
+            <CovarianceInputForm
+              engine={engine}
+              store={store}
+              primaryId={eventResult.primaryId}
+              secondaryId={eventResult.secondaryId}
+            />
+          )}
+
+          {/* Export the selected event as a CCSDS-CDM-style record through the unified export path. */}
+          <Button variant="ghost" testId="export-cdm" onClick={() => void engine?.exportEventCdm()}>
+            Export CDM
+          </Button>
         </div>
       ) : null}
     </div>
