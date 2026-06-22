@@ -57,6 +57,14 @@ export interface AccessRequest {
   readonly abcorr?: AberrationCorrection;
 }
 
+/** A located, typed error for an access request the engine cannot satisfy (fail loudly). */
+export class AccessError extends Error {
+  override readonly name = 'AccessError';
+  constructor(message: string) {
+    super(`@bessel/access: ${message}`);
+  }
+}
+
 /**
  * Compute the access Window: the span intersected with each constraint's window.
  * With no constraints the result is the whole span.
@@ -165,17 +173,22 @@ async function constraintWindow(
     // Line of sight clear of the body's terrain (DEM ray test per epoch). See terrain-los.ts.
     return computeTerrainMaskedLosWindow(spice, req.observer, req.target, req.span, req.step, abcorr, constraint);
   }
-  // range: intersect the (distance < max) and (distance > min) windows.
-  const pieces: Window[] = [];
-  if (constraint.maxKm !== undefined) {
-    pieces.push(
-      await spice.gfdist(req.target, abcorr, req.observer, '<', constraint.maxKm, req.step, t0, t1),
-    );
+  if (constraint.kind === 'range') {
+    // range: intersect the (distance < max) and (distance > min) windows.
+    const pieces: Window[] = [];
+    if (constraint.maxKm !== undefined) {
+      pieces.push(
+        await spice.gfdist(req.target, abcorr, req.observer, '<', constraint.maxKm, req.step, t0, t1),
+      );
+    }
+    if (constraint.minKm !== undefined) {
+      pieces.push(
+        await spice.gfdist(req.target, abcorr, req.observer, '>', constraint.minKm, req.step, t0, t1),
+      );
+    }
+    return pieces.length === 0 ? [[t0, t1]] : windowIntersectAll(pieces);
   }
-  if (constraint.minKm !== undefined) {
-    pieces.push(
-      await spice.gfdist(req.target, abcorr, req.observer, '>', constraint.minKm, req.step, t0, t1),
-    );
-  }
-  return pieces.length === 0 ? [[t0, t1]] : windowIntersectAll(pieces);
+  // Fail loud on an unhandled constraint kind rather than silently admitting the full span.
+  const exhaustive: never = constraint;
+  throw new AccessError(`unhandled access constraint kind: ${(exhaustive as { kind?: string }).kind}`);
 }

@@ -185,7 +185,7 @@ describe('AnalysisPanel catalog screening (worker)', () => {
 
   it('shows the progress readout and cancel button while a screen runs', () => {
     const store = createAppStore();
-    store.setState({ screening: { status: 'running', done: 2, total: 4, events: null } });
+    store.setState({ screening: { status: 'running', done: 2, total: 4, epoch: 0, events: null } });
     const out = renderToStaticMarkup(
       createElement(AnalysisPanel, { engine: null, store, hasSpacecraft: true }),
     );
@@ -194,13 +194,16 @@ describe('AnalysisPanel catalog screening (worker)', () => {
     expect(out).toContain('Screening 2/4');
   });
 
-  it('lists the flagged events once a screen completes', () => {
+  it('lists the flagged events once a screen completes, with TCA relative to the catalog epoch', () => {
     const store = createAppStore();
     store.setState({
       screening: {
         status: 'done',
         done: 4,
         total: 4,
+        // The grid epoch is 120 s; the event's absolute TCA is 600 s, so the panel must show the
+        // relative TCA (600 - 120) / 60 = 8 min, not the absolute 600 / 60 = 10 min.
+        epoch: 120,
         events: [{ primaryId: 'CHASER', secondaryId: 'TARGET', tca: 600, missKm: 1.2, relSpeedKmS: 0.5, pc: null }],
       },
     });
@@ -210,6 +213,8 @@ describe('AnalysisPanel catalog screening (worker)', () => {
     expect(out).toContain('data-testid="screen-events"');
     expect(out).toContain('data-testid="screen-event"');
     expect(out).toContain('CHASER vs TARGET');
+    expect(out).toContain('8 min');
+    expect(out).not.toContain('10 min');
   });
 });
 

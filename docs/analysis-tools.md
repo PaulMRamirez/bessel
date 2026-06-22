@@ -83,7 +83,7 @@ see REFERENCES.md and docs/STK_PARITY_SPEC.md.
   package also provides full 2x2-covariance Pc (Mahalanobis), B-plane projection,
   Alfano maximum Pc, STM covariance propagation to the time of closest approach, and
   all-vs-all screening (`screenAllVsAll`), the latter run off the main thread in a
-  worker pool with progress and cancel (`apps/web/src/screening.worker.ts`).
+  dedicated (single) Web Worker with progress and cancel (`apps/web/src/screening.worker.ts`).
 - Validation: Pc against the analytic centered-circular form.
 - Limits: this button demonstrates the math on the loaded pair; the operational
   all-vs-all screening is exercised through the screening worker rather than this
@@ -203,7 +203,7 @@ see REFERENCES.md and docs/STK_PARITY_SPEC.md.
 - Engine: the F3 EvalSpec interpreter and the unit-tagged `PROVIDER_CATALOG` in
   `@bessel/spice`; CSV via `@bessel/interop`.
 - Limits: the duration is capped (defense against a runaway grid); heavier sweeps
-  use the worker pool.
+  run on the dedicated SPICE compute worker.
 
 ---
 

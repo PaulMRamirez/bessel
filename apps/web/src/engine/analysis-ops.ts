@@ -8,7 +8,7 @@
 import { eclipseIntervals } from '@bessel/events';
 import { computeAccess, computeElevationAccess, type Facility } from '@bessel/access';
 import { figureOfMerit, walkerConstellation, sweepCoverageGrid, type GridSpec } from '@bessel/coverage';
-import type { CoverageOverlayCell } from '@bessel/scene';
+import { CoverageOverlayError, type CoverageOverlayCell } from '@bessel/scene';
 import { windowIntersect } from '@bessel/timeline';
 import { linkBudget } from '@bessel/rf';
 import { closestApproachLinear, collisionProbability2D } from '@bessel/conjunction';
@@ -467,14 +467,19 @@ export async function screenCatalog(
   isDisposed: () => boolean,
   ref: ScreeningRef,
 ): Promise<void> {
+  const epochEt = e.clock.state.et;
   const objects = buildSyntheticCatalog({
-    epochEt: e.clock.state.et,
+    epochEt,
     spanSec: SYNTHETIC_SCREEN_DEFAULTS.spanSec,
     steps: SYNTHETIC_SCREEN_DEFAULTS.steps,
   });
   const client = ref.client ?? (ref.client = new ScreeningClient());
-  // Open the run: a zeroed bar over the partition count (one per primary object).
-  store.setState((s) => ({ screening: reduceScreening(s.screening, { kind: 'start', total: objects.length - 1 }) }));
+  // Open the run: a zeroed bar over the partition count (one per primary object), recording the
+  // catalog epoch so the panel can show each flagged TCA relative to it (ConjunctionEvent.tca is
+  // absolute ET, the synthetic grid starts at this epoch).
+  store.setState((s) => ({
+    screening: reduceScreening(s.screening, { kind: 'start', total: objects.length - 1, epoch: epochEt }),
+  }));
   try {
     const events = await client.start(
       { objects, thresholdKm: SYNTHETIC_SCREEN_DEFAULTS.thresholdKm, padKm: SYNTHETIC_SCREEN_DEFAULTS.padKm },
@@ -1085,9 +1090,21 @@ export async function computeCoverageGrid(
     const radii = await e.spice.bodvrd(body, 'RADII').catch(() => [6378.137]);
     if (isDisposed()) return;
     const bodyRadiusKm = radii[0] && Number.isFinite(radii[0]) ? radii[0] : 6378.137;
+    // RADII is [a, b, c]; the polar (c) radius drapes the overlay on the (a, a, c) ellipsoid so
+    // an oblate body's pole cells do not detach. Fall back to the equatorial radius (a sphere).
+    const polarRadiusKm = radii[2] && Number.isFinite(radii[2]) ? radii[2] : bodyRadiusKm;
+    // Fail loud rather than render the overlay at the scene origin: the overlay is anchored by
+    // body name each frame (positions.get(anchorBody) ?? [0,0,0]), so an unresolved center body
+    // would silently drape the grid at [0,0,0]. The ephemeris table is the scene's anchor set.
+    if (!e.table.byBody.has(body)) {
+      throw new CoverageOverlayError(
+        `center body "${body}" is not in the ephemeris table, so the overlay cannot be anchored`,
+      );
+    }
     e.scene.setCoverageOverlay({
       anchorBody: body,
       bodyRadiusKm,
+      polarRadiusKm,
       latCount: grid.latCount,
       lonCount: grid.lonCount,
       cells,

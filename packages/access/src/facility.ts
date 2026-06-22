@@ -17,12 +17,21 @@ export interface Facility {
   readonly altKm: number;
 }
 
-const dot = (a: Vec3, b: Vec3): number => a.x * b.x + a.y * b.y + a.z * b.z;
-const sub = (a: Vec3, b: Vec3): Vec3 => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z });
-const unit = (a: Vec3): Vec3 => {
+/** Dot product of two body-fixed vectors. */
+export const dot = (a: Vec3, b: Vec3): number => a.x * b.x + a.y * b.y + a.z * b.z;
+/** Component difference a - b. */
+export const sub = (a: Vec3, b: Vec3): Vec3 => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z });
+/** Unit vector (the zero vector maps to itself, guarded against a divide by zero). */
+export const unit = (a: Vec3): Vec3 => {
   const m = Math.sqrt(dot(a, a)) || 1;
   return { x: a.x / m, y: a.y / m, z: a.z / m };
 };
+/** Cross product a x b. */
+export const cross = (a: Vec3, b: Vec3): Vec3 => ({
+  x: a.y * b.z - a.z * b.y,
+  y: a.z * b.x - a.x * b.z,
+  z: a.x * b.y - a.y * b.x,
+});
 
 /** Geodetic (lon, lat, alt) to body-fixed rectangular (km) on an ellipsoid. */
 function geodeticToRect(fac: Facility, re: number, f: number): Vec3 {
@@ -97,4 +106,54 @@ export async function computeElevationAccess(
     return Math.asin(Math.max(-1, Math.min(1, dot(los, upVec)))) - minElevationRad;
   };
   return findConstraintWindow(g, span, step);
+}
+
+/**
+ * The topocentric (local) frame at a facility, in the body-fixed frame: the site position
+ * plus an orthonormal up/east/north triad. `up` is the GEODETIC normal (the STK topocentric
+ * vertical); `east` points along the local parallel toward increasing longitude; `north`
+ * completes the right-handed set. Azimuth is measured from `north` toward `east`.
+ */
+export interface TopoFrame {
+  /** Site position in the body-fixed frame (km). */
+  readonly pos: Vec3;
+  /** Local up: the geodetic ellipsoid normal (unit). */
+  readonly up: Vec3;
+  /** Local east: along the parallel toward increasing longitude (unit). */
+  readonly east: Vec3;
+  /** Local north: up x east, toward the body's spin pole (unit). */
+  readonly north: Vec3;
+}
+
+/**
+ * Build the topocentric frame at a facility from the body's equatorial (`re`) and polar (`rp`)
+ * radii. The east axis is unit(zSpin x up); at a geographic pole `up` is parallel to the spin
+ * axis so that cross product degenerates, and we fall back to the body-fixed +X meridian as
+ * east (an arbitrary but stable azimuth origin where azimuth is otherwise undefined).
+ */
+export function facilityTopoFrame(facility: Facility, re: number, rp: number): TopoFrame {
+  const pos = geodeticToRect(facility, re, (re - rp) / re);
+  const up = geodeticNormal(facility);
+  const zSpin: Vec3 = { x: 0, y: 0, z: 1 };
+  const eastRaw = cross(zSpin, up);
+  const eastMag = Math.sqrt(dot(eastRaw, eastRaw));
+  // Pole-degenerate fallback: up || spin axis, so east is undefined; use the +X meridian.
+  const east = eastMag > 1e-12 ? unit(eastRaw) : { x: 1, y: 0, z: 0 };
+  const north = cross(up, east);
+  return { pos, up, east, north };
+}
+
+/**
+ * Topocentric elevation and azimuth of a body-fixed target point as seen from a facility's
+ * topocentric frame. Elevation is asin(los . up); azimuth is measured from north toward east
+ * (atan2(los . east, los . north)), normalized to [-pi, pi].
+ */
+export function topocentricElAz(
+  frame: TopoFrame,
+  targetPosBodyFixed: Vec3,
+): { elevationRad: number; azimuthRad: number } {
+  const los = unit(sub(targetPosBodyFixed, frame.pos));
+  const elevationRad = Math.asin(Math.max(-1, Math.min(1, dot(los, frame.up))));
+  const azimuthRad = Math.atan2(dot(los, frame.east), dot(los, frame.north));
+  return { elevationRad, azimuthRad };
 }

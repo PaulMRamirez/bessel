@@ -75,32 +75,36 @@ export interface ScreeningState {
   /** Partitions screened so far and the total, for the progress readout (0/0 when idle). */
   readonly done: number;
   readonly total: number;
+  /** The catalog epoch (ET seconds) the screened grid starts at, so a flagged event's absolute
+   *  TCA can be shown relative to the epoch. Zero when idle (no run has set it). */
+  readonly epoch: number;
   /** The flagged conjunction events from the last completed screen, or null. */
   readonly events: readonly ConjunctionEvent[] | null;
 }
 
 /** The screening slice before any run. */
-export const INITIAL_SCREENING: ScreeningState = { status: 'idle', done: 0, total: 0, events: null };
+export const INITIAL_SCREENING: ScreeningState = { status: 'idle', done: 0, total: 0, epoch: 0, events: null };
 
 /**
  * The local lifecycle events plus the worker messages the reducer folds into the slice:
- * 'start' opens a run, 'cancel' aborts it (the main thread terminated the worker), and the
- * worker's own progress/result/error land through ScreeningMessage.
+ * 'start' opens a run (carrying the catalog epoch), 'cancel' aborts it (the main thread
+ * terminated the worker), and the worker's own progress/result/error land through ScreeningMessage.
  */
 export type ScreeningEvent =
-  | { readonly kind: 'start'; readonly total: number }
+  | { readonly kind: 'start'; readonly total: number; readonly epoch: number }
   | ScreeningMessage
   | { readonly kind: 'cancel' };
 
 /**
  * Fold one screening event into the slice. Pure, so it is unit-tested directly: a 'start'
- * resets to running with a zeroed bar, a 'progress' advances done/total, a 'result' lands
- * the events and marks done, an 'error' marks failed, and a 'cancel' returns to idle.
+ * resets to running with a zeroed bar (recording the catalog epoch), a 'progress' advances
+ * done/total, a 'result' lands the events and marks done, an 'error' marks failed, and a
+ * 'cancel' returns to idle.
  */
 export function reduceScreening(state: ScreeningState, event: ScreeningEvent): ScreeningState {
   switch (event.kind) {
     case 'start':
-      return { status: 'running', done: 0, total: Math.max(0, event.total), events: null };
+      return { status: 'running', done: 0, total: Math.max(0, event.total), epoch: event.epoch, events: null };
     case 'progress':
       return { ...state, status: 'running', done: event.done, total: event.total };
     case 'result':
