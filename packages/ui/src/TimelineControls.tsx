@@ -3,6 +3,7 @@
 // input, and per-marker button semantics).
 
 import { useState } from 'react';
+import { Icon, type IconName } from '@bessel/selene-design';
 import { markerFraction, type TimelineAnnotation } from '@bessel/timeline';
 
 /** The time system the displayed epoch is expressed in. */
@@ -58,7 +59,7 @@ const TIME_SYSTEMS: readonly TimeSystem[] = ['UTC', 'TDB'];
 
 /** One step/jump transport button (the controls flanking play/pause). */
 interface StepControl {
-  readonly glyph: string;
+  readonly icon: IconName;
   readonly label: string;
   readonly testId: string;
   readonly disabled: boolean;
@@ -76,7 +77,7 @@ function renderStep(s: StepControl): JSX.Element {
       disabled={s.disabled}
       onClick={s.onClick}
     >
-      <span aria-hidden="true">{s.glyph}</span>
+      <Icon name={s.icon} />
     </button>
   );
 }
@@ -96,10 +97,10 @@ export function TimelineControls(props: TimelineControlsProps): JSX.Element {
   const atEnd = props.value >= props.max;
   // The step/jump controls flanking play/pause: same shape, so render from a table.
   const steps: readonly StepControl[] = [
-    { glyph: '⏮', label: 'Jump to mission start', testId: 'timeline-to-start', disabled: atStart, onClick: () => props.onScrub(props.min) },
-    { glyph: '◀', label: 'Step back', testId: 'timeline-step-back', disabled: atStart, onClick: () => seek(props.value - step) },
-    { glyph: '▶', label: 'Step forward', testId: 'timeline-step-forward', disabled: atEnd, onClick: () => seek(props.value + step) },
-    { glyph: '⏭', label: 'Jump to mission end', testId: 'timeline-to-end', disabled: atEnd, onClick: () => props.onScrub(props.max) },
+    { icon: 'step-back', label: 'Jump to mission start', testId: 'timeline-to-start', disabled: atStart, onClick: () => props.onScrub(props.min) },
+    { icon: 'chevron-left', label: 'Step back', testId: 'timeline-step-back', disabled: atStart, onClick: () => seek(props.value - step) },
+    { icon: 'chevron-right', label: 'Step forward', testId: 'timeline-step-forward', disabled: atEnd, onClick: () => seek(props.value + step) },
+    { icon: 'step-forward', label: 'Jump to mission end', testId: 'timeline-to-end', disabled: atEnd, onClick: () => props.onScrub(props.max) },
   ];
   return (
     <div className="bessel-timeline" role="group" aria-label="Timeline controls">
@@ -113,7 +114,7 @@ export function TimelineControls(props: TimelineControlsProps): JSX.Element {
           aria-label={props.playing ? 'Pause' : 'Play'}
           data-testid="timeline-play"
         >
-          <span aria-hidden="true">{props.playing ? '⏸' : '▶'}</span>
+          <Icon name={props.playing ? 'pause' : 'play'} />
         </button>
         {steps.slice(2).map(renderStep)}
       </div>

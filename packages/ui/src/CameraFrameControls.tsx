@@ -1,4 +1,4 @@
-import { Button } from '@bessel/selene-design';
+import { Button, Icon } from '@bessel/selene-design';
 import { Tooltip } from './Tooltip.tsx';
 
 // Camera reference-frame selector and the dolly/crane motion band. Selecting a frame
@@ -66,7 +66,7 @@ export function CameraFrameControls(props: CameraFrameControlsProps): JSX.Elemen
             ariaLabel="Dolly in (R)"
             title="Dolly in: move the camera toward the focus along the view axis (R)"
           >
-            ⊕
+            <Icon name="zoom-in" />
           </Button>
         </Tooltip>
         <Tooltip label="Dolly out: move the camera away along the view axis (F)">
@@ -77,7 +77,7 @@ export function CameraFrameControls(props: CameraFrameControlsProps): JSX.Elemen
             ariaLabel="Dolly out (F)"
             title="Dolly out: move the camera away along the view axis (F)"
           >
-            ⊖
+            <Icon name="zoom-out" />
           </Button>
         </Tooltip>
         <Tooltip label="Crane up: raise the viewpoint vertically (T)">
@@ -88,7 +88,7 @@ export function CameraFrameControls(props: CameraFrameControlsProps): JSX.Elemen
             ariaLabel="Crane up (T)"
             title="Crane up: raise the viewpoint vertically (T)"
           >
-            ⌃
+            <Icon name="arrow-up" />
           </Button>
         </Tooltip>
         <Tooltip label="Crane down: lower the viewpoint vertically (G)">
@@ -99,7 +99,7 @@ export function CameraFrameControls(props: CameraFrameControlsProps): JSX.Elemen
             ariaLabel="Crane down (G)"
             title="Crane down: lower the viewpoint vertically (G)"
           >
-            ⌄
+            <Icon name="arrow-down" />
           </Button>
         </Tooltip>
       </div>

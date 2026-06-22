@@ -60,6 +60,14 @@ export function Button({
   pressed,
 }: ButtonProps) {
   const v = VARIANTS[variant];
+  // An icon-only control must carry an accessible name; warn loudly in development if
+  // one ships without ariaLabel or title (the CI axe scan is the hard backstop).
+  if (process.env.NODE_ENV !== 'production' && iconOnly && !ariaLabel && !title) {
+    console.warn('selene Button: iconOnly requires an ariaLabel (or title) for an accessible name');
+  }
+  // One name prop yields both the accessible name and the hover/long-press tooltip:
+  // default the native title to ariaLabel when a title is not given.
+  const resolvedTitle = title ?? ariaLabel;
   return (
     <button
       type="button"
@@ -67,7 +75,7 @@ export function Button({
       disabled={disabled}
       data-testid={testId}
       className={className}
-      title={title}
+      title={resolvedTitle}
       aria-label={ariaLabel}
       aria-pressed={pressed}
       style={{

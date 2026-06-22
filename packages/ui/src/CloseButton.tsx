@@ -3,6 +3,8 @@
 // required accessible name, so every "close" looks and reads the same: a header
 // close means CLOSE (it dismisses), distinct from a caret that only collapses.
 
+import { Icon } from '@bessel/selene-design';
+
 export interface CloseButtonProps {
   /** Dismiss handler. */
   readonly onClose: () => void;
@@ -24,7 +26,7 @@ export function CloseButton(props: CloseButtonProps): JSX.Element {
       title={props.label}
       data-testid={props.testId}
     >
-      {'✕'}
+      <Icon name="close" />
     </button>
   );
 }

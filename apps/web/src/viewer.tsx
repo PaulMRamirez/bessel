@@ -5,7 +5,7 @@
 // presentational; all imperative work lives in the engine.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SOLAR_SYSTEM } from '@bessel/scene';
-import { StatusDot, type StatusTone } from '@bessel/selene-design';
+import { StatusDot, Icon, type StatusTone } from '@bessel/selene-design';
 import { sortByEt } from '@bessel/timeline';
 import {
   BookmarksPanel,
@@ -592,7 +592,7 @@ export function BesselViewer(): JSX.Element {
             aria-label="Keyboard shortcuts help"
             data-testid="help-button"
           >
-            ?
+            <Icon name="help" />
           </button>
         </Tooltip>
       </div>

@@ -7,7 +7,7 @@
 // (idle/running/ok/error) and the RunStatusNote tag styling.
 
 import { useEffect, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { Tag } from '@bessel/selene-design';
+import { Tag, Icon } from '@bessel/selene-design';
 import type { RunStatus } from '../store/index.ts';
 
 /** Maximum number of TaskCards a TaskCardAccordion keeps expanded at once. */
@@ -86,8 +86,8 @@ export function TaskCard(props: TaskCardProps): JSX.Element {
           data-testid={`taskcard-${props.id}-toggle`}
           onClick={props.onToggle}
         >
-          <span className="bessel-taskcard-caret" aria-hidden="true">
-            {props.expanded ? '▾' : '▸'}
+          <span className="bessel-taskcard-caret">
+            <Icon name={props.expanded ? 'chevron-down' : 'chevron-right'} size="sm" />
           </span>
           <span className="bessel-taskcard-title">{props.title}</span>
           <span className="bessel-taskcard-purpose">{props.purpose}</span>
