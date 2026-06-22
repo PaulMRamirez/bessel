@@ -5,12 +5,15 @@
 
 import { useMemo, useState } from 'react';
 import { Button } from '@bessel/selene-design';
-import { ReportTable, downloadBlob } from '@bessel/ui';
+import { ReportTable, downloadBlob, reportToText } from '@bessel/ui';
 import { seriesToCsv } from '@bessel/interop';
 import { PROVIDER_CATALOG, type ProviderKind } from '@bessel/spice';
 import type { BesselEngine } from '../engine/index.ts';
 import { useStore, type AppStore } from '../store/index.ts';
 import { RunStatusNote, busyLabel } from './RunStatus.tsx';
+// The same significant-digits choices the analysis-result toolbar offers, so the report
+// table reads consistently with the other result views.
+import { PRECISIONS } from './analysis-result.tsx';
 
 export interface ReportPanelProps {
   readonly engine: BesselEngine | null;
@@ -51,6 +54,8 @@ export function ReportPanel(props: ReportPanelProps): JSX.Element {
   const [frame, setFrame] = useState('J2000');
   const [durationMin, setDurationMin] = useState(60);
   const [stepS, setStepS] = useState(60);
+  const [precision, setPrecision] = useState(6);
+  const [copyState, setCopyState] = useState<'idle' | 'ok' | 'fail'>('idle');
 
   // The observer/target pair, frame, and grid come from the shared context by default;
   // the override reveals the local inputs. The provider kind is always tool-local.
@@ -86,6 +91,19 @@ export function ReportPanel(props: ReportPanelProps): JSX.Element {
       },
     });
     downloadBlob(new Blob([csv], { type: 'text/csv' }), 'report.csv');
+  };
+
+  const copy = (): void => {
+    if (!report) return;
+    const text = reportToText(report.headers, report.rows, precision);
+    void (async () => {
+      try {
+        await navigator.clipboard?.writeText(text);
+        setCopyState(navigator.clipboard ? 'ok' : 'fail');
+      } catch {
+        setCopyState('fail');
+      }
+    })();
   };
 
   return (
@@ -172,7 +190,26 @@ export function ReportPanel(props: ReportPanelProps): JSX.Element {
       {report ? (
         <div data-testid="report-result">
           <div className="bessel-panel-title">{report.label}</div>
-          <ReportTable columns={report.headers} rows={report.rows} testId="report-table" />
+          <div className="bessel-result-toolbar" data-testid="report-result-toolbar">
+            <Button variant="secondary" testId="report-copy" onClick={copy}>
+              {copyState === 'ok' ? 'Copied' : copyState === 'fail' ? 'Copy failed' : 'Copy'}
+            </Button>
+            <label>
+              Digits
+              <select
+                value={precision}
+                data-testid="report-digits"
+                onChange={(e) => setPrecision(Number(e.target.value))}
+              >
+                {PRECISIONS.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <ReportTable columns={report.headers} rows={report.rows} precision={precision} testId="report-table" />
           <Button variant="secondary" className="bessel-csv-button" testId="report-csv" onClick={exportCsv}>
             Export CSV
           </Button>

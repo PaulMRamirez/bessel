@@ -82,6 +82,24 @@ describe('@bessel/ui ScriptConsole load select', () => {
     expect((select.props as { value: string }).value).toBe('');
   });
 
+  it('disables Copy log when the log is empty and enables it with lines', () => {
+    states = [];
+    const empty = findByTestId(render({ ...base, log: [] }), 'script-copy-log')!;
+    expect((empty.props as { disabled: boolean }).disabled).toBe(true);
+    states = [];
+    const filled = findByTestId(render({ ...base, log: ['ran: gotoObject Earth'] }), 'script-copy-log')!;
+    expect((filled.props as { disabled: boolean }).disabled).toBe(false);
+  });
+
+  it('defaults the verb reference open so it is visible without an extra click', () => {
+    states = [];
+    const details = render(base).props.children.find(
+      (c: ReactElement | null) =>
+        isValidElement(c) && (c.props as { className?: string }).className === 'bessel-script-ref',
+    );
+    expect((details.props as { open: boolean }).open).toBe(true);
+  });
+
   it('keeps a delete target after a pick so Delete stays enabled', () => {
     states = [];
     const onDeleteSaved = vi.fn();

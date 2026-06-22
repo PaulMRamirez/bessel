@@ -5,6 +5,7 @@
 // metric-aware contour (legend) plus a regional FOM summary table with CSV. Presentational.
 
 import { useState, type ReactNode } from 'react';
+import { Button } from '@bessel/selene-design';
 import { downloadBlob } from '@bessel/ui';
 import type { BesselEngine } from '../engine/index.ts';
 import { useStore, type AppStore } from '../store/index.ts';
@@ -29,6 +30,13 @@ export interface CoveragePanelProps {
   readonly store: AppStore;
   readonly hasSpacecraft: boolean;
   readonly expandRequest?: ExpandRequest;
+}
+
+/** Whether two flat param objects are equal (same keys, same primitive values), so a
+ *  form's Reset can disable when its inputs already match the module defaults. */
+function sameParams<T extends object>(a: T, b: T): boolean {
+  const keys = Object.keys(a) as (keyof T)[];
+  return keys.length === Object.keys(b).length && keys.every((k) => a[k] === b[k]);
 }
 
 export function CoveragePanel(props: CoveragePanelProps): JSX.Element {
@@ -79,6 +87,14 @@ export function CoveragePanel(props: CoveragePanelProps): JSX.Element {
   const constellationCard = (): ReactNode => (
     <>
       <ConstellationParamsForm value={constellationParams} onChange={setConstellationParams} />
+      <Button
+        variant="ghost"
+        testId="coverage-constellation-reset"
+        disabled={sameParams(constellationParams, DEFAULT_CONSTELLATION_PARAMS)}
+        onClick={() => setConstellationParams({ ...DEFAULT_CONSTELLATION_PARAMS })}
+      >
+        Reset
+      </Button>
       <Action
         variant="primary"
         status={runStatus['compute-constellation']}
@@ -139,6 +155,14 @@ export function CoveragePanel(props: CoveragePanelProps): JSX.Element {
         {assetNote}
       </p>
       <CoverageSweepForm value={sweepParams} onChange={setSweepParams} />
+      <Button
+        variant="ghost"
+        testId="coverage-grid-reset"
+        disabled={sameParams(sweepParams, DEFAULT_COVERAGE_SWEEP_PARAMS)}
+        onClick={() => setSweepParams({ ...DEFAULT_COVERAGE_SWEEP_PARAMS })}
+      >
+        Reset
+      </Button>
       <Action
         variant="primary"
         status={runStatus['compute-coverage-grid']}

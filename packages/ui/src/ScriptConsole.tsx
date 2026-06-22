@@ -64,6 +64,14 @@ export function ScriptConsole(props: ScriptConsoleProps): JSX.Element {
         <button type="button" onClick={props.onClearLog} data-testid="script-clear-log">
           Clear log
         </button>
+        <button
+          type="button"
+          disabled={props.log.length === 0}
+          onClick={() => void navigator.clipboard?.writeText(props.log.join('\n'))}
+          data-testid="script-copy-log"
+        >
+          Copy log
+        </button>
       </div>
 
       <div className="bessel-script-save" role="group" aria-label="Save and load scripts">
@@ -138,7 +146,7 @@ export function ScriptConsole(props: ScriptConsoleProps): JSX.Element {
         {props.log.join('\n')}
       </pre>
 
-      <details className="bessel-script-ref">
+      <details className="bessel-script-ref" open>
         <summary data-testid="script-verbs-toggle">Verb reference ({props.verbs.length})</summary>
         <ul className="bessel-script-verbs" data-testid="script-verbs">
           {props.verbs.map((v) => (

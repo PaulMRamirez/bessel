@@ -1,3 +1,6 @@
+import { Button } from '@bessel/selene-design';
+import { Tooltip } from './Tooltip.tsx';
+
 // Camera reference-frame selector and the dolly/crane motion band. Selecting a frame
 // engages 'frame' camera mode (the viewer auto-switches), so the picker is always
 // operable rather than a dead control that needs Frame mode chosen first; it locks the
@@ -55,38 +58,50 @@ export function CameraFrameControls(props: CameraFrameControlsProps): JSX.Elemen
         </span>
       </label>
       <div className="bessel-view-modes" role="group" aria-label="Camera motion">
-        <button
-          type="button"
-          onClick={() => props.onDolly(STEP)}
-          data-testid="camera-dolly-in"
-          title="Dolly in: move the camera toward the focus along the view axis (R)"
-        >
-          Dolly in
-        </button>
-        <button
-          type="button"
-          onClick={() => props.onDolly(-STEP)}
-          data-testid="camera-dolly-out"
-          title="Dolly out: move the camera away along the view axis (F)"
-        >
-          Dolly out
-        </button>
-        <button
-          type="button"
-          onClick={() => props.onCrane(STEP)}
-          data-testid="camera-crane-up"
-          title="Crane up: raise the viewpoint vertically (T)"
-        >
-          Crane up
-        </button>
-        <button
-          type="button"
-          onClick={() => props.onCrane(-STEP)}
-          data-testid="camera-crane-down"
-          title="Crane down: lower the viewpoint vertically (G)"
-        >
-          Crane down
-        </button>
+        <Tooltip label="Dolly in: move the camera toward the focus along the view axis (R)">
+          <Button
+            iconOnly
+            onClick={() => props.onDolly(STEP)}
+            testId="camera-dolly-in"
+            ariaLabel="Dolly in (R)"
+            title="Dolly in: move the camera toward the focus along the view axis (R)"
+          >
+            ⊕
+          </Button>
+        </Tooltip>
+        <Tooltip label="Dolly out: move the camera away along the view axis (F)">
+          <Button
+            iconOnly
+            onClick={() => props.onDolly(-STEP)}
+            testId="camera-dolly-out"
+            ariaLabel="Dolly out (F)"
+            title="Dolly out: move the camera away along the view axis (F)"
+          >
+            ⊖
+          </Button>
+        </Tooltip>
+        <Tooltip label="Crane up: raise the viewpoint vertically (T)">
+          <Button
+            iconOnly
+            onClick={() => props.onCrane(STEP)}
+            testId="camera-crane-up"
+            ariaLabel="Crane up (T)"
+            title="Crane up: raise the viewpoint vertically (T)"
+          >
+            ⌃
+          </Button>
+        </Tooltip>
+        <Tooltip label="Crane down: lower the viewpoint vertically (G)">
+          <Button
+            iconOnly
+            onClick={() => props.onCrane(-STEP)}
+            testId="camera-crane-down"
+            ariaLabel="Crane down (G)"
+            title="Crane down: lower the viewpoint vertically (G)"
+          >
+            ⌄
+          </Button>
+        </Tooltip>
       </div>
     </div>
   );

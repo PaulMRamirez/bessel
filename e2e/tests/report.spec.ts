@@ -21,6 +21,12 @@ test('report workbench runs a provider and exports CSV', async ({ page }) => {
   await expect(page.getByTestId('report-table')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId('report-row-count')).toContainText('row');
 
+  // The result toolbar offers Copy (via reportToText) and a Digits selector, matching the
+  // other result views. Copy gives loud feedback; Digits re-renders the table precision.
+  await page.getByTestId('report-digits').selectOption('3');
+  await page.getByTestId('report-copy').click();
+  await expect(page.getByTestId('report-copy')).toHaveText(/Copied|Copy failed/);
+
   const downloadPromise = page.waitForEvent('download');
   await page.getByTestId('report-csv').click();
   const download = await downloadPromise;

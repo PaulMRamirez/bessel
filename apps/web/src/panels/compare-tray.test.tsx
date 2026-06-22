@@ -30,6 +30,22 @@ describe('CompareTray (B21)', () => {
     expect(out).toContain('data-testid="compare-clear"');
   });
 
+  it('keeps the chip label non-interactive and confines removal to the ✕ button', () => {
+    const store = createAppStore();
+    store.setState({
+      keptSnapshots: [
+        { id: 'snap-1', domain: 'access', label: 'access 1', metrics: { 'coverage %': '80.0' } },
+      ],
+    });
+    const out = renderToStaticMarkup(createElement(CompareTray, { engine: null, store }));
+    // The label is a plain span (the chip container is not a button), so clicking the
+    // variant name cannot destroy the snapshot.
+    expect(out).toContain('class="bessel-snapshot-chip-label"');
+    // The remove control is the dedicated ✕ button, carrying the testid and accessible name.
+    expect(out).toContain('data-testid="snapshot-remove-snap-1"');
+    expect(out).toContain('aria-label="Remove access 1 from compare"');
+  });
+
   it('shows a kept-count badge without a full note below the limit', () => {
     const store = createAppStore();
     store.setState({

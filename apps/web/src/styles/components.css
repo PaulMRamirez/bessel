@@ -1261,16 +1261,35 @@ button[aria-pressed='true'] {
   margin-bottom: var(--space-1);
 }
 
+/* A kept-snapshot chip: a non-interactive label plus a dedicated remove control, so
+   clicking the variant name no longer destroys the snapshot (only the ✕ removes). */
+.bessel-snapshot-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-1);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 4px);
+  font-size: 0.7rem;
+}
+
+.bessel-snapshot-chip-label {
+  color: var(--text-1);
+}
+
 .bessel-snapshot-remove {
-  margin-left: var(--space-1);
   background: transparent;
   border: none;
   color: var(--text-2);
   cursor: pointer;
   font-size: 0.7rem;
+  line-height: 1;
+  padding: 0;
 }
 
-.bessel-snapshot-remove:hover {
+.bessel-snapshot-remove:hover,
+.bessel-snapshot-remove:focus-visible {
   color: var(--text-0);
 }
 
@@ -1986,7 +2005,9 @@ button[aria-pressed='true'] {
 }
 
 .bessel-script-arity {
-  color: var(--text-2);
+  /* text-1, not text-2: the verb reference is now open by default, so this arity
+     hint is always scanned and must clear AA contrast (text-2 sat at 4.36:1). */
+  color: var(--text-1);
 }
 
 /* Utilities -------------------------------------------------------------- */

@@ -170,6 +170,21 @@ describe('Coverage panel: the Walker -> sweep -> metric-aware contour workflow',
   });
 });
 
+describe('Coverage panel: per-form Reset to defaults', () => {
+  it('renders a Reset button on each config form, disabled while the form is at its defaults', () => {
+    const out = coverage(createAppStore());
+    // Both forms render their Reset affordance.
+    expect(out).toContain('data-testid="coverage-constellation-reset"');
+    expect(out).toContain('data-testid="coverage-grid-reset"');
+    // A fresh panel sits at the module defaults, so each Reset is disabled (no-op).
+    for (const id of ['coverage-constellation-reset', 'coverage-grid-reset']) {
+      const close = out.indexOf(`data-testid="${id}"`);
+      const open = out.lastIndexOf('<button', close);
+      expect(out.slice(open, close)).toContain('disabled');
+    }
+  });
+});
+
 describe('Coverage panel: worker-ized sweep progress + cancel (Phase 3)', () => {
   it('shows the live progress readout and the cancel control while a sweep is running', () => {
     const store = createAppStore();

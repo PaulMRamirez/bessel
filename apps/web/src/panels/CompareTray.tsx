@@ -103,16 +103,19 @@ export function CompareTray(props: CompareTrayProps): JSX.Element {
           <div key={domain} data-testid={`compare-domain-${domain}`}>
             <div className="bessel-compare-chips">
               {group.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  className="bessel-snapshot-remove"
-                  aria-label={`Remove ${s.label}`}
-                  data-testid={`snapshot-remove-${s.id}`}
-                  onClick={() => engine?.removeSnapshot(s.id)}
-                >
-                  {s.label} <span aria-hidden="true">✕</span>
-                </button>
+                <span key={s.id} className="bessel-snapshot-chip">
+                  <span className="bessel-snapshot-chip-label">{s.label}</span>
+                  <button
+                    type="button"
+                    className="bessel-snapshot-remove"
+                    data-testid={`snapshot-remove-${s.id}`}
+                    aria-label={`Remove ${s.label} from compare`}
+                    title="Remove from compare"
+                    onClick={() => engine?.removeSnapshot(s.id)}
+                  >
+                    {'✕'}
+                  </button>
+                </span>
               ))}
             </div>
             <ReportTable
