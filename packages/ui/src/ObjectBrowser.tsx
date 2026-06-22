@@ -1,7 +1,10 @@
 // Object browser: one row per catalog object. The row name toggles selection
 // (multi-select, drives the inspector and measure), a crosshair centers the
-// camera on it, and an eye toggles its visibility. Presentational; the viewer
-// owns the selection set, focus, and visibility map and the scene wiring.
+// camera on it, an eye toggles its visibility, and a spacecraft row gains a track
+// toggle (the camera follows it). Presentational; the viewer owns the selection
+// set, focus, visibility map, tracking, and the scene wiring.
+
+import { Icon } from '@bessel/selene-design';
 
 export interface CatalogEntry {
   readonly id: string;
@@ -19,6 +22,10 @@ export interface ObjectBrowserProps {
   readonly focus?: string;
   /** Center the camera on a body; when omitted the per-row crosshair is hidden. */
   readonly onCenter?: (id: string) => void;
+  /** Toggle camera tracking of a spacecraft; when omitted the per-row track icon is
+   *  hidden. Tracking is global to the mission spacecraft, so `tracking` is shared. */
+  readonly onToggleTrack?: (id: string) => void;
+  readonly tracking?: boolean;
 }
 
 /** A crosshair (center-on) glyph. */
@@ -71,6 +78,20 @@ export function ObjectBrowser(props: ObjectBrowserProps): JSX.Element {
               >
                 {entry.name}
               </button>
+              {props.onToggleTrack && entry.kind === 'spacecraft' ? (
+                <button
+                  type="button"
+                  role="switch"
+                  className="bessel-body-track"
+                  aria-checked={!!props.tracking}
+                  aria-label={`${props.tracking ? 'Stop tracking' : 'Track'} ${entry.name}`}
+                  title={`${props.tracking ? 'Stop tracking' : 'Track'} ${entry.name}`}
+                  onClick={() => props.onToggleTrack?.(entry.id)}
+                  data-testid={`track-${entry.id}`}
+                >
+                  <Icon name="radar" size="sm" />
+                </button>
+              ) : null}
               {props.onCenter && entry.kind !== 'instrument' ? (
                 <button
                   type="button"

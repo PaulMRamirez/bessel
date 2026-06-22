@@ -341,6 +341,24 @@ export function BesselViewer(): JSX.Element {
     </Popover>
   );
 
+  const layersMenu = (
+    <Popover
+      label={<Icon name="settings" />}
+      ariaLabel="Visualization settings"
+      title="Visualization layers"
+      align="right"
+      testId="layers-popover"
+    >
+      <SettingsPanel
+        settings={settings}
+        onChange={(k, v) => engine?.setSetting(k, v)}
+        onReset={() => engine?.resetSettings()}
+        showLiveGeometry={showLiveGeometry}
+        onToggleLiveGeometry={(v) => engine?.setShowLiveGeometry(v)}
+      />
+    </Popover>
+  );
+
   const themeToggle = (
     <Tooltip label="Toggle light / dark theme">
       <ThemeToggle theme={theme} onToggle={toggleTheme} />
@@ -361,6 +379,7 @@ export function BesselViewer(): JSX.Element {
           {viewsMenu}
         </div>
       </Popover>
+      {layersMenu}
       {themeToggle}
     </>
   ) : (
@@ -370,6 +389,7 @@ export function BesselViewer(): JSX.Element {
       {scriptMenu}
       {analyzeButton}
       {viewsMenu}
+      {layersMenu}
       {themeToggle}
     </>
   );
@@ -386,6 +406,8 @@ export function BesselViewer(): JSX.Element {
           onToggleSelect={(id) => engine?.toggleSelectObject(id)}
           onToggleVisible={(id, visible) => engine?.toggleVisibleObject(id, visible)}
           onCenter={(id) => engine?.centerOn(id)}
+          onToggleTrack={() => engine?.toggleTrack()}
+          tracking={track}
         />
       </PanelContainer>
       {selection.length > 0 || measureMode ? (
@@ -552,14 +574,6 @@ export function BesselViewer(): JSX.Element {
           >
             {instruments ? 'Hide instruments' : 'Show instruments'}
           </button>
-            <button
-              type="button"
-              onClick={() => engine?.toggleTrack()}
-              aria-pressed={track}
-              data-testid="toggle-track"
-            >
-              {track ? 'Stop tracking' : 'Track spacecraft'}
-            </button>
             {instruments && instrumentNames.length > 1 ? (
               <label className="bessel-instrument-select">
                 <span className="bessel-visually-hidden">Active instrument</span>
@@ -612,15 +626,6 @@ export function BesselViewer(): JSX.Element {
         </div>
       ) : null}
       <div className="bessel-canvas-topright">
-        <Popover label="Layers" title="Visualization layers" align="right" testId="layers-popover">
-          <SettingsPanel
-            settings={settings}
-            onChange={(k, v) => engine?.setSetting(k, v)}
-            onReset={() => engine?.resetSettings()}
-            showLiveGeometry={showLiveGeometry}
-            onToggleLiveGeometry={(v) => engine?.setShowLiveGeometry(v)}
-          />
-        </Popover>
         <Tooltip label="Keyboard shortcuts and help (press ?)">
           <button
             type="button"
