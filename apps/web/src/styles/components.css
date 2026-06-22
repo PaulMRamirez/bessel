@@ -812,6 +812,14 @@ button[aria-pressed='true'] {
   margin-bottom: calc(-1 * var(--space-1));
 }
 
+/* The left-rail Tools panel: share + capture (screenshot / record) as one icon row,
+   replacing the top-bar Capture menu and the floating share button. */
+.bessel-tools-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
 /* Theme toggle ----------------------------------------------------------- */
 
 .bessel-theme-toggle {

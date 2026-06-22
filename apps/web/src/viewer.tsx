@@ -5,7 +5,7 @@
 // presentational; all imperative work lives in the engine.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SOLAR_SYSTEM } from '@bessel/scene';
-import { StatusDot, Icon, DomainIcon, type StatusTone } from '@bessel/selene-design';
+import { StatusDot, Icon, DomainIcon, Button, type StatusTone } from '@bessel/selene-design';
 import { sortByEt } from '@bessel/timeline';
 import {
   BookmarksPanel,
@@ -286,15 +286,6 @@ export function BesselViewer(): JSX.Element {
     </Popover>
   ) : null;
 
-  const captureMenu = (
-    <Popover label="Capture" title="Capture" align="right" testId="capture-menu">
-      <CaptureControls
-        recording={recording}
-        onCaptureStill={() => engine?.captureStill()}
-        onToggleRecording={() => engine?.toggleRecording()}
-      />
-    </Popover>
-  );
 
   const scriptMenu = (
     <Popover label="Script" title="Scripting console" align="right" testId="script-menu" pinnable>
@@ -366,7 +357,6 @@ export function BesselViewer(): JSX.Element {
         <div className="bessel-appbar-overflow">
           {missionMenu}
           {pluginsMenu}
-          {captureMenu}
           {scriptMenu}
           {viewsMenu}
         </div>
@@ -377,7 +367,6 @@ export function BesselViewer(): JSX.Element {
     <>
       {missionMenu}
       {pluginsMenu}
-      {captureMenu}
       {scriptMenu}
       {analyzeButton}
       {viewsMenu}
@@ -387,6 +376,42 @@ export function BesselViewer(): JSX.Element {
 
   const left = (
     <>
+      <PanelContainer title="Tools" testId="panel-tools">
+        <div className="bessel-tools-row">
+          <Tooltip label="Share view">
+            <Button
+              iconOnly
+              variant="secondary"
+              ariaLabel="Share view"
+              testId="share"
+              onClick={() => void engine?.share().then(showShare)}
+            >
+              <Icon name="share" />
+            </Button>
+          </Tooltip>
+          <CaptureControls
+            recording={recording}
+            onCaptureStill={() => engine?.captureStill()}
+            onToggleRecording={() => engine?.toggleRecording()}
+          />
+        </div>
+        {shareNote ? (
+          shareNote.copied ? (
+            <span className="bessel-share-note" role="status" data-testid="share-confirm">
+              View link copied
+            </span>
+          ) : (
+            <input
+              className="bessel-share-fallback"
+              data-testid="share-url"
+              readOnly
+              value={shareNote.url}
+              aria-label="Shareable view link"
+              onFocus={(e) => e.currentTarget.select()}
+            />
+          )
+        ) : null}
+      </PanelContainer>
       <PanelContainer title="Objects" testId="panel-objects">
         <SearchBox value={query} onChange={setQuery} placeholder="Filter objects" />
         <ObjectBrowser
@@ -517,17 +542,16 @@ export function BesselViewer(): JSX.Element {
           testId="telemetry-fault-alert"
         />
       </div>
-      <div className="bessel-viewcontrols" role="group" aria-label="Instruments and sharing">
-        {hasSpacecraft && (
-          <>
-            <button
-              type="button"
-              onClick={() => engine?.toggleInstruments()}
-              aria-pressed={instruments}
-              data-testid="toggle-instruments"
-            >
-              {instruments ? 'Hide instruments' : 'Show instruments'}
-            </button>
+      {hasSpacecraft ? (
+        <div className="bessel-viewcontrols" role="group" aria-label="Instrument controls">
+          <button
+            type="button"
+            onClick={() => engine?.toggleInstruments()}
+            aria-pressed={instruments}
+            data-testid="toggle-instruments"
+          >
+            {instruments ? 'Hide instruments' : 'Show instruments'}
+          </button>
             <button
               type="button"
               onClick={() => engine?.toggleTrack()}
@@ -585,39 +609,8 @@ export function BesselViewer(): JSX.Element {
                 </Tooltip>
               </span>
             ) : null}
-          </>
-        )}
-        <Tooltip label="Share view">
-          <button
-            type="button"
-            className="bessel-viewcontrols__layer-toggle"
-            onClick={() => void engine?.share().then(showShare)}
-            aria-label="Share view"
-            data-testid="share"
-          >
-            <Icon name="share" />
-          </button>
-        </Tooltip>
-        {shareNote ? (
-          shareNote.copied ? (
-            <span className="bessel-share-note" role="status" data-testid="share-confirm">
-              View link copied
-            </span>
-          ) : (
-            <input
-              className="bessel-share-fallback"
-              data-testid="share-url"
-              readOnly
-              value={shareNote.url}
-              aria-label="Shareable view link"
-              onFocus={(e) => e.currentTarget.select()}
-            />
-          )
-        ) : null}
-        <span className="bessel-selection" data-testid="selection-label">
-          {selection.length ? `Selected: ${selection.join(', ')}` : 'No selection'}
-        </span>
-      </div>
+        </div>
+      ) : null}
       <div className="bessel-canvas-topright">
         <Popover label="Layers" title="Visualization layers" align="right" testId="layers-popover">
           <SettingsPanel
