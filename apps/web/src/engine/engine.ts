@@ -58,12 +58,14 @@ import {
   type AnalysisContext,
   type AnalyzeTab,
   type RunStatus,
+  type SpacecraftSource,
 } from '../store/index.ts';
 import type { AccessConstraintSpec, FovPointingMode } from './analysis-defaults.ts';
 import { bootScene, loadInstrument, type EngineCore } from './bootstrap.ts';
 import { applyViewModel } from './apply-view.ts';
 import { type HpopForceModel } from './hpop-model.ts';
 import { type McsDesign } from './mcs.ts';
+import { type EditableMcs } from './mcs-editor.ts';
 import type {
   AnalysisSpan,
   AnalysisTargetSpan,
@@ -76,6 +78,10 @@ import type {
   ScreeningRef,
   ConstellationRef,
   CoverageSweepOpts,
+  // [ux-p1-conjunction] the ingested-catalog ref + ingest-format/screen-opts types.
+  ConjunctionCatalogRef,
+  IngestFormat,
+  IngestScreenOpts,
 } from './analysis-ops.ts';
 
 // True when two optional angles are equal or both absent (within tolerance).
@@ -211,6 +217,10 @@ export class BesselEngine {
   // (inside the dynamic-import op so the worker chunk stays off the first-paint shell) and
   // reused/cancelled across runs. A mutable ref so the lazily-imported screening ops own it.
   private readonly screeningRef: ScreeningRef = { client: null };
+  // [ux-p1-conjunction] The most recently ingested REAL conjunction catalog (CDM/OEM/TLE) +
+  // per-object covariances, shared by the ingest/screen/per-event-Pc ops across separate
+  // dynamic-import calls. Null until the first ingestion.
+  private readonly conjunctionCatalogRef: ConjunctionCatalogRef = { result: null };
   // The designed-constellation sequence + published asset SPK ids, shared by the (lazily
   // imported) coverage ops so the Walker design FEEDS the sweep across separate dynamic-import
   // calls: designConstellation publishes the asset set into it; sweepCoverage reads it.
@@ -855,23 +865,44 @@ export class BesselEngine {
     });
   }
 
-  /** All-vs-all catalog screen on a dedicated worker: build the deterministic synthetic
-   *  catalog, run the screen off the main thread with incremental progress, and surface the
-   *  flagged events. The synthetic-catalog builder + worker client load with the lazy ops. */
-  async screenCatalog(): Promise<void> {
-    const e = this.core;
-    if (!e) return;
-    await this.runTool('screen-catalog', async () => {
-      const ops = await import('./analysis-ops.ts');
-      await ops.screenCatalog(e, this.store, this.isDisposed, this.screeningRef);
-    });
-  }
-
   /** Cancel an in-flight catalog screen (terminates the worker) and reset the run status. */
   async cancelScreen(): Promise<void> {
     const ops = await import('./analysis-ops.ts');
     ops.cancelScreen(this.store, this.screeningRef);
     this.setRunStatus('screen-catalog', 'idle');
+  }
+
+  /** [ux-p1-conjunction] Ingest REAL CDM/OEM/TLE text into the conjunction screening catalog.
+   *  The pure parse loads with the lazy ops; a malformed input fails loud as a located error. */
+  async ingestConjunctionCatalog(format: IngestFormat, text: string): Promise<void> {
+    await this.runTool('ingest-catalog', async () => {
+      const ops = await import('./analysis-ops.ts');
+      ops.ingestConjunctionCatalog(this.store, this.conjunctionCatalogRef, format, text);
+    });
+  }
+
+  /** [ux-p1-conjunction] Screen the INGESTED catalog on the dedicated worker (same progress/
+   *  cancel UX as the synthetic screen), with configurable thresholdKm/padKm. */
+  async screenIngestedCatalog(opts: IngestScreenOpts = {}): Promise<void> {
+    await this.runTool('screen-catalog', async () => {
+      const ops = await import('./analysis-ops.ts');
+      await ops.screenIngestedCatalog(
+        this.store,
+        this.isDisposed,
+        this.screeningRef,
+        this.conjunctionCatalogRef,
+        opts,
+      );
+    });
+  }
+
+  /** [ux-p1-conjunction] Per-event full-covariance Pc + Max-Pc + B-plane geometry for the
+   *  selected screened event (by index), from the ingested per-object covariances. */
+  async computeEventPc(index: number): Promise<void> {
+    await this.runTool('compute-event-pc', async () => {
+      const ops = await import('./analysis-ops.ts');
+      ops.computeEventPc(this.store, this.conjunctionCatalogRef, index);
+    });
   }
 
   /** Constellation design: generate a Walker pattern, publish each satellite as an SPK
@@ -954,7 +985,16 @@ export class BesselEngine {
     });
   }
 
-  /** Propagation: SGP4 the bundled sample TLE and read it back as altitude + track. */
+  /** Set the editable spacecraft source the propagation tools read (a pasted TLE or a picked
+   *  scene object), mirroring its display name into scenario.primarySpacecraft so other tabs
+   *  share the same role-primary selection. Pass null to clear the source. */
+  setSpacecraftSource(source: SpacecraftSource | null): void {
+    this.store.setState((s) => ({
+      scenario: { ...s.scenario, spacecraftSource: source, primarySpacecraft: source ? source.name : null },
+    }));
+  }
+
+  /** Propagation: SGP4 the active TLE source and read it back as altitude + track. */
   async propagateTle(): Promise<void> {
     const e = this.core;
     if (!e) return;
@@ -984,13 +1024,25 @@ export class BesselEngine {
     });
   }
 
-  /** Mission-design workbench: run a small MCS and draw the arc plus a DC report. */
+  /** Mission-design workbench: run a small fixed-shape MCS (the legacy 4-scalar design) and
+   *  draw the arc plus a DC report. Kept for callers that still pass a scalar McsDesign. */
   async runMcsDesign(design: McsDesign): Promise<void> {
     const e = this.core;
     if (!e) return;
     await this.runTool('run-mcs', async () => {
       const ops = await import('./analysis-ops.ts');
       await ops.runMcsDesign(e, this.store, this.isDisposed, design);
+    });
+  }
+
+  /** Editable mission-design workbench: compile and run the user-built MCS segment list,
+   *  draw the solved arc, and surface the residual trace + solved delta-v (run-mcs testid). */
+  async runEditableMcs(design: EditableMcs): Promise<void> {
+    const e = this.core;
+    if (!e) return;
+    await this.runTool('run-mcs', async () => {
+      const ops = await import('./analysis-ops.ts');
+      await ops.runEditableMcsDesign(e, this.store, this.isDisposed, design);
     });
   }
 

@@ -108,11 +108,13 @@ export function nextExpanded(order: readonly string[], id: string): string[] {
   return grown.slice(Math.max(0, grown.length - MAX_EXPANDED_TASK_CARDS));
 }
 
-/** A request to expand a specific card, raised from outside the accordion (e.g. the
- *  AnalysisLauncher). The `token` lets the same id be re-requested: a changed token
- *  re-triggers the expand even when the id repeats. */
+/** A request to expand one or more cards, raised from outside the accordion (e.g. the
+ *  AnalysisLauncher's single hit, or a mission-profile preset's primary cards). `id` is a
+ *  single card id or an ordered list (applied left-to-right through the cap reducer, so the
+ *  last id wins a tie under the at-most-two-expanded rule). The `token` lets the same
+ *  request be re-fired: a changed token re-triggers the expand even when the ids repeat. */
 export interface ExpandRequest {
-  readonly id: string;
+  readonly id: string | readonly string[];
   readonly token: number;
 }
 
@@ -133,13 +135,27 @@ export function TaskCardAccordion(props: TaskCardAccordionProps): JSX.Element {
     (props.defaultExpanded ?? []).slice(-MAX_EXPANDED_TASK_CARDS),
   );
   const req = props.expandRequest;
-  const hasCard = props.cards.some((c) => c.id === req?.id);
-  const reqId = req?.id;
+  // Normalize the request to an ordered list of ids that actually exist as cards here.
+  const cardIds = props.cards.map((c) => c.id);
+  const reqIds = req
+    ? (Array.isArray(req.id) ? req.id : [req.id]).filter((id) => cardIds.includes(id))
+    : [];
+  const reqKey = reqIds.join(',');
   const reqToken = req?.token;
   useEffect(() => {
-    // reqToken is the change signal; reqId/hasCard guard the target card.
-    if (reqId && hasCard) setOrder((o) => (o.includes(reqId) ? o : nextExpanded(o, reqId)));
-  }, [reqToken, reqId, hasCard]);
+    // reqToken is the change signal; reqKey carries the (filtered) target ids. A single-id
+    // request (the launcher's one hit) is additive: it opens that card through the cap reducer
+    // without disturbing the others. A multi-id request (a mission-profile preset's primary
+    // cards) opens exactly those ids as a fresh capped set, most-recent-last, so the persona's
+    // chosen cards are the ones expanded rather than racing the panel's defaultExpanded.
+    if (reqKey.length === 0) return;
+    const ids = reqKey.split(',');
+    setOrder((o) =>
+      ids.length > 1
+        ? ids.slice(Math.max(0, ids.length - MAX_EXPANDED_TASK_CARDS))
+        : ids.reduce((acc, id) => (acc.includes(id) ? acc : nextExpanded(acc, id)), o),
+    );
+  }, [reqToken, reqKey]);
   const expanded = new Set(order);
   return (
     <div className="bessel-taskcard-accordion" data-testid="taskcard-accordion">

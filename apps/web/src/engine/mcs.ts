@@ -124,11 +124,25 @@ export async function runMcsDesign(design: McsDesign): Promise<McsRunOutput> {
   const mcs = buildMcs(design);
   validateMcs(mcs);
   const run = await runMission(mcs, earthEnv());
-  return { result: reduceRun(run, design), arc: mcsArcPoints(run) };
+  const altLabel = `MCS altitude (km), target ${design.targetRadiusKm} km`;
+  const label = `MCS: ${design.altitudeKm} km LEO, ${design.dvKmS} km/s burn`;
+  return { result: reduceRun(run, altLabel, label), arc: mcsArcPoints(run) };
 }
 
-/** Reduce an McsRun into the result the panel renders (final state + altitude + DC report). */
-function reduceRun(run: McsRun, design: McsDesign): McsResult {
+/**
+ * Run an editable, user-built MCS (compiled from the segment editor's EditableMcs to the
+ * Mcs IR) and reduce it the same way as the demonstration run, so the panel renders the
+ * residual convergence trace and solved delta-v from the corrector. SPICE-free.
+ */
+export async function runEditableMcs(mcs: Mcs): Promise<McsRunOutput> {
+  validateMcs(mcs);
+  const run = await runMission(mcs, earthEnv());
+  return { result: reduceRun(run, 'MCS altitude (km)', 'Editable MCS'), arc: mcsArcPoints(run) };
+}
+
+/** Reduce an McsRun into the result the panel renders (final state + altitude + DC report).
+ *  Surfaces the per-iteration residual convergence trace and the solved prograde delta-v. */
+function reduceRun(run: McsRun, altLabel: string, label: string): McsResult {
   const { final, samples, targetReports } = run;
   const finalRadiusKm = Math.hypot(final.r.x, final.r.y, final.r.z);
   const finalSpeedKmS = Math.hypot(final.v.x, final.v.y, final.v.z);
@@ -149,15 +163,20 @@ function reduceRun(run: McsRun, design: McsDesign): McsResult {
         satisfied: g.satisfied,
       }))
     : [];
+  // The corrector's first control is the prograde dv (Maneuver.dv.x), so its solved value is
+  // the magnitude the differential corrector found; null when no Target ran.
+  const solvedDvKmS = dc && dc.controls.length > 0 ? Math.abs(dc.controls[0]!) : null;
   return {
     finalRadiusKm,
     finalSpeedKmS,
     finalEpoch: final.epoch,
-    altitude: { et, value: altitude, label: `MCS altitude (km), target ${design.targetRadiusKm} km` },
+    altitude: { et, value: altitude, label: altLabel },
     converged: dc ? dc.converged : null,
     iterations: dc ? dc.iterations : 0,
     goals,
-    label: `MCS: ${design.altitudeKm} km LEO, ${design.dvKmS} km/s burn`,
+    residualHistory: dc ? dc.history.map((h) => ({ iter: h.iter, normF: h.normF })) : [],
+    solvedDvKmS,
+    label,
   };
 }
 

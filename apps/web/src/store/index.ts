@@ -6,6 +6,7 @@ export {
   KEPT_SNAPSHOT_LIMIT,
   type AnalysisContext,
   type ScenarioState,
+  type SpacecraftSource,
   type GroundStation,
   type AnalyzeTab,
   type KeptSnapshot,
@@ -27,5 +28,9 @@ export {
   type CoverageGridResult,
   type CoverageMetricSelection,
   type CoverageFomSummaryState,
+  type ConjunctionResult,
+  type ConjunctionIngestSummary,
+  type ConjunctionEventResult,
+  type BPlaneEllipseView,
 } from './app-state.ts';
 export { useStore } from './use-store.ts';

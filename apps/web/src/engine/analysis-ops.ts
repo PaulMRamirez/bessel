@@ -10,7 +10,11 @@ import { figureOfMerit, walkerConstellation, sweepCoverageGrid, type GridSpec } 
 import { CoverageOverlayError, type CoverageOverlayCell, type Km3 } from '@bessel/scene';
 import { windowIntersect } from '@bessel/timeline';
 import { linkBudget } from '@bessel/rf';
-import { closestApproachLinear, collisionProbability2D } from '@bessel/conjunction';
+// [ux-p1-conjunction] full-covariance Pc helpers added to the existing conjunction import. The
+// encounter-plane Foster integral + the max-Pc bound are LIGHT (pure covariance.ts / max-pc.ts,
+// no propagator integrator); the covariance combination is done locally (combineEncounter in
+// bplane-geometry.ts) to keep the STM-propagation path out of this lazy chunk.
+import { closestApproachLinear, collisionProbability2D, maxCollisionProbability } from '@bessel/conjunction';
 import { eigenAxisSlew, nadirAttitude, sunPointingAttitude, type Quaternion } from '@bessel/attitude';
 import { lambert } from '@bessel/mission';
 import { writeOem, type Oem } from '@bessel/interop';
@@ -35,7 +39,6 @@ import {
 } from './coverage-metric.ts';
 import { downloadBlob } from '@bessel/ui';
 import { describeProvider, type ProviderKind, type ProviderSpec, type SpiceEngine } from '@bessel/spice';
-import { SAMPLE_TLE } from '../sample-tle.ts';
 import { RAD2DEG, DEG2RAD } from '../angles.ts';
 import {
   DEFAULT_LINK,
@@ -54,12 +57,21 @@ export { computeAccessStack, computeFovWindows } from './ops-access.ts';
 import type { AppStore } from '../store/index.ts';
 import type { EngineCore } from './bootstrap.ts';
 import { buildHpopForceModel, HPOP_FORCE_MODEL_LABELS, type HpopForceModel } from './hpop-model.ts';
-import { runMcsDesign as runMcsDesignCore, type McsDesign } from './mcs.ts';
+import { runMcsDesign as runMcsDesignCore, runEditableMcs, type McsDesign } from './mcs.ts';
+import { compileEditableMcs } from './mcs-compile.ts';
+import { type EditableMcs } from './mcs-editor.ts';
+import type { SpacecraftSource } from '../store/index.ts';
 import { runOdDemo } from './od.ts';
 import { centerMu } from './center-mu.ts';
 import { ScreeningClient, ScreeningCancelled } from '../screening-client.ts';
-import { buildSyntheticCatalog, SYNTHETIC_SCREEN_DEFAULTS } from '../synthetic-catalog.ts';
 import { reduceScreening, INITIAL_SCREENING } from '../screening-protocol.ts';
+// [ux-p1-conjunction] REAL CDM/OEM/TLE ingestion (the pure parse->catalog fn) + the B-plane
+// geometry, co-located in this lazy chunk so they share the conjunction/propagator deps and
+// stay off the first-paint shell.
+import { ingestCatalog, type IngestFormat, type IngestResult } from '../conjunction/ingest.ts';
+export type { IngestFormat };
+import { buildBPlaneGeometry, combineEncounter, encounterPlanePc } from '../conjunction/bplane-geometry.ts';
+import type { ConjunctionEvent, SampledEphemeris } from '@bessel/conjunction';
 
 // Earth gravity constants for the numerical (HPOP) propagation. Published WGS-84/EGM
 // values, caller-injected because a PCK carries no GM or harmonics.
@@ -139,6 +151,14 @@ export interface TleState {
  *  calls. Null until the first screen constructs the client. */
 export interface ScreeningRef {
   client: ScreeningClient | null;
+}
+
+/** [ux-p1-conjunction] The most recently ingested REAL conjunction catalog (CDM/OEM/TLE),
+ *  held as a mutable ref on the engine so the ingest op, the screen op, and the per-event Pc
+ *  op share the same catalog + per-object covariances across separate dynamic-import calls.
+ *  Null until the first ingestion. */
+export interface ConjunctionCatalogRef {
+  result: IngestResult | null;
 }
 
 /** Build a concrete ProviderSpec from a report config (only frame-needing kinds use it). */
@@ -309,49 +329,93 @@ export async function computeConjunction(
   }
 }
 
+// [ux-p1-conjunction] The synthetic-catalog screen op was removed: the Conjunction tab now
+// screens a REAL ingested catalog (screenIngestedCatalog below). The deterministic synthetic
+// catalog builder stays in synthetic-catalog.ts (still unit-tested) but is no longer wired
+// into the panel, so it no longer lands in this lazy chunk.
+
+/** Cancel an in-flight catalog screen: terminate the worker and reset the screening slice. */
+export function cancelScreen(store: AppStore, ref: ScreeningRef): void {
+  ref.client?.cancel();
+  store.setState((s) => ({ screening: reduceScreening(s.screening, { kind: 'cancel' }) }));
+}
+
+// [ux-p1-conjunction] REAL CDM/OEM/TLE ingestion + screen + per-event full-covariance Pc.
+// ingestConjunctionCatalog parses pasted/uploaded text into a SampledEphemeris catalog (plus
+// per-object covariances) via the pure ingestCatalog fn and stores it on the engine ref;
+// screenIngestedCatalog screens THAT catalog on the existing dedicated worker (reusing the
+// progress/cancel UX); computeEventPc takes a screened event index and computes the full-
+// covariance Pc + Max-Pc + B-plane geometry from the ingested covariances. Fails loud.
+
+/** Parameters for the screen of an ingested catalog (configurable thresholds). */
+export interface IngestScreenOpts {
+  readonly thresholdKm?: number;
+  readonly padKm?: number;
+}
+
 /**
- * All-vs-all catalog screen on a DEDICATED screening worker. Builds the deterministic
- * synthetic catalog at the current epoch (real RSO ingestion is out of scope), hands it to
- * the worker through the ScreeningClient, and folds the worker's incremental progress and
- * terminal result into the screening slice through the pure reduceScreening reducer (so the
- * panel shows a moving progress readout and then the flagged events). The main thread never
- * runs screenAllVsAll itself, so a multi-object screen does not stall rendering. A user
- * cancel terminates the worker; that surfaces as ScreeningCancelled, which resets the slice
- * to idle rather than raising a loud error.
+ * Ingest REAL CDM/OEM/TLE text into the conjunction screening catalog (decision 3). The parse
+ * is the pure tested ingestCatalog; on success the catalog + per-object covariances are stored
+ * on the engine ref (for the screen and the per-event Pc), and a summary lands in the store.
+ * Fails loud (the typed IngestError) on malformed input; the wrapper surfaces it as a located
+ * run-status error and the panel shows it.
  */
-export async function screenCatalog(
-  e: EngineCore,
+export function ingestConjunctionCatalog(
+  store: AppStore,
+  ref: ConjunctionCatalogRef,
+  format: IngestFormat,
+  text: string,
+): void {
+  // ingestCatalog throws a located IngestError on bad input; let it propagate to the wrapper.
+  const result = ingestCatalog(format, text);
+  ref.result = result;
+  // A fresh ingestion supersedes any prior screen result and selected event.
+  store.setState({
+    conjunctionIngest: {
+      format: result.format,
+      objectCount: result.catalog.length,
+      covarianceCount: result.covariances.size,
+      ids: result.catalog.map((o) => o.id),
+      note: result.note,
+    },
+    screening: INITIAL_SCREENING,
+    conjunctionEvent: null,
+  });
+}
+
+/**
+ * Screen the INGESTED catalog on the dedicated worker, with configurable thresholdKm/padKm.
+ * Reuses the same ScreeningClient + reduceScreening progress/cancel pipeline as the synthetic
+ * screen, but over the real ingested objects. Fails loud when no catalog has been ingested.
+ */
+export async function screenIngestedCatalog(
   store: AppStore,
   isDisposed: () => boolean,
-  ref: ScreeningRef,
+  screeningRef: ScreeningRef,
+  catalogRef: ConjunctionCatalogRef,
+  opts: IngestScreenOpts = {},
 ): Promise<void> {
-  const epochEt = e.clock.state.et;
-  const objects = buildSyntheticCatalog({
-    epochEt,
-    spanSec: SYNTHETIC_SCREEN_DEFAULTS.spanSec,
-    steps: SYNTHETIC_SCREEN_DEFAULTS.steps,
-  });
-  const client = ref.client ?? (ref.client = new ScreeningClient());
-  // Open the run: a zeroed bar over the partition count (one per primary object), recording the
-  // catalog epoch so the panel can show each flagged TCA relative to it (ConjunctionEvent.tca is
-  // absolute ET, the synthetic grid starts at this epoch).
+  const result = catalogRef.result;
+  if (!result) {
+    throw new Error('no ingested catalog: ingest CDM, OEM, or TLE text before screening');
+  }
+  const objects = result.catalog;
+  // Default thresholds when the panel does not override them (the ingest card supplies both).
+  const thresholdKm = opts.thresholdKm ?? 5;
+  const padKm = opts.padKm ?? 50;
+  const client = screeningRef.client ?? (screeningRef.client = new ScreeningClient());
   store.setState((s) => ({
-    screening: reduceScreening(s.screening, { kind: 'start', total: objects.length - 1, epoch: epochEt }),
+    screening: reduceScreening(s.screening, { kind: 'start', total: objects.length - 1, epoch: result.epoch }),
+    conjunctionEvent: null,
   }));
   try {
-    const events = await client.start(
-      { objects, thresholdKm: SYNTHETIC_SCREEN_DEFAULTS.thresholdKm, padKm: SYNTHETIC_SCREEN_DEFAULTS.padKm },
-      (p) => {
-        if (!isDisposed()) {
-          store.setState((s) => ({ screening: reduceScreening(s.screening, p) }));
-        }
-      },
-    );
+    const events = await client.start({ objects, thresholdKm, padKm }, (p) => {
+      if (!isDisposed()) store.setState((s) => ({ screening: reduceScreening(s.screening, p) }));
+    });
     if (!isDisposed()) {
       store.setState((s) => ({ screening: reduceScreening(s.screening, { kind: 'result', events }) }));
     }
   } catch (err) {
-    // A user cancel (worker terminated) is not a failure: reset the slice to idle.
     if (err instanceof ScreeningCancelled) {
       if (!isDisposed()) store.setState({ screening: INITIAL_SCREENING });
       return;
@@ -360,15 +424,100 @@ export async function screenCatalog(
       const message = err instanceof Error ? err.message : String(err);
       store.setState((s) => ({ screening: reduceScreening(s.screening, { kind: 'error', message }) }));
     }
-    console.error('catalog screen failed', err);
+    console.error('ingested catalog screen failed', err);
     throw err;
   }
 }
 
-/** Cancel an in-flight catalog screen: terminate the worker and reset the screening slice. */
-export function cancelScreen(store: AppStore, ref: ScreeningRef): void {
-  ref.client?.cancel();
-  store.setState((s) => ({ screening: reduceScreening(s.screening, { kind: 'cancel' }) }));
+/** Look up a screened event by index from the screening slice, failing loud on a bad index. */
+function selectScreenedEvent(store: AppStore, index: number): ConjunctionEvent {
+  const events = store.getState().screening.events;
+  if (!events || events.length === 0) throw new Error('no screened events: run a screen first');
+  const ev = events[index];
+  if (!ev) throw new Error(`event index ${index} is out of range (0..${events.length - 1})`);
+  return ev;
+}
+
+/** The combined hard-body radius (km) for a screened pair, summed from the two objects' tagged
+ *  radii (each SampledEphemeris carries its own radiusKm; default to a small value if absent). */
+function combinedRadiusKm(catalog: readonly SampledEphemeris[], primaryId: string, secondaryId: string): number {
+  const find = (id: string): number => catalog.find((o) => o.id === id)?.radiusKm ?? 0.005;
+  return find(primaryId) + find(secondaryId);
+}
+
+/**
+ * Per-event full-covariance Pc + Max-Pc + B-plane geometry for a selected screened event.
+ * When BOTH objects carry an ingested covariance (CDM), the two position covariances combine
+ * and project into the encounter plane (combineEncounter, normal to the relative velocity) and
+ * Foster's encounter-plane integral (collisionProbabilityCov) gives the FULL-covariance Pc; the
+ * 1/3-sigma B-plane ellipses come from the combined 2x2 covariance. The covariances are written
+ * at the CDM TCA, so the combination is at the encounter epoch (no STM propagation needed, which
+ * keeps the propagator integrator out of this lazy chunk). Max-Pc (the Alfano bound) is always
+ * available from the screened miss + combined radius. Without covariances (OEM/TLE) only Max-Pc
+ * is reported and the B-plane has no ellipse. Fails loud on a bad index / covariance.
+ */
+export function computeEventPc(store: AppStore, catalogRef: ConjunctionCatalogRef, index: number): void {
+  const result = catalogRef.result;
+  if (!result) throw new Error('no ingested catalog: ingest before computing per-event Pc');
+  const ev = selectScreenedEvent(store, index);
+  const radiusKm = combinedRadiusKm(result.catalog, ev.primaryId, ev.secondaryId);
+  const pcMax = maxCollisionProbability(ev.missKm, radiusKm);
+
+  const primaryCov = result.covariances.get(ev.primaryId);
+  const secondaryCov = result.covariances.get(ev.secondaryId);
+  if (primaryCov && secondaryCov) {
+    // Both objects carry a real covariance: combine the two position covariances at the encounter
+    // epoch, project into the encounter plane, and integrate the full-covariance Foster Pc.
+    const enc = combineEncounter(primaryCov.state6, primaryCov.posCov3, secondaryCov.state6, secondaryCov.posCov3);
+    const pcFull = encounterPlanePc(enc.cov2, enc.missXKm, enc.missYKm, radiusKm);
+    const geom = buildBPlaneGeometry(enc.cov2, enc.missXKm, enc.missYKm, radiusKm);
+    store.setState({
+      conjunctionEvent: {
+        index,
+        primaryId: ev.primaryId,
+        secondaryId: ev.secondaryId,
+        tca: ev.tca,
+        pcFull,
+        pcMax,
+        missXKm: enc.missXKm,
+        missYKm: enc.missYKm,
+        missKm: enc.missKm,
+        radiusKm,
+        relSpeedKmS: enc.relSpeedKmS,
+        hasCovariance: true,
+        ellipses: geom.ellipses.map((e) => ({
+          sigma: e.sigma,
+          semiMajorKm: e.semiMajorKm,
+          semiMinorKm: e.semiMinorKm,
+          angleRad: e.angleRad,
+        })),
+        extentKm: geom.extentKm,
+      },
+    });
+    return;
+  }
+
+  // No covariance pair: report Max-Pc only, with the screened miss along +x for the B-plane
+  // miss vector and hard-body circle (no covariance ellipse). The extent frames the miss + R.
+  const extentKm = Math.max(ev.missKm + radiusKm, 1e-6) * 1.15;
+  store.setState({
+    conjunctionEvent: {
+      index,
+      primaryId: ev.primaryId,
+      secondaryId: ev.secondaryId,
+      tca: ev.tca,
+      pcFull: null,
+      pcMax,
+      missXKm: ev.missKm,
+      missYKm: 0,
+      missKm: ev.missKm,
+      radiusKm,
+      relSpeedKmS: ev.relSpeedKmS,
+      hasCovariance: false,
+      ellipses: [],
+      extentKm,
+    },
+  });
 }
 
 
@@ -575,15 +724,38 @@ export async function exportOem(e: EngineCore, store: AppStore): Promise<void> {
   }
 }
 
+/** A located error raised when a propagation tool is run with no, or an unsuitable,
+ *  spacecraft source set (instead of silently falling back to bundled sample data). */
+export class SpacecraftSourceError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SpacecraftSourceError';
+  }
+}
+
+/** Read the active spacecraft source from the scenario slice, narrowed to a TLE source.
+ *  Fails loud when no source is set, or when the set source is a picked scene object (SGP4
+ *  needs element data, so the SGP4 path is TLE-only; the HPOP path handles object sources). */
+function requireTleSource(store: AppStore): Extract<SpacecraftSource, { kind: 'tle' }> {
+  const source = store.getState().scenario.spacecraftSource;
+  if (!source) {
+    throw new SpacecraftSourceError('set a spacecraft source (paste a TLE or pick a scene object) before propagating');
+  }
+  if (source.kind !== 'tle') {
+    throw new SpacecraftSourceError('SGP4 needs a TLE source; pick the HPOP path for a scene-object source');
+  }
+  return source;
+}
+
 /**
- * Propagation: parse the bundled sample TLE, run SGP4 over one day from its epoch,
- * publish the arc as an in-memory SPK Type-13 segment about the Earth, then query
- * that SPK through the F3 evalSeries pipeline for an altitude time series and a
- * ground track. This exercises the full @bessel/propagator path (TLE -> SGP4 ->
- * SPK-13 -> render) with no special-case geometry: the propagated orbit is read
- * back through the same spkpos pipeline as any other body. (Frame note: SGP4 is in
- * TEME; the segment is published as J2000, an arcminute-scale approximation near the
- * epoch. The EOP-aware TEME->J2000 conversion is the interop/frame work, #22.)
+ * Propagation: parse the active spacecraft source's TLE, run SGP4 over one day from its
+ * epoch, publish the arc as an in-memory SPK Type-13 segment about the Earth, then query
+ * that SPK through the F3 evalSeries pipeline for an altitude time series and a ground
+ * track. This exercises the full @bessel/propagator path (TLE -> SGP4 -> SPK-13 -> render)
+ * with no special-case geometry: the propagated orbit is read back through the same spkpos
+ * pipeline as any other body. Fails loud when no TLE source is set (no sample fallback).
+ * (Frame note: SGP4 is in TEME; the segment is published as J2000, an arcminute-scale
+ * approximation near the epoch. The EOP-aware TEME->J2000 conversion is the interop work, #22.)
  */
 export async function propagateTle(
   e: EngineCore,
@@ -592,7 +764,8 @@ export async function propagateTle(
   tle: TleState,
 ): Promise<void> {
   try {
-    const parsed = parseTle(SAMPLE_TLE.line1, SAMPLE_TLE.line2);
+    const source = requireTleSource(store);
+    const parsed = parseTle(source.line1, source.line2);
     const rec = sgp4init(parsed);
     // SPICE str2et rejects a trailing 'Z'; the TLE epoch is UTC regardless.
     const epoch = await e.spice.str2et(parsed.epochUtc.replace(/Z$/, ''));
@@ -632,10 +805,10 @@ export async function propagateTle(
     if (!isDisposed()) {
       store.setState({
         tleOrbit: {
-          altitude: { et, value: altitude, label: `${SAMPLE_TLE.name} altitude (km)` },
-          track: { et, lon: series.columns[1]!, lat: series.columns[2]!, label: `${SAMPLE_TLE.name} ground track` },
+          altitude: { et, value: altitude, label: `${source.name} altitude (km)` },
+          track: { et, lon: series.columns[1]!, lat: series.columns[2]!, label: `${source.name} ground track` },
           periodMin: 1440 / parsed.meanMotion,
-          label: SAMPLE_TLE.name,
+          label: source.name,
         },
       });
     }
@@ -705,13 +878,48 @@ export async function computeStationAccess(
   }
 }
 
+/** The numerical-propagation seed: an initial osculating Earth-centered J2000 state plus its
+ *  epoch and a display name, resolved from whichever spacecraft source is active. */
+interface HpopSeed {
+  readonly position: { x: number; y: number; z: number };
+  readonly velocity: { x: number; y: number; z: number };
+  readonly epoch: number;
+  readonly name: string;
+}
+
+/** Resolve the active spacecraft source into an HPOP seed state. A TLE source uses the SGP4
+ *  state at the TLE epoch; a scene-object source reads the object's osculating Earth-relative
+ *  J2000 state at the current epoch via SPICE. Fails loud when no source is set. */
+async function resolveHpopSeed(e: EngineCore, store: AppStore): Promise<HpopSeed> {
+  const source = store.getState().scenario.spacecraftSource;
+  if (!source) {
+    throw new SpacecraftSourceError('set a spacecraft source (paste a TLE or pick a scene object) before propagating');
+  }
+  if (source.kind === 'tle') {
+    const parsed = parseTle(source.line1, source.line2);
+    const rec = sgp4init(parsed);
+    const epoch = await e.spice.str2et(parsed.epochUtc.replace(/Z$/, ''));
+    const s0 = sgp4(rec, 0); // TEME state at the TLE epoch
+    return {
+      position: { x: s0.position[0], y: s0.position[1], z: s0.position[2] },
+      velocity: { x: s0.velocity[0], y: s0.velocity[1], z: s0.velocity[2] },
+      epoch,
+      name: source.name,
+    };
+  }
+  // Scene object: its osculating Earth-centered J2000 state at the current epoch.
+  const epoch = e.clock.state.et;
+  const s = await e.spice.spkezr(source.name, epoch, 'J2000', 'NONE', 'EARTH');
+  return { position: s.position, velocity: s.velocity, epoch, name: source.name };
+}
+
 /**
- * Numerical (HPOP) propagation: take the TLE's initial osculating state, integrate
- * it over one day with the native Cowell propagator under a point-mass + J2 force
- * model (@bessel/propagator), publish the arc as an SPK, and plot its altitude. This
- * is the analytic-vs-numerical companion to the SGP4 run and exercises the new
- * integrator end-to-end. (Frame note: the TLE state is TEME, integrated as J2000, an
- * arcminute-scale approximation near the epoch; the J2 axis assumption holds.)
+ * Numerical (HPOP) propagation: take the active source's initial osculating state, integrate
+ * it over one day with the native Cowell propagator under a selectable force model
+ * (@bessel/propagator), publish the arc as an SPK, and plot its altitude. This is the
+ * analytic-vs-numerical companion to the SGP4 run and exercises the integrator end-to-end.
+ * Fails loud when no source is set (no sample fallback). (Frame note for a TLE source: the
+ * state is TEME, integrated as J2000, an arcminute-scale approximation near the epoch.)
  */
 export async function propagateHpop(
   e: EngineCore,
@@ -721,20 +929,15 @@ export async function propagateHpop(
   model: HpopForceModel = 'j2',
 ): Promise<void> {
   try {
-    const parsed = parseTle(SAMPLE_TLE.line1, SAMPLE_TLE.line2);
-    const rec = sgp4init(parsed);
-    const epoch = await e.spice.str2et(parsed.epochUtc.replace(/Z$/, ''));
-    const s0 = sgp4(rec, 0); // TEME state at the TLE epoch
+    const seed = await resolveHpopSeed(e, store);
+    const epoch = seed.epoch;
     const step = 60;
     const n = Math.floor(86400 / step) + 1;
     const et = new Float64Array(n);
     for (let i = 0; i < n; i++) et[i] = epoch + i * step;
     const forceModel = buildHpopForceModel(model, { gm: EARTH_GM, re: EARTH_RE, j2: EARTH_J2 });
     const table = propagateCowell({
-      state: {
-        position: { x: s0.position[0], y: s0.position[1], z: s0.position[2] },
-        velocity: { x: s0.velocity[0], y: s0.velocity[1], z: s0.velocity[2] },
-      },
+      state: { position: seed.position, velocity: seed.velocity },
       epoch,
       etGrid: et,
       forceModel,
@@ -752,7 +955,7 @@ export async function propagateHpop(
         hpopAltitude: {
           et,
           value: altitude,
-          label: `${SAMPLE_TLE.name} HPOP altitude (km, ${HPOP_FORCE_MODEL_LABELS[model]})`,
+          label: `${seed.name} HPOP altitude (km, ${HPOP_FORCE_MODEL_LABELS[model]})`,
         },
       });
     }
@@ -790,6 +993,36 @@ export async function runMcsDesign(
   } catch (err) {
     if (!isDisposed()) store.setState({ mcsResult: null });
     console.error('MCS design run failed', err);
+    throw err;
+  }
+}
+
+/**
+ * Editable mission-design workbench: compile the user-built segment list (the MCS builder's
+ * EditableMcs) into the @bessel/propagator Mcs IR, run it SPICE-free, draw the solved arc as a
+ * camera-relative Earth-anchored orbit polyline, and write the result (final state, altitude
+ * series, per-iteration corrector residual trace, and solved delta-v) to the store. Fails loud
+ * with a located McsEditorError when the segment list cannot lower to a runnable IR.
+ */
+export async function runEditableMcsDesign(
+  e: EngineCore,
+  store: AppStore,
+  isDisposed: () => boolean,
+  design: EditableMcs,
+): Promise<void> {
+  try {
+    const mcs = compileEditableMcs(design);
+    const { result, arc } = await runEditableMcs(mcs);
+    if (isDisposed()) return;
+    // Camera-relative: km Earth-centered J2000 points; the scene applies the floating-origin
+    // scale, so no raw solar-system coordinates reach the GPU float32 buffers.
+    if (arc.length >= 2) {
+      e.scene.setOrbits([{ id: 'mcs-arc', anchorBody: 'Earth', points: arc, color: 0xffaa33 }]);
+    }
+    store.setState({ mcsResult: result });
+  } catch (err) {
+    if (!isDisposed()) store.setState({ mcsResult: null });
+    console.error('editable MCS run failed', err);
     throw err;
   }
 }
