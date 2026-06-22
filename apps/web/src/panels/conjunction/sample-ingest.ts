@@ -53,7 +53,13 @@ CN_T = 0.000000 [km**2]
 CN_N = 0.030000 [km**2]
 `;
 
-/** Two short CCSDS OEM (502.0 KVN) segments whose tabulated states close within a few km. */
+/** Two short CCSDS OEM (502.0 KVN) segments whose tabulated states close within a few km. The two
+ *  objects share the in-plane track but cross with a small out-of-plane (Z) relative velocity, so
+ *  near the segment midpoint they pass ~2 km apart with a NON-ZERO relative velocity. That non-zero
+ *  relative velocity is required: the encounter plane (normal to the relative velocity) is undefined
+ *  for two co-velocity objects, so an analyst-supplied covariance could not yield a full-covariance
+ *  Pc if the pair moved in lockstep. The tabulated in-plane velocity is the segment's own slope
+ *  (-2000 km over 1800 s in X, +6000 km in Y), so the states are self-consistent. */
 export const SAMPLE_OEM = `CCSDS_OEM_VERS = 2.0
 CREATION_DATE = 2026-06-01T00:00:00
 ORIGINATOR = BESSEL
@@ -66,8 +72,8 @@ TIME_SYSTEM = UTC
 START_TIME = 2026-06-02T00:00:00.000
 STOP_TIME = 2026-06-02T00:30:00.000
 META_STOP
-2026-06-02T00:00:00.000 7000.000 0.000 0.000 0.000 7.546 0.000
-2026-06-02T00:30:00.000 5000.000 6000.000 0.000 -6.000 4.000 0.000
+2026-06-02T00:00:00.000 7000.000 0.000 0.000 -1.111111 3.333333 0.000000
+2026-06-02T00:30:00.000 5000.000 6000.000 0.000 -1.111111 3.333333 0.000000
 
 CCSDS_OEM_VERS = 2.0
 CREATION_DATE = 2026-06-01T00:00:00
@@ -81,8 +87,8 @@ TIME_SYSTEM = UTC
 START_TIME = 2026-06-02T00:00:00.000
 STOP_TIME = 2026-06-02T00:30:00.000
 META_STOP
-2026-06-02T00:00:00.000 7000.000 3.000 0.000 0.000 7.546 0.000
-2026-06-02T00:30:00.000 5000.000 6003.000 0.000 -6.000 4.000 0.000
+2026-06-02T00:00:00.000 7000.000 2.000 -5.000 -1.111111 3.333333 0.005556
+2026-06-02T00:30:00.000 5000.000 6002.000 5.000 -1.111111 3.333333 0.005556
 `;
 
 /** A two-object TLE set (named), near-coplanar LEO. Parsed via parseTle + SGP4. */

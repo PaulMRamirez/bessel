@@ -32,9 +32,19 @@ export function LambertPorkchopCard(props: LambertPorkchopCardProps): JSX.Elemen
   const transfer = useStore(store, (s) => s.transfer);
   const objects = useStore(store, (s) => s.objects);
 
-  // The body select offers the loaded objects plus the common transfer bodies, de-duplicated.
+  // The body select offers the loaded objects plus the common transfer bodies, de-duplicated. A
+  // heliocentric transfer is posed against planet BARYCENTERS (what an ephemeris like de440 carries
+  // for planet positions; a planet body-center such as 499 needs an extra satellite SPK), so the
+  // built-in planet choices are barycenter names, which resolve against both the bounded fixture
+  // ephemeris and a full kernel set.
   const bodyOptions = useMemo(() => {
-    const names = new Set<string>(['SUN', 'EARTH', 'MARS', 'VENUS', 'JUPITER']);
+    const names = new Set<string>([
+      'SUN',
+      'EARTH',
+      'MARS BARYCENTER',
+      'VENUS BARYCENTER',
+      'JUPITER BARYCENTER',
+    ]);
     for (const o of objects) names.add(o.name);
     return Array.from(names);
   }, [objects]);

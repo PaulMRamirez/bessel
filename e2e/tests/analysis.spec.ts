@@ -108,8 +108,18 @@ test('lighting analysis computes and renders eclipse intervals', async ({ page }
   await page.getByTestId('compute-link-worksheet').click();
   await expect(page.getByTestId('link-worksheet')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId('link-margin')).toContainText('Margin');
-  // The margin-vs-time chart draws the link-closes threshold (margin = 0).
-  await expect(page.getByTestId('link-margin-chart-threshold')).toBeVisible();
+  // The margin-vs-time chart draws the link-closes threshold (margin = 0) as a horizontal SVG
+  // <line>. A horizontal line has zero height, so Playwright's toBeVisible() (which needs a
+  // non-empty box) reports it hidden even though it is drawn; assert PRESENCE and POSITION instead:
+  // exactly one threshold line is attached, it is horizontal (y1 === y2), and its y sits inside the
+  // chart's drawable band (the 2 px pad .. height - 2 px), i.e. it is on-canvas, not clipped away.
+  const threshold = page.getByTestId('link-margin-chart-threshold');
+  await expect(threshold).toHaveCount(1);
+  const y1 = Number(await threshold.getAttribute('y1'));
+  const y2 = Number(await threshold.getAttribute('y2'));
+  expect(y1).toBe(y2);
+  expect(y1).toBeGreaterThanOrEqual(2);
+  expect(y1).toBeLessThanOrEqual(78);
 
   // Conjunction (Conjunction tab): REAL CDM ingestion -> worker screen -> per-event
   // full-covariance Pc + B-plane (analysis-UX Phase 1). Load the sample CDM, ingest it, screen

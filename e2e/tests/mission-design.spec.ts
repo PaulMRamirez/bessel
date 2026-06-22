@@ -54,7 +54,20 @@ test('porkchop sweeps a delta-v contour and sends the optimum to a new MCS maneu
   await expect(page.getByTestId('param-dep-range')).toBeVisible();
   await expect(page.getByTestId('param-tof-range')).toBeVisible();
 
-  // Sweep the default heliocentric Earth -> Mars window; the contour and its marked minimum render.
+  // Drive the sweep over a heliocentric Earth -> Mars-barycenter window that the bounded fixture
+  // ephemeris actually covers: planet positions come from barycenters (the fixture SPK has the
+  // planet barycenters, not the planet body-centers), and the departure + time-of-flight ranges
+  // stay inside the bundled 2004 inner-system coverage (max departure + TOF = 30 + 150 = 180 d,
+  // under the fixture's forward span from the cold-boot epoch). With a full kernel the user can
+  // pick any covered pair and window; here we pin a fixture-covered one so spkezr never fails loud.
+  await page.getByTestId('param-departure-body').selectOption('EARTH');
+  await page.getByTestId('param-arrival-body').selectOption('MARS BARYCENTER');
+  await page.getByTestId('param-dep-day0').fill('0');
+  await page.getByTestId('param-dep-day1').fill('30');
+  await page.getByTestId('param-tof-day0').fill('90');
+  await page.getByTestId('param-tof-day1').fill('150');
+
+  // Sweep the window; the delta-v contour and its marked minimum render.
   await page.getByTestId('compute-porkchop').click();
   await expect(page.getByTestId('porkchop')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('porkchop-min')).toBeVisible();

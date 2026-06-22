@@ -13,16 +13,20 @@ export interface PorkchopFormState {
   readonly tofDay1: number;
 }
 
-// A heliocentric Earth -> Mars window is the canonical porkchop example; the bodies are editable
-// against whatever the loaded ephemerides resolve.
+// A heliocentric Earth -> Mars-barycenter window is the canonical porkchop example. A heliocentric
+// transfer is posed against planet BARYCENTERS (what a published ephemeris like de440 provides for
+// planet positions; a planet body-center such as 499 needs an extra satellite SPK), so the bodies
+// are named by barycenter and stay editable against whatever the loaded ephemerides resolve. The
+// default departure + time-of-flight window is kept modest so it falls inside a bounded fixture SPK
+// (the bundled 2004 inner-system ephemeris) as well as a full kernel set.
 export const DEFAULT_PORKCHOP_FORM: PorkchopFormState = {
   departureBody: 'EARTH',
-  arrivalBody: 'MARS',
+  arrivalBody: 'MARS BARYCENTER',
   centerBody: 'SUN',
   departureDay0: 0,
-  departureDay1: 60,
-  tofDay0: 120,
-  tofDay1: 300,
+  departureDay1: 30,
+  tofDay0: 90,
+  tofDay1: 150,
 };
 
 export interface PorkchopFormProps {
