@@ -68,6 +68,19 @@ describe('sweepCoverageGrid', () => {
     const dark = result.cells.filter((c) => c.fom.percentCoverage === 0);
     expect(covered.length).toBeGreaterThan(0);
     expect(dark.length).toBeGreaterThan(0);
+
+    // The grid carries an additive area-weighted coverage in [0,1] that matches a
+    // direct cos(lat)-weighted recomputation over the cells.
+    let weighted = 0;
+    let totalWeight = 0;
+    for (const c of result.cells) {
+      const w = Math.max(0, Math.cos(c.latRad));
+      weighted += w * c.fom.percentCoverage;
+      totalWeight += w;
+    }
+    expect(result.areaWeightedPercentCoverage).toBeCloseTo(weighted / totalWeight, 9);
+    expect(result.areaWeightedPercentCoverage).toBeGreaterThanOrEqual(0);
+    expect(result.areaWeightedPercentCoverage).toBeLessThanOrEqual(1);
   });
 
   it('a cell at the sub-solar longitude is sunlit and its FOM matches a direct access call', async () => {

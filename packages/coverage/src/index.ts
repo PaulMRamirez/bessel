@@ -5,9 +5,11 @@
 
 import { windowCard, windowComplement, windowMeasure, type EphemerisTime, type Window } from '@bessel/timeline';
 import type { ClassicalElements } from '@bessel/propagator';
+import { figureOfMeritStats, type FigureOfMeritStats } from './fom-stats.ts';
 
 export {
   sweepCoverageGrid,
+  areaWeightedPercentCoverage,
   GridSweepError,
   type GridSpec,
   type GridSweepRequest,
@@ -15,10 +17,16 @@ export {
   type CoverageGrid,
 } from './grid-sweep.ts';
 
+export { figureOfMeritStats, FigureOfMeritError, type FigureOfMeritStats } from './fom-stats.ts';
+
 const TWO_PI = Math.PI * 2;
 
-/** Coverage statistics for one ground point over an analysis span. */
-export interface FigureOfMerit {
+/**
+ * Coverage statistics for one ground point over an analysis span. The first five
+ * fields are the original FOM; the remaining fields (mirrored from FigureOfMeritStats)
+ * are an additive deepening, computed by figureOfMeritStats and merged here.
+ */
+export interface FigureOfMerit extends FigureOfMeritStats {
   /** Covered fraction of the span, in [0, 1]. */
   readonly percentCoverage: number;
   /** Number of distinct access intervals. */
@@ -41,12 +49,27 @@ export function figureOfMerit(window: Window, span: readonly [EphemerisTime, Eph
   const meanGapSec = gapLengths.length ? gapLengths.reduce((a, b) => a + b, 0) / gapLengths.length : 0;
   const first = window[0];
   const timeToFirstSec = window.length === 0 ? null : Math.max(0, first![0] - t0);
+  // The richer stats need an increasing span (figureOfMeritStats is loud on a bad
+  // span). figureOfMerit historically tolerated a degenerate span by returning zeroed
+  // coverage, so preserve that: only deepen when the span is increasing, else emit the
+  // neutral stats that match a zero-length / never-covered reduction.
+  const stats: FigureOfMeritStats =
+    duration > 0
+      ? figureOfMeritStats(window, span)
+      : {
+          meanAccessDurationSec: 0,
+          maxAccessDurationSec: 0,
+          revisitMaxSec: 0,
+          revisitMeanSec: 0,
+          responseTimeSec: window.length === 0 ? null : 0,
+        };
   return {
     percentCoverage: duration > 0 ? windowMeasure(window) / duration : 0,
     accessCount: windowCard(window),
     meanGapSec,
     maxGapSec,
     timeToFirstSec,
+    ...stats,
   };
 }
 
