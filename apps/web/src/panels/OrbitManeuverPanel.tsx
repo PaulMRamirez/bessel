@@ -2,8 +2,9 @@
 // in per decision 7.1): TLE/state propagation, the Mission Control Sequence builder, the
 // orbit-determination workbench, and the maneuver tools (attitude slew, Lambert transfer),
 // surfaced as collapsible TaskCards. The propagation/mission/OD bodies are the existing
-// panels mounted unchanged; the slew/Lambert JSX is moved verbatim from the former
-// AnalysisPanel Maneuver section. Presentational; no engine capability changes here.
+// panels mounted unchanged; the slew card is moved verbatim from the former AnalysisPanel
+// Maneuver section. The Lambert card is the Phase-2 configurable transfer + porkchop sweep with a
+// send-to-MCS hop (LambertPorkchopCard). Presentational; the geometry runs behind the lazy seam.
 
 import { useState, type ReactNode } from 'react';
 import { seriesToCsv } from '@bessel/interop';
@@ -12,11 +13,12 @@ import { useStore, type AppStore } from '../store/index.ts';
 import { PropagatePanel } from './PropagatePanel.tsx';
 import { MissionPanel } from './MissionPanel.tsx';
 import { OdPanel } from './OdPanel.tsx';
-import { SeriesResult, StatResult } from './analysis-result.tsx';
+import { SeriesResult } from './analysis-result.tsx';
 import { RunStatusNote } from './RunStatus.tsx';
 import { TaskCardAccordion, type ExpandRequest, type TaskCardEntry } from './TaskCard.tsx';
 import { SlewParamsForm, DEFAULT_SLEW_PARAMS, type SlewFormParams } from './analysis-tool-forms.tsx';
-import { Action, fmt, useAnalysisParams } from './analysis-shared.tsx';
+import { Action, useAnalysisParams } from './analysis-shared.tsx';
+import { LambertPorkchopCard } from './LambertPorkchopCard.tsx';
 
 export interface OrbitManeuverPanelProps {
   readonly engine: BesselEngine | null;
@@ -34,7 +36,6 @@ export function OrbitManeuverPanel(props: OrbitManeuverPanelProps): JSX.Element 
 
   const runStatus = useStore(store, (s) => s.runStatus);
   const slewSeries = useStore(store, (s) => s.slewSeries);
-  const transfer = useStore(store, (s) => s.transfer);
 
   const slewCard = (): ReactNode => (
     <>
@@ -70,41 +71,7 @@ export function OrbitManeuverPanel(props: OrbitManeuverPanelProps): JSX.Element 
   );
 
   const lambertCard = (): ReactNode => (
-    <>
-      <Action
-        status={runStatus['compute-transfer']}
-        onClick={() => void engine?.computeTransfer()}
-        testId="compute-transfer"
-      >
-        Solve Lambert transfer
-      </Action>
-      <StatResult
-        show={!!transfer}
-        resultTestId="transfer-result"
-        hint="Lambert arc departure delta-v over a 2 h transfer."
-        csv={
-          transfer
-            ? {
-                testId: 'transfer-csv',
-                filename: 'transfer.csv',
-                build: () =>
-                  scalarCsv([
-                    ['arc', transfer.label],
-                    ['delta_v_km_s', transfer.deltaVKmS],
-                    ['tof_hours', transfer.tofHours],
-                  ]),
-              }
-            : undefined
-        }
-      >
-        {transfer && (
-          <>
-            {transfer.label}: delta-v {fmt(transfer.deltaVKmS, 4)} km/s over {fmt(transfer.tofHours, 1)} h
-          </>
-        )}
-      </StatResult>
-      <RunStatusNote status={runStatus['compute-transfer']} id="compute-transfer" />
-    </>
+    <LambertPorkchopCard engine={engine} store={store} scalarCsv={scalarCsv} />
   );
 
   const cards: readonly TaskCardEntry[] = [
@@ -138,9 +105,9 @@ export function OrbitManeuverPanel(props: OrbitManeuverPanelProps): JSX.Element 
     },
     {
       id: 'lambert',
-      title: 'Lambert transfer',
-      purpose: 'Two-impulse transfer departure delta-v.',
-      status: runStatus['compute-transfer'],
+      title: 'Lambert transfer + porkchop',
+      purpose: 'Sweep a departure x time-of-flight delta-v contour, then send the best to MCS.',
+      status: runStatus['compute-porkchop'],
       render: lambertCard,
     },
   ];

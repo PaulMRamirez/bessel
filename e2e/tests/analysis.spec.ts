@@ -78,6 +78,49 @@ test('lighting analysis computes and renders eclipse intervals', async ({ page }
   await expect(page.getByTestId('link-chart')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId('link-chart').locator('polyline')).toHaveCount(1);
 
+  // [ux-p2-access] Ground-station registry + az/el-mask passes + the link-budget worksheet
+  // (comms-engineer journey). Register a station in the SHARED context bar (it is first-class
+  // shared context the access cards read by role), compute the rise/set passes over it, then
+  // assemble the itemized worksheet and read its margin + MODCOD threshold.
+  await expect(page.getByTestId('station-registry')).toBeVisible();
+  await page.getByTestId('station-add-toggle').click();
+  await page.getByTestId('station-name').fill('Test Station');
+  await page.getByTestId('station-lon').fill('-116.9');
+  await page.getByTestId('station-lat').fill('35.4');
+  await page.getByTestId('station-alt').fill('1');
+  await page.getByTestId('station-minel').fill('5');
+  await page.getByTestId('station-save').click();
+  // The saved station becomes active (the active note names it).
+  await expect(page.getByTestId('station-active-note')).toContainText('Test Station');
+
+  await expandCard(page, 'station-passes');
+  await page.getByTestId('compute-station-passes').click();
+  await expect(page.getByTestId('compute-station-passes-status')).toContainText('Done', { timeout: 20_000 });
+
+  // If the spacecraft rises over the station in the span, bind the first pass row; otherwise the
+  // worksheet falls back to a representative geometry. Either way the worksheet + margin must render.
+  const firstPass = page.getByTestId('select-pass-pass-0');
+  if (await firstPass.isVisible().catch(() => false)) {
+    await firstPass.click();
+  }
+  await expandCard(page, 'link-worksheet');
+  await expect(page.getByTestId('param-modcod')).toBeVisible();
+  await page.getByTestId('compute-link-worksheet').click();
+  await expect(page.getByTestId('link-worksheet')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('link-margin')).toContainText('Margin');
+  // The margin-vs-time chart draws the link-closes threshold (margin = 0) as a horizontal SVG
+  // <line>. A horizontal line has zero height, so Playwright's toBeVisible() (which needs a
+  // non-empty box) reports it hidden even though it is drawn; assert PRESENCE and POSITION instead:
+  // exactly one threshold line is attached, it is horizontal (y1 === y2), and its y sits inside the
+  // chart's drawable band (the 2 px pad .. height - 2 px), i.e. it is on-canvas, not clipped away.
+  const threshold = page.getByTestId('link-margin-chart-threshold');
+  await expect(threshold).toHaveCount(1);
+  const y1 = Number(await threshold.getAttribute('y1'));
+  const y2 = Number(await threshold.getAttribute('y2'));
+  expect(y1).toBe(y2);
+  expect(y1).toBeGreaterThanOrEqual(2);
+  expect(y1).toBeLessThanOrEqual(78);
+
   // Conjunction (Conjunction tab): REAL CDM ingestion -> worker screen -> per-event
   // full-covariance Pc + B-plane (analysis-UX Phase 1). Load the sample CDM, ingest it, screen
   // the ingested catalog, click the flagged event, and read the full-covariance Pc + the B-plane.
@@ -93,6 +136,33 @@ test('lighting analysis computes and renders eclipse intervals', async ({ page }
   await expect(page.getByTestId('pc-full')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId('pc-max')).toBeVisible();
   await expect(page.getByTestId('bplane-view')).toBeVisible();
+  // [ux-p2-conjunction] the CDM event already carries covariance, so the export-CDM action is offered.
+  await expect(page.getByTestId('export-cdm')).toBeVisible();
+
+  // [ux-p2-conjunction] Explicit covariance INPUT flow: ingest a covariance-less catalog (OEM),
+  // screen it, select the flagged event, supply an assumed covariance, and read the now-available
+  // full-covariance Pc. Re-ingesting supersedes the prior CDM catalog.
+  await expandCard(page, 'catalog-screen');
+  await page.getByTestId('ingest-format').selectOption('oem');
+  await page.getByTestId('ingest-sample').click();
+  await page.getByTestId('ingest-run').click();
+  await expect(page.getByTestId('ingest-summary')).toContainText('0 with covariance', { timeout: 20_000 });
+  await page.getByTestId('screen-catalog').click();
+  await expandCard(page, 'per-event-pc');
+  await expect(page.getByTestId('conjunction-event-0')).toBeVisible({ timeout: 20_000 });
+  await page.getByTestId('conjunction-event-0').click();
+  // The selected row is marked, and the covariance-input form appears (no covariance in this catalog).
+  await expect(page.getByTestId('conjunction-event-0')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('covariance-input')).toBeVisible();
+  await expect(page.getByTestId('pc-full')).toContainText('n/a');
+  // Supply an assumed RTN covariance for both objects, then read the full-covariance Pc.
+  await page.getByTestId('param-cov-sigma').fill('1');
+  await page.getByTestId('cov-apply').click();
+  await expect(page.getByTestId('cov-supplied-summary')).toBeVisible({ timeout: 20_000 });
+  await page.getByTestId('cov-object').selectOption({ index: 1 });
+  await page.getByTestId('cov-apply').click();
+  await expect(page.getByTestId('pc-full')).not.toContainText('n/a', { timeout: 20_000 });
+  await page.getByTestId('export-cdm').click();
 
   // The single-pair closest-approach card is kept (now collapsed by default): expand and run it.
   await expandCard(page, 'closest-approach');

@@ -9,12 +9,44 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, it, expect } from 'vitest';
 import { PropagatePanel } from './PropagatePanel.tsx';
 import { MissionPanel } from './MissionPanel.tsx';
+import { LambertPorkchopCard } from './LambertPorkchopCard.tsx';
 import { createAppStore, type AppStore } from '../store/index.ts';
+import type { PorkchopResult } from '../engine/porkchop.ts';
 
 const propagate = (store: AppStore): string =>
   renderToStaticMarkup(createElement(PropagatePanel, { engine: null, store }));
 const mission = (store: AppStore): string =>
   renderToStaticMarkup(createElement(MissionPanel, { engine: null, store }));
+const noopCsv = (): string => '';
+const porkchopCard = (store: AppStore): string =>
+  renderToStaticMarkup(createElement(LambertPorkchopCard, { engine: null, store, scalarCsv: noopCsv }));
+
+function seededPorkchop(): PorkchopResult {
+  return {
+    departureEt: [0, 86400, 172800],
+    tofSec: [100 * 86400, 200 * 86400],
+    nodes: [
+      { departureIndex: 0, tofIndex: 0, departureEt: 0, tofSec: 100 * 86400, deltaVKmS: 4.2 },
+      { departureIndex: 0, tofIndex: 1, departureEt: 0, tofSec: 200 * 86400, deltaVKmS: 3.1 },
+      { departureIndex: 1, tofIndex: 0, departureEt: 86400, tofSec: 100 * 86400, deltaVKmS: 5.0 },
+      { departureIndex: 1, tofIndex: 1, departureEt: 86400, tofSec: 200 * 86400, deltaVKmS: null },
+      { departureIndex: 2, tofIndex: 0, departureEt: 172800, tofSec: 100 * 86400, deltaVKmS: 3.6 },
+      { departureIndex: 2, tofIndex: 1, departureEt: 172800, tofSec: 200 * 86400, deltaVKmS: 4.4 },
+    ],
+    minDeltaVKmS: 3.1,
+    maxDeltaVKmS: 5.0,
+    best: {
+      departureIndex: 0,
+      tofIndex: 1,
+      departureEt: 0,
+      tofSec: 200 * 86400,
+      deltaVKmS: 3.1,
+      departureVelocity: { x: 30, y: 5, z: 0 },
+      departureDeltaV: { x: 3, y: 0.4, z: 0 },
+    },
+    label: 'EARTH -> MARS departure delta-v (km/s)',
+  };
+}
 
 describe('PropagatePanel editable spacecraft source', () => {
   it('renders the source control with the TLE/object toggle and the source input', () => {
@@ -98,5 +130,34 @@ describe('MissionPanel editable MCS builder', () => {
     expect(out).toContain('data-testid="mcs-solved-dv"');
     expect(out).toContain('data-testid="mcs-dc-report"');
     expect(out).toContain('converged');
+  });
+});
+
+describe('LambertPorkchopCard configurable transfer + porkchop', () => {
+  it('renders the configurable departure/arrival bodies and the range controls', () => {
+    const out = porkchopCard(createAppStore());
+    for (const id of [
+      'param-departure-body',
+      'param-arrival-body',
+      'param-dep-range',
+      'param-tof-range',
+      'compute-porkchop',
+      'compute-transfer',
+    ]) {
+      expect(out, id).toContain(`data-testid="${id}"`);
+    }
+    // No sweep yet: the porkchop contour and send-to-MCS action are gated off.
+    expect(out).not.toContain('data-testid="porkchop"');
+    expect(out).not.toContain('data-testid="send-to-mcs"');
+  });
+
+  it('renders the porkchop contour with the marked minimum and a send-to-MCS action once swept', () => {
+    const store = createAppStore();
+    store.setState({ porkchop: seededPorkchop() });
+    const out = porkchopCard(store);
+    expect(out).toContain('data-testid="porkchop"');
+    expect(out).toContain('data-testid="porkchop-min"');
+    expect(out).toContain('data-testid="porkchop-best"');
+    expect(out).toContain('data-testid="send-to-mcs"');
   });
 });

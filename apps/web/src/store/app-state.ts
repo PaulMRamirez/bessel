@@ -11,6 +11,12 @@ import type { Bookmark } from '../bookmarks.ts';
 import type { SavedScript } from '../scripts.ts';
 import { INITIAL_SCREENING, type ScreeningState } from '../screening-protocol.ts';
 import { createStore, type Store } from './create-store.ts';
+// [ux-p2-orbit] Type-only imports (erased at build, no runtime store->engine cycle): the
+// porkchop sweep result the Lambert card publishes, and the editable MCS the builder edits and
+// the "send to MCS" hop appends to, lifted into the store so the two cards share one design.
+import type { PorkchopResult } from '../engine/porkchop.ts';
+import type { EditableMcs } from '../engine/mcs-editor.ts';
+import { defaultEditableMcs } from '../engine/mcs-editor.ts';
 
 /** The active tab in the consolidated Analyze dock. The six intent-named domain tabs of
  *  the analysis-UX re-slot (design section 3): Orbit & Maneuver (with OD folded in),
@@ -162,6 +168,21 @@ export interface AppState {
   linkSeries: Series | null;
   /** The radio parameters the last link run used, for a reproducible CSV export. */
   linkParams: LinkBudgetParams | null;
+  /** [ux-p2-access] Rise/set passes of the primary spacecraft over the ACTIVE ground station, by
+   *  az/el mask, each with its max-elevation epoch (the station-passes card). Null until a run. */
+  stationPasses: StationPassesResult | null;
+  /** [ux-p2-access] The selected pass id the link worksheet binds to (active-selection: the passes
+   *  card writes it, the worksheet card reads it), or null when no pass row is selected. */
+  selectedPassId: string | null;
+  /** [ux-p2-access] The itemized link-budget worksheet at the worst-case AND nominal elevation of
+   *  the selected pass, plus the margin-vs-time series over the pass. Null until a run. */
+  linkWorksheet: LinkWorksheetResult | null;
+  /** [ux-p2-access] The selected consecutive pass pair the slew-feasibility card binds to (active-
+   *  selection: the passes card writes the two pass ids), or null when no pair is selected. */
+  selectedWindowPair: readonly [string, string] | null;
+  /** [ux-p2-access] The eigen-axis slew-feasibility verdict between the selected pass pair's
+   *  pointings (does the slew fit in the gap), or null until a run. */
+  slewFeasibility: SlewFeasibilityResult | null;
   /** Closest-approach + collision-probability summary from the last conjunction run. */
   conjunction: ConjunctionResult | null;
   /** Off-main-thread all-vs-all catalog screening: status, progress, and flagged events. */
@@ -172,6 +193,14 @@ export interface AppState {
   /** The per-event full-covariance Pc + B-plane result for the selected screened event, or
    *  null until an event is selected (or while it is being computed). */
   conjunctionEvent: ConjunctionEventResult | null;
+  /** [ux-p2-conjunction] First-class active selection: the index (in the screened-events list)
+   *  of the currently selected conjunction event, or null when none is selected. The Pc card,
+   *  the B-plane, and a future avoidance carrier all read THIS so they reflect one selection. */
+  selectedConjunctionEventId: number | null;
+  /** [ux-p2-conjunction] The object ids the analyst has supplied an explicit covariance for
+   *  (the assumed covariance for an OEM/TLE catalog that carried none). The covariance matrices
+   *  live on the engine catalog ref; this is the panel readout of which objects have one. */
+  conjunctionSuppliedCovariances: readonly string[];
   /** Walker constellation summary from the last coverage/constellation run. */
   constellation: ConstellationResult | null;
   /** The designed constellation as the swept ASSET SET (published SPK ids), or null until
@@ -183,6 +212,12 @@ export interface AppState {
   slewSeries: Series | null;
   /** Lambert transfer summary (delta-v) from the last maneuver-design run. */
   transfer: TransferResult | null;
+  /** [ux-p2-orbit] The Lambert porkchop sweep (delta-v over departure x TOF, plus the marked
+   *  minimum) from the last configurable-transfer run, or null. */
+  porkchop: PorkchopResult | null;
+  /** [ux-p2-orbit] The editable Mission Control Sequence the MCS builder edits; lifted into the
+   *  store so the porkchop "send to MCS" hop appends a Maneuver to the same design. */
+  editableMcs: EditableMcs;
   /** Sub-spacecraft ground track (lon/lat radians) from the last ground-track run. */
   groundTrack: GroundTrack | null;
   /** SGP4-propagated TLE orbit (altitude series + ground track) from the last run. */
@@ -468,6 +503,89 @@ export interface IntervalAnalysisResult {
   readonly label: string;
 }
 
+/** [ux-p2-access] One rise/set pass of the spacecraft over a ground station, with the slant range
+ *  and elevation at its max-elevation epoch. A pass row is the active-selection unit the worksheet
+ *  and slew cards bind to (selectedPassId / selectedWindowPair). */
+export interface StationPass {
+  /** A stable id for the pass row (active-selection key + testid suffix), e.g. 'pass-0'. */
+  readonly id: string;
+  /** Rise (start) and set (stop) of the pass, ET seconds. */
+  readonly rise: number;
+  readonly set: number;
+  /** Epoch (ET seconds) of maximum elevation within the pass. */
+  readonly maxElevationEpoch: number;
+  /** Maximum elevation in the pass (radians). */
+  readonly maxElevationRad: number;
+  /** Slant range (km) and elevation (radians) at the max-elevation epoch, the worksheet nominal. */
+  readonly maxElevationRangeKm: number;
+  /** Slant range (km) and elevation (radians) at the worst-case (lowest-elevation pass edge). */
+  readonly worstElevationRad: number;
+  readonly worstElevationRangeKm: number;
+}
+
+/** [ux-p2-access] Az/el-masked station passes of the spacecraft over the active station. */
+export interface StationPassesResult {
+  /** The active station's display name + body, for the readout. */
+  readonly stationName: string;
+  /** The spacecraft (or propagated body) the passes are computed for. */
+  readonly spacecraft: string;
+  readonly span: readonly [number, number];
+  readonly passes: readonly StationPass[];
+  readonly fom: AccessFom;
+  readonly label: string;
+}
+
+/** [ux-p2-access] One row of the assembled link worksheet (mirrors link-worksheet.WorksheetLine). */
+export interface LinkWorksheetLine {
+  readonly id: string;
+  readonly label: string;
+  readonly value: number;
+  readonly unit: string;
+}
+
+/** [ux-p2-access] The worksheet at one geometry case (worst-case or nominal elevation of the pass):
+ *  the itemized lines plus the rolled-up Eb/N0 and margin. */
+export interface LinkWorksheetCase {
+  readonly caseLabel: string;
+  readonly elevationDeg: number;
+  readonly rangeKm: number;
+  readonly lines: readonly LinkWorksheetLine[];
+  readonly ebN0Db: number;
+  readonly requiredEbN0Db: number;
+  readonly marginDb: number;
+}
+
+/** [ux-p2-access] The full link-budget worksheet bound to the selected pass: a worst-case and a
+ *  nominal case, the selected MODCOD name, and a margin-vs-time series over the pass with the
+ *  required-Eb/N0 threshold drawn. When no pass is selected the geometry is a representative note. */
+export interface LinkWorksheetResult {
+  /** The selected pass id the worksheet bound to, or null when a representative geometry was used. */
+  readonly passId: string | null;
+  readonly modcodName: string;
+  readonly requiredEbN0Db: number;
+  readonly worstCase: LinkWorksheetCase;
+  readonly nominal: LinkWorksheetCase;
+  /** Margin (dB) over the pass for the margin-vs-time chart; et aligned to marginDb. */
+  readonly marginSeries: Series;
+  /** A short note (e.g. "representative geometry: no pass selected"), or '' when bound to a pass. */
+  readonly note: string;
+  readonly label: string;
+}
+
+/** [ux-p2-access] The eigen-axis slew-feasibility verdict between two consecutive passes. */
+export interface SlewFeasibilityResult {
+  readonly fromPassId: string;
+  readonly toPassId: string;
+  /** The pointing mode the two attitudes were resolved under ('targetTrack' or 'inertial'). */
+  readonly mode: 'targetTrack' | 'inertial';
+  readonly slewAngleDeg: number;
+  readonly slewDurationSec: number;
+  readonly gapSec: number;
+  readonly slackSec: number;
+  readonly fits: boolean;
+  readonly label: string;
+}
+
 export interface TleOrbit {
   /** Altitude above the Earth ellipsoid over one day (km vs ET). */
   readonly altitude: Series;
@@ -579,15 +697,24 @@ export const initialAppState: AppState = {
   fovSurviving: null,
   linkSeries: null,
   linkParams: null,
+  stationPasses: null,
+  selectedPassId: null,
+  linkWorksheet: null,
+  selectedWindowPair: null,
+  slewFeasibility: null,
   conjunction: null,
   screening: INITIAL_SCREENING,
   conjunctionIngest: null,
   conjunctionEvent: null,
+  selectedConjunctionEventId: null,
+  conjunctionSuppliedCovariances: [],
   constellation: null,
   designedConstellation: null,
   coverageGrid: null,
   slewSeries: null,
   transfer: null,
+  porkchop: null,
+  editableMcs: defaultEditableMcs(),
   groundTrack: null,
   tleOrbit: null,
   stationAccess: null,
