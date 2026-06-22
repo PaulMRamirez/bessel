@@ -83,13 +83,27 @@
 }
 
 .bessel-dock-side {
-  overflow-y: auto;
+  /* react-resizable-panels sets an inline overflow:hidden on the panel; !important
+     restores scrolling so a tall rail (Objects + Selection) does not run off screen. */
+  overflow-y: auto !important;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
   background: var(--bg-1);
   border-inline: 1px solid var(--border);
   padding: var(--space-3);
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+}
+
+.bessel-dock-side::-webkit-scrollbar {
+  width: 9px;
+}
+
+.bessel-dock-side::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 4px;
 }
 
 .bessel-dock-center {
@@ -814,9 +828,22 @@ button[aria-pressed='true'] {
 
 /* The left-rail Tools panel: share + capture (screenshot / record) as one icon row,
    replacing the top-bar Capture menu and the floating share button. */
-.bessel-tools-row {
+/* View tools as a vertical strip on the canvas, under the status HUD: share,
+   screenshot, record. Replaces the top-bar Capture menu and the floating share. */
+.bessel-canvas-tools {
+  position: absolute;
+  top: 3rem;
+  left: var(--space-2);
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  z-index: 20;
+}
+
+.bessel-canvas-tools .bessel-capture {
+  display: flex;
+  flex-direction: column;
   gap: var(--space-1);
 }
 
@@ -1579,10 +1606,21 @@ button[aria-pressed='true'] {
 }
 
 /* Epoch time-system toggle (B3). */
+/* The epoch readout and its time-system selector read as one unit (the system is no
+   longer a redundant text suffix on the epoch). */
+.bessel-epoch-group {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
 .bessel-time-system {
   display: inline-flex;
-  gap: 2px;
-  margin-left: var(--space-2);
+  align-items: center;
+}
+
+.bessel-time-system select {
+  font-variant-numeric: tabular-nums;
 }
 
 /* Object-browser legend: selected versus centered (B14). --text-1 matches the panel

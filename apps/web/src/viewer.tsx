@@ -376,42 +376,6 @@ export function BesselViewer(): JSX.Element {
 
   const left = (
     <>
-      <PanelContainer title="Tools" testId="panel-tools">
-        <div className="bessel-tools-row">
-          <Tooltip label="Share view">
-            <Button
-              iconOnly
-              variant="secondary"
-              ariaLabel="Share view"
-              testId="share"
-              onClick={() => void engine?.share().then(showShare)}
-            >
-              <Icon name="share" />
-            </Button>
-          </Tooltip>
-          <CaptureControls
-            recording={recording}
-            onCaptureStill={() => engine?.captureStill()}
-            onToggleRecording={() => engine?.toggleRecording()}
-          />
-        </div>
-        {shareNote ? (
-          shareNote.copied ? (
-            <span className="bessel-share-note" role="status" data-testid="share-confirm">
-              View link copied
-            </span>
-          ) : (
-            <input
-              className="bessel-share-fallback"
-              data-testid="share-url"
-              readOnly
-              value={shareNote.url}
-              aria-label="Shareable view link"
-              onFocus={(e) => e.currentTarget.select()}
-            />
-          )
-        ) : null}
-      </PanelContainer>
       <PanelContainer title="Objects" testId="panel-objects">
         <SearchBox value={query} onChange={setQuery} placeholder="Filter objects" />
         <ObjectBrowser
@@ -531,6 +495,42 @@ export function BesselViewer(): JSX.Element {
               {focus}
             </span>
           </>
+        ) : null}
+      </div>
+      {/* View tools (share / screenshot / record), a vertical strip under the status
+          HUD, replacing the top-bar Capture menu and the floating share button. */}
+      <div className="bessel-canvas-tools" role="group" aria-label="View tools">
+        <Tooltip label="Share view">
+          <Button
+            iconOnly
+            variant="secondary"
+            ariaLabel="Share view"
+            testId="share"
+            onClick={() => void engine?.share().then(showShare)}
+          >
+            <Icon name="share" />
+          </Button>
+        </Tooltip>
+        <CaptureControls
+          recording={recording}
+          onCaptureStill={() => engine?.captureStill()}
+          onToggleRecording={() => engine?.toggleRecording()}
+        />
+        {shareNote ? (
+          shareNote.copied ? (
+            <span className="bessel-share-note" role="status" data-testid="share-confirm">
+              View link copied
+            </span>
+          ) : (
+            <input
+              className="bessel-share-fallback"
+              data-testid="share-url"
+              readOnly
+              value={shareNote.url}
+              aria-label="Shareable view link"
+              onFocus={(e) => e.currentTarget.select()}
+            />
+          )
         ) : null}
       </div>
       {/* Always-mounted telemetry fault alert: a fault reaches the operator with no
