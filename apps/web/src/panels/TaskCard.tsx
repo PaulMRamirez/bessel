@@ -143,11 +143,17 @@ export function TaskCardAccordion(props: TaskCardAccordionProps): JSX.Element {
   const reqKey = reqIds.join(',');
   const reqToken = req?.token;
   useEffect(() => {
-    // reqToken is the change signal; reqKey carries the (filtered) target ids. Apply each
-    // through the cap reducer in order, so the last id wins the at-most-two-expanded cap.
+    // reqToken is the change signal; reqKey carries the (filtered) target ids. A single-id
+    // request (the launcher's one hit) is additive: it opens that card through the cap reducer
+    // without disturbing the others. A multi-id request (a mission-profile preset's primary
+    // cards) opens exactly those ids as a fresh capped set, most-recent-last, so the persona's
+    // chosen cards are the ones expanded rather than racing the panel's defaultExpanded.
     if (reqKey.length === 0) return;
+    const ids = reqKey.split(',');
     setOrder((o) =>
-      reqKey.split(',').reduce((acc, id) => (acc.includes(id) ? acc : nextExpanded(acc, id)), o),
+      ids.length > 1
+        ? ids.slice(Math.max(0, ids.length - MAX_EXPANDED_TASK_CARDS))
+        : ids.reduce((acc, id) => (acc.includes(id) ? acc : nextExpanded(acc, id)), o),
     );
   }, [reqToken, reqKey]);
   const expanded = new Set(order);

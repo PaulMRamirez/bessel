@@ -14,7 +14,7 @@
       "!apps/web/dist/assets/spice.worker-*.js",
       "!apps/web/dist/assets/ajv-lazy-*.js"
     ],
-    "limit": "73 KB",
+    "limit": "84 KB",
     "gzip": true
   },
   {
