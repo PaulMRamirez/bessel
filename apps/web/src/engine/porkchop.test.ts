@@ -61,6 +61,19 @@ describe('sweepPorkchop', () => {
     expect(best.departureDeltaV.y).toBeCloseTo(best.departureVelocity.y - dep.velocity.y, 6);
   });
 
+  it('fires onProgress once per departure column (analysis-UX Phase 3 worker progress)', () => {
+    const ticks: { done: number; total: number }[] = [];
+    sweepPorkchop({ departureEt, tofSec }, MU_SUN, departureStates, arrivalStates, 'progress', {
+      onProgress: (done, total) => ticks.push({ done, total }),
+    });
+    // One tick per departure epoch (3), advancing done from 1..3 with a fixed total of 3.
+    expect(ticks).toEqual([
+      { done: 1, total: 3 },
+      { done: 2, total: 3 },
+      { done: 3, total: 3 },
+    ]);
+  });
+
   it('records a non-converging node as a null-delta-v gap instead of aborting', () => {
     // A 180-degree transfer (arrival antiparallel to departure) is degenerate (A ~ 0): the
     // transfer plane is undefined, so lambert throws and the node is recorded as a gap.

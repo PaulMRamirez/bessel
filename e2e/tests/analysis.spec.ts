@@ -139,6 +139,30 @@ test('lighting analysis computes and renders eclipse intervals', async ({ page }
   // [ux-p2-conjunction] the CDM event already carries covariance, so the export-CDM action is offered.
   await expect(page.getByTestId('export-cdm')).toBeVisible();
 
+  // [ux-p3-conjunction] Watchlist: add the selected event to the watchlist and see its row appear.
+  await page.getByTestId('watch-event').click();
+  await expandCard(page, 'watchlist');
+  await expect(page.getByTestId('watchlist')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('watchlist-row')).toHaveCount(1);
+
+  // [ux-p3-conjunction] Maneuver-then-rescreen loop: plan the avoidance burn (seeds the editable MCS
+  // and jumps to Orbit & Maneuver), run the MCS corrector, return to Conjunction, and screen after the
+  // maneuver. The before/after Pc readout shows the risk change; the watched row updates with it.
+  await expandCard(page, 'per-event-pc');
+  await page.getByTestId('plan-avoidance-burn').click();
+  // The carrier switched to the Orbit & Maneuver tab; run the seeded MCS through its corrector.
+  await expect(page.getByTestId('tab-orbit-maneuver')).toHaveAttribute('aria-selected', 'true');
+  await expandCard(page, 'mcs');
+  await page.getByTestId('run-mcs').click();
+  await expect(page.getByTestId('mcs-result')).toBeVisible({ timeout: 20_000 });
+  // Back to Conjunction, re-select the event, and screen after the maneuver.
+  await openAnalyze(page, 'conjunction');
+  await expandCard(page, 'per-event-pc');
+  await page.getByTestId('conjunction-event-0').click();
+  await page.getByTestId('rescreen-after-maneuver').click();
+  await expect(page.getByTestId('pc-before-after')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('pc-before-after')).toContainText('Pc before');
+
   // [ux-p2-conjunction] Explicit covariance INPUT flow: ingest a covariance-less catalog (OEM),
   // screen it, select the flagged event, supply an assumed covariance, and read the now-available
   // full-covariance Pc. Re-ingesting supersedes the prior CDM catalog.

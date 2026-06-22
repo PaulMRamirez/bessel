@@ -25,6 +25,13 @@ export interface PorkchopGrid {
   readonly tofSec: readonly number[];
 }
 
+/** Optional sweep options: a progress hook fired after each departure column finishes (done = i + 1,
+ *  total = departure samples), so the worker can yield progress from one sweep call. Does not affect
+ *  the result; absent on the synchronous path. (analysis-UX Phase 3 porkchop worker-ization.) */
+export interface SweepOptions {
+  readonly onProgress?: (done: number, total: number) => void;
+}
+
 /** One solved grid node: the departure delta-v (km/s) at a (departure, TOF) pair, or null when
  *  Lambert did not converge (a degenerate/unsolvable node), so the contour can show a gap. */
 export interface PorkchopNode {
@@ -94,6 +101,7 @@ export function sweepPorkchop(
   departureStates: readonly SampledState[],
   arrivalStates: readonly (readonly SampledState[])[],
   label: string,
+  options: SweepOptions = {},
 ): PorkchopResult {
   const nd = grid.departureEt.length;
   const nt = grid.tofSec.length;
@@ -149,6 +157,9 @@ export function sweepPorkchop(
         if (deltaVKmS > max) max = deltaVKmS;
       }
     }
+    // One departure column finished: yield progress so the worker can post a tick. The total is
+    // the departure-sample count (the outer loop bound), advancing as each column completes.
+    options.onProgress?.(i + 1, nd);
   }
 
   if (!best) throw new Error('porkchop: no grid node produced a Lambert solution');

@@ -12,6 +12,7 @@ import { useStore, type AppStore } from '../../store/index.ts';
 import { Keep, fmt, useTrayFull } from '../analysis-shared.tsx';
 import { BPlaneView } from './BPlaneView.tsx';
 import { CovarianceInputForm } from './CovarianceInputForm.tsx';
+import { RescreenCard } from './RescreenCard.tsx';
 
 type SortKey = 'tca' | 'missKm' | 'pc';
 
@@ -162,7 +163,7 @@ export function PcCard(props: { readonly engine: BesselEngine | null; readonly s
           </Button>
 
           {/* [ux-p2-wave2b] Carrier: seed an impulsive avoidance Maneuver in the editable MCS from this
-              event, then switch to the Orbit & Maneuver tab. The rescreen loop lands in Phase 3. */}
+              event, then switch to the Orbit & Maneuver tab. [ux-p3-conjunction] closes the loop below. */}
           <Button
             variant="ghost"
             testId="plan-avoidance-burn"
@@ -170,6 +171,15 @@ export function PcCard(props: { readonly engine: BesselEngine | null; readonly s
           >
             Plan avoidance burn
           </Button>
+
+          {/* [ux-p3-conjunction] Close the maneuver-then-rescreen loop + the Watch affordance: screen the
+              solved-maneuver primary against the catalog and show the BEFORE vs AFTER Pc for this pair. */}
+          <RescreenCard
+            engine={engine}
+            store={store}
+            primaryId={eventResult.primaryId}
+            secondaryId={eventResult.secondaryId}
+          />
 
           {/* Keep this per-event Pc result as a compare snapshot (Wave 2B generalized snapshots). */}
           <Keep
