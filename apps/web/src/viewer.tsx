@@ -459,9 +459,17 @@ export function BesselViewer(): JSX.Element {
               <span aria-hidden="true" style={{ display: 'inline-flex', verticalAlign: 'middle' }}>
                 <StatusDot tone={residual.tone} />
               </span>
-              <span className="bessel-hud-residual" data-testid="hud-residual" data-severity={residual.tone}>
+              <button
+                type="button"
+                className="bessel-hud-residual bessel-hud-residual-link"
+                data-testid="hud-residual"
+                data-severity={residual.tone}
+                onClick={() => engine?.setAnalyzeTab('report-compare')}
+                title="Open the telemetry overlay"
+                aria-label={`Telemetry residual ${residual.text}. Open the telemetry overlay.`}
+              >
                 {residual.text}
-              </span>
+              </button>
             </span>
             <span className="bessel-hud-sep" aria-hidden="true" />
             <span className="bessel-hud-track" data-testid="hud-track">

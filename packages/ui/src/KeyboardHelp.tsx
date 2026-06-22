@@ -28,6 +28,11 @@ const CAMERA_HELP: readonly { keys: string; description: string }[] = [
   { keys: '- =', description: 'Widen / narrow field of view' },
 ];
 
+// Analysis-dock shortcuts handled within the panels (not the global keymap).
+const ANALYSIS_HELP: readonly { keys: string; description: string }[] = [
+  { keys: 'Cmd/Ctrl+Enter', description: 'Re-run the focused task card (or run the script)' },
+];
+
 export function KeyboardHelp(props: KeyboardHelpProps): JSX.Element | null {
   const ref = useRef<HTMLDivElement>(null);
   // Reference onClose through a ref so the focus effect can depend on props.open
@@ -76,6 +81,17 @@ export function KeyboardHelp(props: KeyboardHelpProps): JSX.Element | null {
       <h2>Camera</h2>
       <dl>
         {CAMERA_HELP.map((b) => (
+          <div key={b.keys}>
+            <dt>
+              <kbd>{b.keys}</kbd>
+            </dt>
+            <dd>{b.description}</dd>
+          </div>
+        ))}
+      </dl>
+      <h2>Analysis</h2>
+      <dl>
+        {ANALYSIS_HELP.map((b) => (
           <div key={b.keys}>
             <dt>
               <kbd>{b.keys}</kbd>

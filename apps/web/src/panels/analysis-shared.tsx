@@ -65,11 +65,15 @@ export function Action(props: {
   disabled?: boolean;
 }): JSX.Element {
   const busy = props.status === 'running';
+  const variant = props.variant ?? 'secondary';
   return (
     <Button
-      variant={props.variant ?? 'secondary'}
+      variant={variant}
       full
       testId={props.testId}
+      // The primary action carries a marker class so the TaskCard's Cmd/Ctrl+Enter
+      // re-run can find and trigger it without threading a handler through children.
+      className={variant === 'primary' ? 'bessel-card-action' : undefined}
       disabled={busy || !!props.disabled}
       onClick={props.onClick}
     >

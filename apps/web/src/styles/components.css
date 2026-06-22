@@ -220,6 +220,22 @@
   font-feature-settings: var(--feat-mono);
 }
 
+/* The residual readout doubles as the entry point to the telemetry overlay: a bare
+   button that reads as text but is keyboard and pointer operable. */
+.bessel-hud-residual-link {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+
+.bessel-hud-residual-link:hover,
+.bessel-hud-residual-link:focus-visible {
+  text-decoration: underline;
+}
+
 .bessel-hud-track {
   color: var(--text-1);
   font-family: var(--font-mono);

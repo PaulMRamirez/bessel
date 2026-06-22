@@ -6,12 +6,24 @@
 // coupling them to the state tree. The status chip reuses the runStatus semantics
 // (idle/running/ok/error) and the RunStatusNote tag styling.
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Tag } from '@bessel/selene-design';
 import type { RunStatus } from '../store/index.ts';
 
 /** Maximum number of TaskCards a TaskCardAccordion keeps expanded at once. */
 export const MAX_EXPANDED_TASK_CARDS = 2;
+
+/** Cmd/Ctrl+Enter inside a card re-runs its primary Action, even from a focused input
+ *  (so an analyst can tweak a parameter and re-run without reaching for the mouse). The
+ *  primary Action button carries the bessel-card-action marker; trigger it if enabled. */
+function rerunOnChord(ev: KeyboardEvent<HTMLDivElement>): void {
+  if (ev.key !== 'Enter' || !(ev.metaKey || ev.ctrlKey)) return;
+  const action = ev.currentTarget.querySelector<HTMLButtonElement>('.bessel-card-action');
+  if (action && !action.disabled) {
+    ev.preventDefault();
+    action.click();
+  }
+}
 
 /** A status chip derived from a tool's run status: nothing while idle, a "Running"
  *  amber tag, a green "Done" tag on success, or a red "Error" tag on a loud failure.
@@ -82,7 +94,12 @@ export function TaskCard(props: TaskCardProps): JSX.Element {
           <StatusChip status={props.status} id={props.id} />
         </button>
       </h3>
-      <div id={regionId} className="bessel-taskcard-body" hidden={!props.expanded}>
+      <div
+        id={regionId}
+        className="bessel-taskcard-body"
+        hidden={!props.expanded}
+        onKeyDown={rerunOnChord}
+      >
         {props.expanded ? props.children : null}
       </div>
     </section>
