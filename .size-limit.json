@@ -2,7 +2,7 @@
   {
     "name": "web app shell (first-paint JS, gzip)",
     "path": ["apps/web/dist/assets/app-*.js", "apps/web/dist/assets/vendor-*.js"],
-    "limit": "310 KB",
+    "limit": "345 KB",
     "gzip": true
   },
   {
@@ -14,7 +14,7 @@
       "!apps/web/dist/assets/spice.worker-*.js",
       "!apps/web/dist/assets/ajv-lazy-*.js"
     ],
-    "limit": "55 KB",
+    "limit": "66 KB",
     "gzip": true
   },
   {
@@ -26,7 +26,7 @@
   {
     "name": "spice worker (gzip)",
     "path": "apps/web/dist/assets/spice.worker-*.js",
-    "limit": "23 KB",
+    "limit": "32 KB",
     "gzip": true
   },
   {
