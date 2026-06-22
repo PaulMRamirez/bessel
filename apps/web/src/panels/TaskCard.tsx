@@ -6,7 +6,7 @@
 // coupling them to the state tree. The status chip reuses the runStatus semantics
 // (idle/running/ok/error) and the RunStatusNote tag styling.
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Tag } from '@bessel/selene-design';
 import type { RunStatus } from '../store/index.ts';
 
@@ -108,19 +108,38 @@ export function nextExpanded(order: readonly string[], id: string): string[] {
   return grown.slice(Math.max(0, grown.length - MAX_EXPANDED_TASK_CARDS));
 }
 
+/** A request to expand a specific card, raised from outside the accordion (e.g. the
+ *  AnalysisLauncher). The `token` lets the same id be re-requested: a changed token
+ *  re-triggers the expand even when the id repeats. */
+export interface ExpandRequest {
+  readonly id: string;
+  readonly token: number;
+}
+
 export interface TaskCardAccordionProps {
   readonly cards: readonly TaskCardEntry[];
   /** Ids expanded on first render; capped to MAX_EXPANDED_TASK_CARDS (most-recent-last). */
   readonly defaultExpanded?: readonly string[];
+  /** An external request to expand a card (its id must match a card); honored on change. */
+  readonly expandRequest?: ExpandRequest;
 }
 
 /** A container that renders TaskCards and owns which are expanded, enforcing the
  *  at-most-two-expanded cap: expanding a third card collapses the least-recently
- *  expanded one. State is local (useState); no store coupling. */
+ *  expanded one. State is local (useState); no store coupling. An external expandRequest
+ *  (from the launcher) opens a named card through the same cap reducer. */
 export function TaskCardAccordion(props: TaskCardAccordionProps): JSX.Element {
   const [order, setOrder] = useState<readonly string[]>(() =>
     (props.defaultExpanded ?? []).slice(-MAX_EXPANDED_TASK_CARDS),
   );
+  const req = props.expandRequest;
+  const hasCard = props.cards.some((c) => c.id === req?.id);
+  const reqId = req?.id;
+  const reqToken = req?.token;
+  useEffect(() => {
+    // reqToken is the change signal; reqId/hasCard guard the target card.
+    if (reqId && hasCard) setOrder((o) => (o.includes(reqId) ? o : nextExpanded(o, reqId)));
+  }, [reqToken, reqId, hasCard]);
   const expanded = new Set(order);
   return (
     <div className="bessel-taskcard-accordion" data-testid="taskcard-accordion">

@@ -12,8 +12,17 @@ import type { SavedScript } from '../scripts.ts';
 import { INITIAL_SCREENING, type ScreeningState } from '../screening-protocol.ts';
 import { createStore, type Store } from './create-store.ts';
 
-/** The active tab in the consolidated Analyze dock. */
-export type AnalyzeTab = 'propagation' | 'maneuver' | 'od' | 'access' | 'report' | 'compare';
+/** The active tab in the consolidated Analyze dock. The six intent-named domain tabs of
+ *  the analysis-UX re-slot (design section 3): Orbit & Maneuver (with OD folded in),
+ *  Lighting & Geometry, Access & Comms, Conjunction, Coverage & Constellation, and the
+ *  cross-cutting Report & Compare sink. */
+export type AnalyzeTab =
+  | 'orbit-maneuver'
+  | 'lighting-geometry'
+  | 'access-comms'
+  | 'conjunction'
+  | 'coverage'
+  | 'report-compare';
 
 /** Per-tool run status: a compute action is idle, running, succeeded, or failed loudly. */
 export type RunStatus = 'idle' | 'running' | 'ok' | { readonly error: string };
@@ -381,7 +390,7 @@ export const initialAppState: AppState = {
   boundsLabel: null,
   timeSystem: 'UTC',
   analyzeOpen: false,
-  analyzeTab: 'access',
+  analyzeTab: 'orbit-maneuver',
   analysisContext: { spanSec: 86400, stepSec: 120, target: '', observer: '', frame: 'J2000' },
   scenario: {
     primarySpacecraft: null,

@@ -1,24 +1,27 @@
 import { test, expect } from '@playwright/test';
-import { loadCassiniSample, openAnalyze } from './sample.ts';
+import { loadCassiniSample, openAnalyze, expandCard } from './sample.ts';
 
-// The lighting analysis surfaces a real engine result in the UI: loading the
-// Cassini sample, the Analyze dock's Access & Coverage tab computes the spacecraft
-// eclipse and renders the umbra intervals as a Gantt timeline. (STK_PARITY_SPEC F5.)
+// The analysis tools surface real engine results in the UI. The re-slot groups them into
+// six intent-named domain tabs, each tool inside a collapsible TaskCard; the assertions
+// below navigate to the new tab and expand the card before driving the tool. (STK_PARITY F5.)
 
 test('lighting analysis computes and renders eclipse intervals', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
 
-  // The Analyze dock is always reachable; before a spacecraft is loaded the Access &
-  // Coverage tab shows a "load a spacecraft" notice and runs its tools on sample data.
+  // The Analyze dock is always reachable; before a spacecraft is loaded the Lighting &
+  // Geometry tab shows a "load a spacecraft" notice and runs its tools on sample data.
   await expect(page.getByTestId('analyze-toggle')).toBeVisible();
-  await openAnalyze(page, 'access');
+  await openAnalyze(page, 'lighting-geometry');
   await expect(page.getByTestId('analysis-empty-notice')).toBeVisible();
 
   await loadCassiniSample(page);
   // The dock stays open (no auto-dismiss); the notice clears once a spacecraft loads.
-  await openAnalyze(page, 'access');
+  await openAnalyze(page, 'lighting-geometry');
   await expect(page.getByTestId('analysis-empty-notice')).toHaveCount(0);
+
+  // Eclipse lives in the Lighting & Geometry tab; expand its card, then run it.
+  await expandCard(page, 'eclipse');
   await page.getByTestId('compute-eclipse').click();
 
   // The result (umbra Gantt) appears, with an interval count rendered.
@@ -27,6 +30,7 @@ test('lighting analysis computes and renders eclipse intervals', async ({ page }
 
   // The range analysis plots the spacecraft-to-center-body distance as a
   // time-series polyline (the second charting primitive, batched spkpos path).
+  await expandCard(page, 'range');
   await page.getByTestId('compute-range').click();
   await expect(page.getByTestId('range-chart')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId('range-chart').locator('polyline')).toHaveCount(1);
@@ -47,46 +51,59 @@ test('lighting analysis computes and renders eclipse intervals', async ({ page }
   expect(clip).toMatch(/\d/);
   await page.getByTestId('range-result-precision').selectOption('3');
 
-  // The access analysis finds line-of-sight visibility windows (spacecraft to the
-  // Sun, occulted by the center body) through the geometry-finder + window algebra.
+  // The access analysis (Access & Comms tab) finds line-of-sight visibility windows
+  // (spacecraft to the Sun, occulted by the center body) through the geometry-finder.
+  await openAnalyze(page, 'access-comms');
+  await expandCard(page, 'access');
   await page.getByTestId('compute-access').click();
   await expect(page.getByTestId('access-timeline')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId('access-result').getByTestId('interval-count')).toContainText(
     'interval',
   );
+  // The access run also reduces the window to a figure of merit (@bessel/coverage).
+  await expect(page.getByTestId('access-fom')).toContainText('Coverage');
 
   // The communications analysis plots the downlink Eb/N0 to Earth, combining the
   // geometric range with the link-budget physics (@bessel/rf).
+  await expandCard(page, 'link');
   await page.getByTestId('compute-link').click();
   await expect(page.getByTestId('link-chart')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId('link-chart').locator('polyline')).toHaveCount(1);
 
-  // The access run also reduces the window to a figure of merit (@bessel/coverage).
-  await expect(page.getByTestId('access-fom')).toContainText('Coverage');
-
-  // Conjunction: closest approach + collision probability (@bessel/conjunction).
+  // Conjunction (Conjunction tab): closest approach + collision probability.
+  await openAnalyze(page, 'conjunction');
+  await expandCard(page, 'closest-approach');
   await page.getByTestId('compute-conjunction').click();
   await expect(page.getByTestId('conjunction-result')).toContainText('Pc');
 
-  // Constellation design: a Walker pattern (@bessel/coverage), pure and synchronous.
+  // Constellation design (Coverage & Constellation tab): a Walker pattern, synchronous.
+  await openAnalyze(page, 'coverage');
+  await expandCard(page, 'constellation');
   await page.getByTestId('compute-constellation').click();
   await expect(page.getByTestId('constellation-result')).toContainText('Walker');
 
-  // Attitude: an eigen-axis slew profile plotted over time (@bessel/attitude).
+  // Attitude slew (Orbit & Maneuver tab): an eigen-axis profile plotted over time.
+  await openAnalyze(page, 'orbit-maneuver');
+  await expandCard(page, 'slew');
   await page.getByTestId('compute-slew').click();
   await expect(page.getByTestId('slew-chart')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId('slew-chart').locator('polyline')).toHaveCount(1);
 
-  // Maneuver design: a Lambert transfer delta-v (@bessel/mission).
+  // Maneuver design (Orbit & Maneuver tab): a Lambert transfer delta-v (@bessel/mission).
+  await expandCard(page, 'lambert');
   await page.getByTestId('compute-transfer').click();
   await expect(page.getByTestId('transfer-result')).toContainText('delta-v');
 
-  // 2D map: the sub-spacecraft ground track (@bessel/map-projection + GroundTrackMap).
+  // 2D map (Lighting & Geometry tab): the sub-spacecraft ground track.
+  await openAnalyze(page, 'lighting-geometry');
+  await expandCard(page, 'ground-track');
   await page.getByTestId('compute-groundtrack').click();
   await expect(page.getByTestId('ground-track')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId('ground-track').locator('polyline').first()).toBeVisible();
 
-  // Interop: exporting the trajectory downloads a CCSDS OEM file (@bessel/interop).
+  // Interop (Report & Compare tab): exporting the trajectory downloads a CCSDS OEM file.
+  await openAnalyze(page, 'report-compare');
+  await expandCard(page, 'export-oem');
   const downloadPromise = page.waitForEvent('download');
   await page.getByTestId('export-oem').click();
   const download = await downloadPromise;
@@ -97,10 +114,11 @@ test('the in-FOV tool computes instrument-target visibility windows', async ({ p
   await page.goto('/');
   await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
   await loadCassiniSample(page);
-  await openAnalyze(page, 'access');
+  await openAnalyze(page, 'access-comms');
 
   // With the Cassini ISS sensor loaded, the in-FOV tool is enabled; running it
   // reduces the nadir-pointed FOV sweep to a figure of merit and a located note.
+  await expandCard(page, 'in-fov');
   const fov = page.getByTestId('compute-fov');
   await expect(fov).toBeEnabled();
   await fov.click();
@@ -112,7 +130,7 @@ test('analysis tools honor user-supplied parameters (span, target, secondary)', 
   await page.goto('/');
   await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
   await loadCassiniSample(page);
-  await openAnalyze(page, 'access');
+  await openAnalyze(page, 'lighting-geometry');
 
   // Tools use the shared context by default; turn the override on to drive the
   // span-based and target-based tools with this tab's own parameters.
@@ -122,11 +140,14 @@ test('analysis tools honor user-supplied parameters (span, target, secondary)', 
   await page.getByTestId('param-target').selectOption('Saturn');
 
   // Range over the 2-day span, to the chosen target, still renders a polyline.
+  await expandCard(page, 'range');
   await page.getByTestId('compute-range').click();
   await expect(page.getByTestId('range-chart').locator('polyline')).toHaveCount(1, { timeout: 20_000 });
 
   // Conjunction against a user-chosen secondary object reports that object by name.
+  await openAnalyze(page, 'conjunction');
   await page.getByTestId('param-secondary').selectOption('Saturn');
+  await expandCard(page, 'closest-approach');
   await page.getByTestId('compute-conjunction').click();
   await expect(page.getByTestId('conjunction-result')).toContainText('Saturn');
 });

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openAnalyze } from './sample.ts';
+import { openAnalyze, expandCard } from './sample.ts';
 
 // The propagation workbench is mission-independent: from a cold boot (no mission
 // loaded) it parses the bundled TLE, runs SGP4, publishes an in-memory SPK Type-13
@@ -10,7 +10,8 @@ test('propagate sample TLE renders altitude series and ground track', async ({ p
   await page.goto('/');
   await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
 
-  await openAnalyze(page, 'propagation');
+  await openAnalyze(page, 'orbit-maneuver');
+  await expandCard(page, 'propagate');
   await page.getByTestId('propagate-tle').click();
 
   // The propagated orbit surfaces as a period readout, an altitude polyline, and a

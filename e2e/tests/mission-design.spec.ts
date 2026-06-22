@@ -1,17 +1,19 @@
 import { test, expect } from '@playwright/test';
-import { openAnalyze } from './sample.ts';
+import { openAnalyze, expandCard } from './sample.ts';
 
 // The mission-design workbench is mission-independent: from a cold boot it assembles a
 // small Mission Control Sequence (initial LEO state, coast, impulsive prograde burn, and
 // a Target whose differential corrector tunes the burn to a desired radius), runs it via
 // @bessel/propagator runMission, renders the propagated arc in the scene, and reports the
-// final state plus the corrector convergence. (STK_PARITY_SPEC §4.3.)
+// final state plus the corrector convergence. It lives in the Orbit & Maneuver tab's
+// "Mission control sequence" TaskCard. (STK_PARITY_SPEC §4.3.)
 
 test('mission design runs an MCS and reports corrector convergence', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
 
-  await openAnalyze(page, 'maneuver');
+  await openAnalyze(page, 'orbit-maneuver');
+  await expandCard(page, 'mcs');
   // Tune one parameter to prove the controls thread into the run, then run the sequence.
   await page.getByTestId('mcs-target-radius').fill('7300');
   await page.getByTestId('run-mcs').click();
