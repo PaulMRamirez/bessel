@@ -1,26 +1,41 @@
 # Analysis Tools Reference
 
-One entry per workbench tool: its inputs, what it computes, the engine behind it,
-its validation, and its limits. The tools live in three menus in the app shell.
-For a guided first run see docs/getting-started.md; for the validation provenance
-see REFERENCES.md and docs/STK_PARITY_SPEC.md.
+One entry per tool: its inputs, what it computes, the engine behind it, its
+validation, and its limits. The tools live in the consolidated analysis workbench
+(the right-dock "Analyze" panel), organized into six intent-named domain tabs of
+collapsible TaskCards: Orbit & Maneuver, Lighting & Geometry, Access & Comms,
+Conjunction, Coverage & Constellation, and Report & Compare. For the structure and
+shared controls of that workbench see docs/analysis-workbench.md; for the
+per-perspective walkthroughs see docs/analysis-personas.md; for a guided first run
+see docs/getting-started.md; for the validation provenance see REFERENCES.md and
+docs/STK_PARITY_SPEC.md. The tool entries below keep their original menu groupings
+as a per-engine index; the mapping to the workbench tabs is noted where it helps.
 
 ## How to read this reference
 
-- Availability: the Analysis menu appears only once a spacecraft mission is
-  loaded; Propagate and Report are always available.
-- Every result can be exported. Time series and intervals export to CSV; the
-  trajectory exports to a CCSDS OEM file; the Report workbench is the
-  parameterized path.
+- The workbench opens once a spacecraft mission is loaded; the Report & Compare and
+  Propagate tools are always available. The spacecraft a task analyzes comes from the
+  editable spacecraft source on the Orbit & Maneuver Propagate card (a pasted TLE or a
+  picked scene object), not a bundled sample TLE.
+- The shared context bar sets the span, step, target, observer, frame, and active
+  ground station once for every tab; each TaskCard adds its own parameters. Deep
+  capabilities (full-covariance Pc, B-plane, beta angle, az/el mask, sun keepout,
+  terrain LOS, range rate, area-weighted FOM, modcod margin, covariance input) are
+  parameters and toggles on the cards, not hidden engine-only features.
+- Every result can be Kept into the compare tray and exported. Time series and
+  intervals export to CSV; the trajectory exports to a CCSDS OEM; a selected
+  conjunction event exports a CCSDS-CDM-style record; the link worksheet exports an
+  itemized worst-case and nominal CSV; the coverage FOM summary exports a CSV.
 
 ### Honest limits (read this first)
 
-- The Analysis and Propagate buttons use fixed demonstration parameters chosen to
-  exercise each engine end to end: one-day spans, a representative DSN 34 m
-  X-band station and a Goldstone-class ground station, the bundled sample TLE,
-  and an illustrative conjunction covariance. They are not configurable from the
-  UI yet. The Report workbench is the parameterized path (any provider, observer,
-  target, frame, and grid).
+- The tools are configurable from the UI: the shared context bar drives span, step,
+  target, observer, frame, and the active ground station, and each card carries its
+  own parameter form (e.g. the porkchop departure and time-of-flight ranges, the
+  screening threshold and pad, the link and worksheet parameters, the constraint
+  stack, the Walker pattern, and the coverage grid/metric/N-fold). Some per-tool
+  defaults below describe a representative starting configuration, not a fixed,
+  unchangeable demo.
 - SGP4 produces TEME coordinates; Bessel publishes them as J2000, an
   arcminute-scale approximation near the element epoch. An EOP-aware TEME to
   J2000 transform is deferred (docs/STK_PARITY_SPEC.md).
@@ -28,9 +43,9 @@ see REFERENCES.md and docs/STK_PARITY_SPEC.md.
   harmonics (`packages/propagator/src/force/spherical-harmonics.ts`), a third-body
   term, atmospheric drag (`force/drag.ts`, with Harris-Priester and Jacchia-1971
   density models), and solar radiation pressure (`force/srp.ts`), all selectable in
-  the force model.
-- Each engine is validated against an independent reference (below). The fixed
-  demo parameters are for demonstration; treat absolute numbers accordingly.
+  the force model (the HPOP card's force-model selector).
+- Each engine is validated against an independent reference (below). Treat absolute
+  numbers from a representative starting configuration accordingly.
 
 ---
 
@@ -74,29 +89,38 @@ see REFERENCES.md and docs/STK_PARITY_SPEC.md.
 - Validation: link math against textbook/ITU anchors.
 
 ### Conjunction (closest approach + Pc)
-- Inputs: the relative state of the central body with respect to the spacecraft
-  at the current epoch; an illustrative 1 km position sigma and 100 m combined
-  hard-body radius.
+- Workbench: the Conjunction tab. The single-pair case is the Closest approach (pair)
+  card; the operational path is Catalog ingestion & screening -> Per-event Pc &
+  B-plane -> Watchlist.
+- Inputs: the closest-approach pair card takes a configurable position sigma and
+  combined hard-body radius. The screening path takes a pasted CCSDS CDM / OEM / TLE
+  catalog plus a threshold and sieve pad.
 - Computes: time of closest approach, miss distance, relative speed, and the 2D
-  probability of collision.
-- Engine: `@bessel/conjunction` (rectilinear closest approach; Foster 2D Pc). The
-  package also provides full 2x2-covariance Pc (Mahalanobis), B-plane projection,
-  Alfano maximum Pc, STM covariance propagation to the time of closest approach, and
-  all-vs-all screening (`screenAllVsAll`), the latter run off the main thread in a
-  dedicated (single) Web Worker with progress and cancel (`apps/web/src/screening.worker.ts`).
+  probability of collision for the pair card; an all-vs-all screen, then per selected
+  event the full-covariance Pc and the Alfano Max-Pc with a B-plane plot.
+- Engine: `@bessel/conjunction` (rectilinear closest approach; Foster 2D Pc; full
+  2x2-covariance Pc (Mahalanobis); B-plane projection; Alfano maximum Pc; STM
+  covariance propagation to the time of closest approach; all-vs-all screening
+  `screenAllVsAll`). Screening runs off the main thread in a dedicated (single) Web
+  Worker with progress and cancel (`apps/web/src/screening.worker.ts`) over a REAL
+  ingested catalog (parsed via `@bessel/interop` / `@bessel/propagator`).
 - Validation: Pc against the analytic centered-circular form.
-- Limits: this button demonstrates the math on the loaded pair; the operational
-  all-vs-all screening is exercised through the screening worker rather than this
-  demo button.
+- Limits: when the ingested catalog (OEM or TLE) carries no covariance for a pair, the
+  per-event card reports only the Max-Pc bound until an assumed covariance is supplied
+  through the covariance-input form.
 
 ### Walker constellation design
-- Inputs: a Walker Delta 24/3/1 pattern at 700 km, 53 deg inclination.
-- Computes: the generated constellation structure (planes, satellites per plane).
+- Workbench: the Coverage & Constellation tab, the Walker constellation card feeding
+  the Coverage sweep card.
+- Inputs: a configurable Walker T/P/F pattern (total satellites, planes, phasing,
+  inclination, altitude); the run is gated on a buildable T/P.
+- Computes: the generated constellation structure (planes, satellites per plane); it
+  renders as orbit rings and publishes its members as the swept asset set.
 - Engine: `@bessel/coverage` (`walkerConstellation`).
-- Limits: this button is pure element-set generation; a flown coverage grid sweep
-  is available via `sweepCoverageGrid` (with area-weighted FOM and revisit/
-  response-time statistics) and renders as a camera-relative contour overlay on the
-  globe (the Coverage grid tool, `engine.computeCoverageGrid`).
+- The Coverage sweep card then runs `sweepCoverageGrid` (with area-weighted FOM and
+  revisit/response-time statistics) over the asset set on a dedicated, cancellable
+  coverage worker, coloring a metric-aware camera-relative contour overlay on the
+  globe with a legend and a regional FOM summary table.
 
 ### Attitude slew
 - Inputs: a slew from a nadir-pointing to a Sun-pointing attitude at the current
@@ -104,11 +128,16 @@ see REFERENCES.md and docs/STK_PARITY_SPEC.md.
 - Computes: the eigen-axis slew angle (deg) over time.
 - Engine: `@bessel/attitude` (two-vector laws via `twovec`, eigen-axis slew).
 
-### Lambert transfer
-- Inputs: the spacecraft's current position about the central body to a point a
-  quarter revolution ahead, over a quarter of the circular period at that radius.
-- Computes: the departure delta-v of the connecting Lambert arc.
-- Engine: `@bessel/mission` (universal-variable Lambert).
+### Lambert transfer + porkchop
+- Workbench: the Orbit & Maneuver tab, the Lambert transfer + porkchop card.
+- Inputs: configurable departure and arrival bodies, a departure-window day range, and
+  a time-of-flight day range (the legacy single quarter-revolution solve stays
+  available below the sweep).
+- Computes: a bounded departure x time-of-flight sweep solving Lambert at each node,
+  rendered as a departure-delta-v contour with the minimum marked; the marked optimum
+  can be sent to the editable MCS as a new maneuver.
+- Engine: `@bessel/mission` (universal-variable Lambert). The sweep runs on a
+  dedicated, cancellable porkchop worker (`apps/web/src/porkchop.worker.ts`).
 - Validation: Lambert against Vallado example 7-5.
 
 ### Ground track
@@ -128,10 +157,12 @@ see REFERENCES.md and docs/STK_PARITY_SPEC.md.
 
 ## Propagate menu
 
-### Propagate sample TLE (SGP4)
-- Inputs: the bundled SGP4-VER sample two-line element set.
-- Computes: SGP4 over one day, published as an in-memory SPK Type-13 segment;
-  read back as an altitude time series, a ground track, and the orbit period.
+### Propagate orbit (SGP4)
+- Workbench: the Orbit & Maneuver tab, the Propagate orbit (SGP4 / HPOP) card.
+- Inputs: the editable spacecraft source set on the card (a pasted, parsed and
+  validated two-line element set), not a bundled sample.
+- Computes: SGP4 over the span, published as an in-memory SPK Type-13 segment; read
+  back as an altitude time series, a ground track, and the orbit period.
 - Engine: `@bessel/propagator` (SGP4) plus `publishEphemeris` (`spkw13`).
 - Validation: SGP4 against the AIAA-2006-6753 SGP4-VER reference vectors
   (sub-meter); the publish round-trip reproduces the SGP4 state via `spkezr`.
@@ -148,8 +179,10 @@ see REFERENCES.md and docs/STK_PARITY_SPEC.md.
 - Validation: elevation access against solar rise/set at a known mask.
 
 ### Propagate numerically (HPOP)
-- Inputs: the same TLE initial state, integrated over one day, plus a force-model
-  selector (point-mass / J2 / NxN gravity / drag / SRP) and a frame note.
+- Workbench: the same Propagate orbit (SGP4 / HPOP) card; HPOP also accepts a
+  scene-object source (its osculating state).
+- Inputs: the spacecraft source's initial state, integrated over the span, plus a
+  force-model selector (point-mass / J2 / NxN gravity / drag / SRP) and a frame note.
 - Computes: a numerical altitude time series, to compare against SGP4.
 - Engine: `@bessel/propagator` Cowell propagator (adaptive Dormand-Prince 5(4))
   with the selected force model (point-mass, zonal/NxN spherical harmonics,
@@ -163,16 +196,18 @@ see REFERENCES.md and docs/STK_PARITY_SPEC.md.
 ## Mission Design menu
 
 ### Mission Control Sequence
-- Inputs: an initial circular altitude, a coast duration, an impulsive prograde
-  delta-v, and a target radius for the differential corrector.
-- Computes: runs an MCS (initial state, propagate, impulsive maneuver, target/coast)
-  through `@bessel/propagator` `runMission`, renders the resulting trajectory in the
-  3D scene (camera-relative), and shows the final state, an altitude chart, and the
-  corrector convergence (`DcReport`).
+- Workbench: the Orbit & Maneuver tab, the Mission control sequence card.
+- Inputs: an editable, ordered segment list (InitialState / Propagate / Maneuver /
+  Target) built in the segment editor (add, edit each segment's key parameters,
+  reorder, remove), plus the target goal for the differential corrector. A porkchop
+  optimum or a conjunction avoidance burn can be sent in as a Maneuver segment.
+- Computes: runs the MCS through `@bessel/propagator` `runMission`, renders the
+  resulting trajectory in the 3D scene (camera-relative), and shows the final state, an
+  altitude chart, and the corrector convergence (`DcReport`).
 - Engine: the Astrogator-class MCS executor and its differential corrector (with an
   STM-analytic or finite-difference Jacobian, nested targeting, finite burns, and an
   optional fuel-optimal gradient optimizer).
-- Limits: the panel exposes a single-burn targeting demo; the underlying executor
+- Limits: the editor exposes the four common segment kinds; the underlying executor
   supports arbitrary nested sequences authored as the `Mcs` IR.
 
 ---

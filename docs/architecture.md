@@ -146,6 +146,46 @@ flowchart LR
   cancellable sweeps), the clock, and the scene.
 - Heavy compute stays off the main thread; series results transfer zero-copy.
 
+## Web shell: the analysis workbench
+
+The reference shell (`apps/web`) hosts the analysis workbench, the consolidated
+right-dock "Analyze" panel (`panels/AnalyzeWorkbench.tsx`). Its structure mirrors the
+analyst's intent rather than the engine list. For the user-facing guide see
+docs/analysis-workbench.md and docs/analysis-personas.md.
+
+- Six intent-named domain panels, each a tab owning the engines that compose for one
+  inner loop: `OrbitManeuverPanel` (propagation, MCS, OD, slew, Lambert/porkchop),
+  `LightingGeometryPanel` (range, ground track, beta, eclipse, solar intensity),
+  `AccessCommsPanel` (constraint-stack access, in-FOV, downlink, station passes, link
+  worksheet, slew feasibility, observation schedule), `ConjunctionPanel` (ingest +
+  screen, per-event Pc + B-plane, watchlist, closest approach), `CoveragePanel`
+  (Walker designer + sweep), and `ReportComparePanel` (report, OEM export, compare).
+  Each tab body is `React.lazy` (`panels/lazy.tsx`), so it stays out of the
+  first-paint shell; within a tab, tools are collapsible `TaskCard`s in a capped
+  accordion (`panels/TaskCard.tsx`).
+- The Scenario Object Model is a typed store slice (`scenario` in
+  `store/app-state.ts`): role SLOTS the tasks read by role (primary spacecraft and
+  its editable source, secondary objects, the ground-station registry with an active
+  station, the observation target, and the asset set). The shared context bar
+  (`panels/AnalysisContextBar.tsx`) and the spacecraft-source and station-registry
+  controls write these slots; every tab reads them by default. An `AnalysisLauncher`
+  search and a `PresetBar` of mission-profile chips are accelerators over the same
+  tab/card expand path.
+- The compute behind the cards lives in the app engine controller (`engine/engine.ts`)
+  and the lazy ops module (`engine/analysis-ops.ts`), loaded behind a dynamic import
+  so the engines are not in the first-paint shell.
+- Dedicated worker seams keep heavy sweeps off the main thread, each with its own size
+  budget in `.size-limit.json`: the SPICE worker (`spice.worker.ts`), the conjunction
+  screening worker (`screening.worker.ts`), the coverage sweep worker
+  (`coverage.worker.ts`), and the Lambert porkchop worker (`porkchop.worker.ts`). Each
+  reports progress and is cancellable.
+- The conjunction ingestion path is real, not synthetic: pasted CCSDS CDM / CCSDS OEM
+  / TLE-set text is parsed (`parseCdm` / `parseOem` / `parseTle` via `@bessel/interop`
+  and `@bessel/propagator`) into a screening catalog, the all-vs-all screen runs over
+  that catalog on the screening worker, and a selected event computes the
+  full-covariance Pc and Max-Pc with a B-plane plot; an assumed covariance can be
+  supplied when the catalog carried none.
+
 ## Cross-cutting mandates
 
 - Camera-relative rendering is mandatory: positions are computed relative to the
