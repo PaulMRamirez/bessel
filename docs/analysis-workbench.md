@@ -179,9 +179,11 @@ sample TLE.
 A "What do you want to analyze?" search box (`analysis-launcher`) sits at the top of
 the tab body. It filters a static registry of cards by intent keyword (across all
 tabs) and, on a hit, switches to the owning tab and expands that exact card. For
-example "porkchop" finds the Lambert transfer card, "pc" or "collision" finds the
-closest-approach card, "modcod" or "downlink" finds the link cards. An empty query
-shows nothing.
+example "lambert" or "transfer" finds the Lambert transfer card, "pc" or "collision"
+finds the closest-approach card, and "downlink" or "ebn0" finds the downlink budget
+card. The registry covers the main cards but not every one (the per-event Pc,
+watchlist, station-passes, link-worksheet, and slew-feasibility cards are reached by
+opening their tab, not by the launcher). An empty query shows nothing.
 
 ## Mission-profile presets
 
@@ -190,8 +192,9 @@ is not a separate mode and hides nothing; every tab and card stays reachable nor
 Selecting a preset switches to that persona's home tab and pre-expands its primary
 cards through the same expand path the launcher uses. The five presets:
 
-- SSA: the Conjunction tab, expanding catalog screening and per-event closest
-  approach.
+- SSA: the Conjunction tab, expanding Catalog ingestion & screening and Closest
+  approach (pair). (The full triage path, Per-event Pc & B-plane, is the card just
+  below; it is open by default when you enter the Conjunction tab directly.)
 - Comms: the Access & Comms tab, expanding the downlink budget.
 - Coverage: the Coverage & Constellation tab, expanding the Walker designer and the
   coverage sweep.

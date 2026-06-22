@@ -85,7 +85,11 @@ variants side by side.
 ## 3. SSA / Conjunction Analyst
 
 Entry: the "SSA" preset, or the Conjunction tab (`tab-conjunction`). The preset opens
-the tab and pre-expands the Catalog screening and per-event closest-approach cards.
+the tab and pre-expands the Catalog ingestion & screening and Closest approach (pair)
+cards. The Per-event Pc & B-plane card (where the triage in steps 3 to 7 happens) sits
+just below; opening the Conjunction tab directly instead pre-expands Catalog ingestion &
+screening and Per-event Pc & B-plane by default. Either way, expand whichever card a step
+names (the accordion keeps at most two open).
 
 Steps:
 
@@ -145,9 +149,9 @@ Steps:
    with a live cells-done/total readout (`coverage-progress`) and a cancel, so a large
    global sweep never stalls the UI.
 4. Read the result. The result shows the area-weighted percent coverage over the
-   cells, a metric-aware contour with a legend (`ContourLegend`, colored by the
-   selected metric and drawn as a camera-relative overlay on the globe), and a regional
-   FOM summary table.
+   cells (`coverage-grid-stat`), a metric-aware contour drawn as a camera-relative
+   overlay on the globe, an on-panel legend keyed to that metric (`ContourLegend`),
+   and a regional FOM summary table.
 
 Outputs / decisions: a designed Walker constellation rendered in 3D, a metric-aware
 coverage contour, and a regional FOM summary. Export the FOM summary CSV

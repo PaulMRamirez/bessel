@@ -51,16 +51,15 @@ as a per-engine index; the mapping to the workbench tabs is noted where it helps
 
 ## Analysis menu
 
-### Eclipse (umbra intervals)
-- Inputs: the loaded spacecraft and its central body; a one-day span at a 120 s
-  search step.
-- Computes: the intervals during which the spacecraft is in the central body's
-  umbra (total shadow), rendered as a Gantt timeline.
+### Eclipse phases
+- Workbench: the Lighting & Geometry tab, the Eclipse phases card.
+- Inputs: the loaded spacecraft and its central body, over the shared context span
+  and step.
+- Computes: the umbra (total shadow), penumbra (partial), annular, and sunlit
+  intervals, each a Gantt timeline, plus the per-day shadowed duration.
 - Engine: `@bessel/events` (CSPICE `gfoclt` occultation finder + `occult`).
 - Validation: `gfoclt` intervals cross-checked against the per-epoch `occult`
   code; tested on the Cassini-at-Saturn shadow.
-- Limits: umbra only in the UI (penumbra/annular/sunlit are available in the
-  engine); fixed one-day span.
 
 ### Range (time series)
 - Inputs: spacecraft to central body, one-day span at a 360 s step.
@@ -68,16 +67,19 @@ as a per-engine index; the mapping to the workbench tabs is noted where it helps
 - Engine: the F3 `evalSeries` `range` provider over the SPICE worker.
 - Validation: the interpreter reproduces per-epoch `spkpos` to sub-millimeter.
 
-### Sun access + figure of merit
-- Inputs: spacecraft to the Sun, occulted by the central body; one-day span,
-  120 s step.
-- Computes: the line-of-sight access window (a Gantt), reduced to a figure of
-  merit (percent coverage, access count, maximum gap).
+### Access + figure of merit
+- Workbench: the Access & Comms tab, the Constraint-stack access card (and the Sun
+  exclusion / line-of-sight cases it composes).
+- Inputs: spacecraft to a target (or the Sun) over the shared context span and step,
+  under a composable constraint stack.
+- Computes: the surviving access window (a Gantt), reduced to a figure of
+  merit (percent coverage, access count, maximum gap), with a per-constraint
+  breakdown of what each constraint alone admits.
 - Engine: `@bessel/access` (geometry finders + `SpiceWindow` algebra) and
   `@bessel/coverage` (`figureOfMerit`).
-- Limits: the UI wires the line-of-sight-to-Sun case; the library also supports
-  range, elevation, range-rate, and chained constraints (see the Report and
-  ground-station tools).
+- Note: the constraint stack surfaces line of sight, az/el mask, sun-exclusion
+  keepout, range, range rate, and terrain line of sight as toggles on the card; the
+  station and report tools below add the ground-station and provider-grid cases.
 
 ### Downlink Eb/N0 (link budget)
 - Inputs: spacecraft to Earth range over a day; a representative DSN 34 m X-band
@@ -169,6 +171,9 @@ as a per-engine index; the mapping to the workbench tabs is noted where it helps
 - Limits: near-Earth SGP4 only (no deep-space SDP4); TEME published as J2000.
 
 ### Ground-station access
+- Workbench: a built-in shortcut on the Propagate orbit card (the "Ground-station
+  access (Goldstone, 10 deg, sunlit)" button), distinct from the registry-driven
+  Station passes card on the Access & Comms tab.
 - Inputs: the propagated satellite, a Goldstone-class station, a 10 deg elevation
   mask intersected with a geocentric range gate; a 12-hour span at a 2-minute
   step.
