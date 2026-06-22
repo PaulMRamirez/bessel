@@ -297,7 +297,7 @@ export function BesselViewer(): JSX.Element {
   );
 
   const scriptMenu = (
-    <Popover label="Script" title="Scripting console" align="right" testId="script-menu">
+    <Popover label="Script" title="Scripting console" align="right" testId="script-menu" pinnable>
       <PanelSuspense>
         <ScriptConsole
           source={scriptSource}

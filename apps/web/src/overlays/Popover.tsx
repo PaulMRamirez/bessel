@@ -15,19 +15,26 @@ export interface PopoverProps {
   readonly align?: 'left' | 'right';
   readonly triggerClassName?: string;
   readonly testId?: string;
+  /** When true, offer a pin toggle: a pinned panel does not auto-dismiss on an
+   *  outside click, so a working surface (the Script console) survives canvas
+   *  interaction. Escape still closes it. */
+  readonly pinnable?: boolean;
   readonly children: ReactNode;
 }
 
 export function Popover(props: PopoverProps): JSX.Element {
   const [open, setOpen] = useState(false);
+  const [pinned, setPinned] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const panelId = useId();
 
   useEffect(() => {
     if (!open) return undefined;
     // pointerdown (not mousedown) so a touch tap outside dismisses on the PWA and
-    // Capacitor targets; mousedown does not fire for touch on those platforms.
+    // Capacitor targets; mousedown does not fire for touch on those platforms. A
+    // pinned panel ignores the outside tap (but Escape still closes it).
     const onPointer = (e: PointerEvent): void => {
+      if (pinned) return;
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
     const onKey = (e: KeyboardEvent): void => {
@@ -39,7 +46,7 @@ export function Popover(props: PopoverProps): JSX.Element {
       document.removeEventListener('pointerdown', onPointer);
       document.removeEventListener('keydown', onKey);
     };
-  }, [open]);
+  }, [open, pinned]);
 
   return (
     <div className="bessel-popover" ref={ref}>
@@ -61,6 +68,19 @@ export function Popover(props: PopoverProps): JSX.Element {
           aria-label={props.title}
           className={`bessel-popover-panel bessel-popover-${props.align ?? 'left'}`}
         >
+          {props.pinnable ? (
+            <button
+              type="button"
+              className="bessel-popover-pin"
+              aria-pressed={pinned}
+              data-testid={props.testId ? `${props.testId}-pin` : undefined}
+              title={pinned ? 'Unpin (close on outside click)' : 'Pin (keep open)'}
+              aria-label={pinned ? 'Unpin panel' : 'Pin panel open'}
+              onClick={() => setPinned((p) => !p)}
+            >
+              {pinned ? '📌' : '📍'}
+            </button>
+          ) : null}
           {props.children}
         </div>
       ) : null}
