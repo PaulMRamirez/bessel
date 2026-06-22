@@ -12,6 +12,7 @@ import {
   CameraFrameControls,
   CaptureControls,
   CatalogLoader,
+  CloseButton,
   DEFAULT_LADDER,
   FaultBanner,
   KeyboardHelp,
@@ -171,6 +172,7 @@ export function BesselViewer(): JSX.Element {
   const cameraFrame = useStore(store, (s) => s.cameraFrame);
   const realImageryApplied = useStore(store, (s) => s.realImageryApplied);
   const settings = useStore(store, (s) => s.settings);
+  const showLiveGeometry = useStore(store, (s) => s.showLiveGeometry);
   const visibility = useStore(store, (s) => s.visibility);
   const readouts = useStore(store, (s) => s.readouts);
   const bodyState = useStore(store, (s) => s.bodyState);
@@ -181,6 +183,7 @@ export function BesselViewer(): JSX.Element {
   const telemetryResidualKm = useStore(store, (s) => s.telemetryResidualKm);
   const telemetryOverlay = useStore(store, (s) => s.telemetryOverlay);
   const telemetryFault = useStore(store, (s) => s.telemetryFault);
+  const acknowledgedFault = useStore(store, (s) => s.acknowledgedFault);
   const statusTone = hudTone(status, telemetryFault, telemetryResidualKm);
   const residual = hudResidual(telemetryResidualKm, telemetryFault);
   const missionAnnotations = useStore(store, (s) => s.annotations);
@@ -240,7 +243,7 @@ export function BesselViewer(): JSX.Element {
   // The live geometry readout stays visible through a pass (independent of selection)
   // whenever tracking is on or the spacecraft itself is the focus.
   const focusIsSpacecraft = focusEntry?.kind === 'spacecraft';
-  const showLiveReadout = hasSpacecraft && (track || focusIsSpacecraft);
+  const showLiveReadout = hasSpacecraft && (track || focusIsSpacecraft) && showLiveGeometry;
 
   // Timeline annotations are computed in the engine/mission layer (where SPICE
   // lives) from arc boundaries plus a SPICE-found closest approach, and arrive
@@ -294,7 +297,7 @@ export function BesselViewer(): JSX.Element {
   );
 
   const scriptMenu = (
-    <Popover label="Script" title="Scripting console" align="right" testId="script-menu">
+    <Popover label="Script" title="Scripting console" align="right" testId="script-menu" pinnable>
       <PanelSuspense>
         <ScriptConsole
           source={scriptSource}
@@ -456,9 +459,17 @@ export function BesselViewer(): JSX.Element {
               <span aria-hidden="true" style={{ display: 'inline-flex', verticalAlign: 'middle' }}>
                 <StatusDot tone={residual.tone} />
               </span>
-              <span className="bessel-hud-residual" data-testid="hud-residual" data-severity={residual.tone}>
+              <button
+                type="button"
+                className="bessel-hud-residual bessel-hud-residual-link"
+                data-testid="hud-residual"
+                data-severity={residual.tone}
+                onClick={() => engine?.setAnalyzeTab('report-compare')}
+                title="Open the telemetry overlay"
+                aria-label={`Telemetry residual ${residual.text}. Open the telemetry overlay.`}
+              >
                 {residual.text}
-              </span>
+              </button>
             </span>
             <span className="bessel-hud-sep" aria-hidden="true" />
             <span className="bessel-hud-track" data-testid="hud-track">
@@ -470,7 +481,11 @@ export function BesselViewer(): JSX.Element {
       {/* Always-mounted telemetry fault alert: a fault reaches the operator with no
           menu open. Renders nothing (no role/contrast surface) when nominal. */}
       <div className="bessel-fault-chrome">
-        <FaultBanner fault={telemetryFault} testId="telemetry-fault-alert" />
+        <FaultBanner
+          fault={telemetryFault && telemetryFault !== acknowledgedFault ? telemetryFault : null}
+          onAcknowledge={() => engine?.acknowledgeFault()}
+          testId="telemetry-fault-alert"
+        />
       </div>
       <div className="bessel-viewcontrols" role="group" aria-label="Instruments and sharing">
         {hasSpacecraft && (
@@ -561,28 +576,48 @@ export function BesselViewer(): JSX.Element {
       </div>
       <div className="bessel-canvas-topright">
         <Popover label="Layers" title="Visualization layers" align="right" testId="layers-popover">
-          <SettingsPanel settings={settings} onChange={(k, v) => engine?.setSetting(k, v)} />
+          <SettingsPanel
+            settings={settings}
+            onChange={(k, v) => engine?.setSetting(k, v)}
+            onReset={() => engine?.resetSettings()}
+            showLiveGeometry={showLiveGeometry}
+            onToggleLiveGeometry={(v) => engine?.setShowLiveGeometry(v)}
+          />
         </Popover>
-        <button
-          type="button"
-          className="bessel-help-button"
-          onClick={() => engine?.setHelpOpen(true)}
-          aria-label="Keyboard shortcuts help"
-          data-testid="help-button"
-        >
-          ?
-        </button>
+        <Tooltip label="Keyboard shortcuts and help (press ?)">
+          <button
+            type="button"
+            className="bessel-help-button"
+            onClick={() => engine?.setHelpOpen(true)}
+            aria-label="Keyboard shortcuts help"
+            data-testid="help-button"
+          >
+            ?
+          </button>
+        </Tooltip>
       </div>
       <KeyboardHelp open={helpOpen} onClose={() => engine?.setHelpOpen(false)} />
       {/* Always-visible geometry, bound to the tracked/focused object, so a canvas
           click that clears the selection does not blank the live numbers. */}
-      {showLiveReadout ? <LiveGeometryReadout target={focus} readouts={readouts} /> : null}
+      {showLiveReadout ? (
+        <LiveGeometryReadout
+          target={focus}
+          readouts={readouts}
+          onDismiss={() => engine?.setShowLiveGeometry(false)}
+        />
+      ) : null}
       {selection.length > 0 || measureMode ? (
         <aside
           className="bessel-inspector-card"
           aria-label="Selection details"
           data-testid="inspector-card"
         >
+          <CloseButton
+            onClose={() => engine?.closeInspector()}
+            label="Close selection details"
+            testId="inspector-close"
+            className="bessel-close-button--corner"
+          />
           <ObjectInspector name={focus} kind={focusEntry?.kind} fields={inspectorFields} />
           <ReadoutPanel target={focus} readouts={readouts} />
           <MeasurePanel

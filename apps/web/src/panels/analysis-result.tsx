@@ -9,6 +9,7 @@ import {
   IntervalTimeline,
   ReportTable,
   TimeSeriesChart,
+  Tooltip,
   downloadBlob,
   reportToText,
 } from '@bessel/ui';
@@ -30,7 +31,8 @@ function CsvButton(props: { onClick: () => void; testId: string }): JSX.Element 
   );
 }
 
-const PRECISIONS = [3, 4, 6, 9] as const;
+/** Digit-precision options shared by the result toolbar and the Report panel. */
+export const PRECISIONS = [3, 4, 6, 9] as const;
 
 type Rows = readonly (readonly (string | number)[])[];
 
@@ -61,22 +63,30 @@ function ResultView(props: {
   return (
     <>
       <div className="bessel-result-toolbar" data-testid={`${props.baseTestId}-toolbar`}>
-        <Button
-          variant={mode === 'chart' ? 'primary' : 'secondary'}
-          aria-pressed={mode === 'chart'}
-          testId={`${props.baseTestId}-view-chart`}
-          onClick={() => setMode('chart')}
-        >
-          Chart
-        </Button>
-        <Button
-          variant={mode === 'table' ? 'primary' : 'secondary'}
-          aria-pressed={mode === 'table'}
-          testId={`${props.baseTestId}-view-table`}
-          onClick={() => setMode('table')}
-        >
-          Table
-        </Button>
+        <Tooltip label="Show chart">
+          <Button
+            variant={mode === 'chart' ? 'primary' : 'secondary'}
+            pressed={mode === 'chart'}
+            iconOnly
+            ariaLabel="Show chart"
+            testId={`${props.baseTestId}-view-chart`}
+            onClick={() => setMode('chart')}
+          >
+            {'\u{1F4C8}'}
+          </Button>
+        </Tooltip>
+        <Tooltip label="Show table">
+          <Button
+            variant={mode === 'table' ? 'primary' : 'secondary'}
+            pressed={mode === 'table'}
+            iconOnly
+            ariaLabel="Show table"
+            testId={`${props.baseTestId}-view-table`}
+            onClick={() => setMode('table')}
+          >
+            {'\u{2637}'}
+          </Button>
+        </Tooltip>
         <Button variant="secondary" testId={`${props.baseTestId}-copy`} onClick={copy}>
           {copyState === 'ok' ? 'Copied' : copyState === 'fail' ? 'Copy failed' : 'Copy'}
         </Button>

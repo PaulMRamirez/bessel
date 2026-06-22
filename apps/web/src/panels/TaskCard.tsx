@@ -6,12 +6,24 @@
 // coupling them to the state tree. The status chip reuses the runStatus semantics
 // (idle/running/ok/error) and the RunStatusNote tag styling.
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Tag } from '@bessel/selene-design';
 import type { RunStatus } from '../store/index.ts';
 
 /** Maximum number of TaskCards a TaskCardAccordion keeps expanded at once. */
 export const MAX_EXPANDED_TASK_CARDS = 2;
+
+/** Cmd/Ctrl+Enter inside a card re-runs its primary Action, even from a focused input
+ *  (so an analyst can tweak a parameter and re-run without reaching for the mouse). The
+ *  primary Action button carries the bessel-card-action marker; trigger it if enabled. */
+function rerunOnChord(ev: KeyboardEvent<HTMLDivElement>): void {
+  if (ev.key !== 'Enter' || !(ev.metaKey || ev.ctrlKey)) return;
+  const action = ev.currentTarget.querySelector<HTMLButtonElement>('.bessel-card-action');
+  if (action && !action.disabled) {
+    ev.preventDefault();
+    action.click();
+  }
+}
 
 /** A status chip derived from a tool's run status: nothing while idle, a "Running"
  *  amber tag, a green "Done" tag on success, or a red "Error" tag on a loud failure.
@@ -82,7 +94,12 @@ export function TaskCard(props: TaskCardProps): JSX.Element {
           <StatusChip status={props.status} id={props.id} />
         </button>
       </h3>
-      <div id={regionId} className="bessel-taskcard-body" hidden={!props.expanded}>
+      <div
+        id={regionId}
+        className="bessel-taskcard-body"
+        hidden={!props.expanded}
+        onKeyDown={rerunOnChord}
+      >
         {props.expanded ? props.children : null}
       </div>
     </section>
@@ -134,6 +151,10 @@ export function TaskCardAccordion(props: TaskCardAccordionProps): JSX.Element {
   const [order, setOrder] = useState<readonly string[]>(() =>
     (props.defaultExpanded ?? []).slice(-MAX_EXPANDED_TASK_CARDS),
   );
+  // The explicit "expand all" escape hatch from the cap. When true, every card is
+  // expanded and the at-most-two cap is bypassed; the user asked for all of them, so
+  // honor it. Any individual toggle (below) drops back to the normal capped LRU.
+  const [expandAll, setExpandAll] = useState(false);
   const req = props.expandRequest;
   // Normalize the request to an ordered list of ids that actually exist as cards here.
   const cardIds = props.cards.map((c) => c.id);
@@ -150,15 +171,58 @@ export function TaskCardAccordion(props: TaskCardAccordionProps): JSX.Element {
     // chosen cards are the ones expanded rather than racing the panel's defaultExpanded.
     if (reqKey.length === 0) return;
     const ids = reqKey.split(',');
+    // An external request targets specific cards through the capped reducer, so it leaves
+    // the explicit expand-all mode (a request is not "show everything").
+    setExpandAll(false);
     setOrder((o) =>
       ids.length > 1
         ? ids.slice(Math.max(0, ids.length - MAX_EXPANDED_TASK_CARDS))
         : ids.reduce((acc, id) => (acc.includes(id) ? acc : nextExpanded(acc, id)), o),
     );
   }, [reqToken, reqKey]);
-  const expanded = new Set(order);
+  // While expand-all is active every card is open; otherwise the normal capped order wins.
+  const expanded = expandAll ? new Set(cardIds) : new Set(order);
+  // The cap can silently collapse cards once there are more than the cap, so the
+  // expand/collapse-all control is only a discoverable escape hatch when that can happen.
+  const overCap = props.cards.length > MAX_EXPANDED_TASK_CARDS;
+  // Individual toggles return to the normal LRU: turn off expand-all, and when leaving
+  // expand-all collapse to this single card so we never strand more than the cap open.
+  const toggleCard = (id: string): void => {
+    if (expandAll) {
+      setExpandAll(false);
+      setOrder([id]);
+      return;
+    }
+    setOrder((o) => nextExpanded(o, id));
+  };
   return (
     <div className="bessel-taskcard-accordion" data-testid="taskcard-accordion">
+      {overCap ? (
+        <div className="bessel-taskcard-accordion-controls">
+          {expandAll ? (
+            <button
+              type="button"
+              className="bessel-taskcard-accordion-toggle-all"
+              data-testid="accordion-collapse-all"
+              onClick={() => {
+                setExpandAll(false);
+                setOrder([]);
+              }}
+            >
+              Collapse all
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="bessel-taskcard-accordion-toggle-all"
+              data-testid="accordion-expand-all"
+              onClick={() => setExpandAll(true)}
+            >
+              Expand all
+            </button>
+          )}
+        </div>
+      ) : null}
       {props.cards.map((card) => {
         const isOpen = expanded.has(card.id);
         return (
@@ -169,7 +233,7 @@ export function TaskCardAccordion(props: TaskCardAccordionProps): JSX.Element {
             purpose={card.purpose}
             {...(card.status !== undefined ? { status: card.status } : {})}
             expanded={isOpen}
-            onToggle={() => setOrder((o) => nextExpanded(o, card.id))}
+            onToggle={() => toggleCard(card.id)}
           >
             {isOpen ? card.render() : null}
           </TaskCard>

@@ -103,4 +103,15 @@ describe('TaskCardAccordion', () => {
     const open = (out.match(/aria-expanded="true"/g) ?? []).length;
     expect(open).toBeLessThanOrEqual(MAX_EXPANDED_TASK_CARDS);
   });
+
+  it('shows the Expand all control only when there are more cards than the cap', () => {
+    // Three cards (> the cap of two): the discoverable escape hatch is offered.
+    const over = html(createElement(TaskCardAccordion, { cards: entries }));
+    expect(over).toContain('data-testid="accordion-expand-all"');
+    expect(over).toContain('Expand all');
+    // Two cards (at the cap): the cap can never silently collapse, so no control.
+    const atCap = html(createElement(TaskCardAccordion, { cards: entries.slice(0, 2) }));
+    expect(atCap).not.toContain('accordion-expand-all');
+    expect(atCap).not.toContain('accordion-collapse-all');
+  });
 });

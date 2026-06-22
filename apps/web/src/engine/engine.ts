@@ -53,6 +53,7 @@ import {
 import { loadSavedScripts, persistSavedScripts, upsertScript } from '../scripts.ts';
 import {
   KEPT_SNAPSHOT_LIMIT,
+  DEFAULT_VISUALIZATION_SETTINGS,
   type AppStore,
   type AnalysisContext,
   type AnalyzeTab,
@@ -62,6 +63,7 @@ import {
 } from '../store/index.ts';
 import {
   buildSnapshotMetrics,
+  buildSnapshotLabel,
   kindDomain,
   type SnapshotKind,
 } from './snapshot-metrics.ts';
@@ -705,6 +707,28 @@ export class BesselEngine {
     this.store.setState({ selection: [] });
   }
 
+  /** Close the selection inspector: drop the selection and leave Measure mode in one
+   *  action, so the header close is a single, discoverable dismiss. */
+  closeInspector(): void {
+    this.store.setState({ selection: [], measureMode: false });
+  }
+
+  /** Acknowledge the current telemetry fault so the banner hides until a new
+   *  (different) fault string is raised. */
+  acknowledgeFault(): void {
+    this.store.setState((s) => ({ acknowledgedFault: s.telemetryFault }));
+  }
+
+  /** Show or hide the live-geometry readout strip (independent of camera state). */
+  setShowLiveGeometry(show: boolean): void {
+    this.store.setState({ showLiveGeometry: show });
+  }
+
+  /** Restore the layer/visualization settings to their canonical defaults. */
+  resetSettings(): void {
+    this.store.setState({ settings: { ...DEFAULT_VISUALIZATION_SETTINGS } });
+  }
+
   centerOn(body: string, animate = true): void {
     // Framing implies an orbit view; leave free-fly so the framing takes effect.
     if (this.store.getState().cameraMode === 'free') this.setCameraMode('orbit');
@@ -750,7 +774,8 @@ export class BesselEngine {
     const domain = kindDomain(kind);
     const seq = (this.snapSeq += 1);
     const keptAt = this.store.getState().et;
-    const snapshot = { id: `snap-${seq}`, domain, label: `${kind} ${seq}`, metrics, keptAt };
+    const label = buildSnapshotLabel(kind, this.store.getState(), seq);
+    const snapshot = { id: `snap-${seq}`, domain, label, metrics, keptAt };
     // One functional update that re-checks the limit against the freshest state: two
     // rapid keeps must not both read a stale length and append past the cap. A no-op
     // (return the same array) when the tray is already full.
@@ -1718,6 +1743,11 @@ export class BesselEngine {
   /** [ux-p2-access] Convenience: remove a ground station from the registry by id. */
   removeStation(id: string): void {
     this.dispatchStation({ kind: 'remove', id });
+  }
+
+  /** [ux-f30] Convenience: overwrite a station by id (edit in place; rejects unknown id). */
+  updateStation(station: GroundStation): void {
+    this.dispatchStation({ kind: 'update', station });
   }
 
   stepRate(dir: -1 | 1): void {

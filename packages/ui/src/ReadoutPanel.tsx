@@ -2,6 +2,8 @@
 // it formats and displays values supplied by the viewer (computed via @bessel/spice),
 // importing no engine itself.
 
+import { Button } from '@bessel/selene-design';
+
 export interface Readouts {
   /** Observer to target range, km. */
   readonly rangeKm: number | null;
@@ -30,6 +32,18 @@ function deg(value: number | null): string {
   return `${value.toFixed(1)} deg`;
 }
 
+/** A copyable plain-text rendering of the readouts, for pasting into notes or tools. */
+function readoutsToText(target: string, r: Readouts): string {
+  return [
+    `${target} geometry`,
+    `Range ${km(r.rangeKm)}`,
+    `Altitude ${km(r.altitudeKm)}`,
+    `Phase ${deg(r.phaseDeg)}`,
+    `Incidence ${deg(r.incidenceDeg)}`,
+    `Emission ${deg(r.emissionDeg)}`,
+  ].join('\n');
+}
+
 export function ReadoutPanel(props: ReadoutPanelProps): JSX.Element {
   const { readouts } = props;
   return (
@@ -47,6 +61,14 @@ export function ReadoutPanel(props: ReadoutPanelProps): JSX.Element {
         <dt>Emission</dt>
         <dd data-testid="readout-emission">{deg(readouts.emissionDeg)}</dd>
       </dl>
+      <Button
+        variant="ghost"
+        testId="readout-copy"
+        ariaLabel="Copy readouts"
+        onClick={() => void navigator.clipboard?.writeText(readoutsToText(props.target, readouts))}
+      >
+        Copy
+      </Button>
     </section>
   );
 }

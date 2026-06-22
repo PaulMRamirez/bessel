@@ -43,6 +43,7 @@ export {
 } from './capture.ts';
 export { AppBar, type AppBarProps } from './AppBar.tsx';
 export { PanelContainer, type PanelContainerProps } from './PanelContainer.tsx';
+export { CloseButton, type CloseButtonProps } from './CloseButton.tsx';
 export { IntervalTimeline, type IntervalTimelineProps } from './IntervalTimeline.tsx';
 export { TimeSeriesChart, type TimeSeriesChartProps } from './TimeSeriesChart.tsx';
 export {

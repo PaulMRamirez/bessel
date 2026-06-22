@@ -2,6 +2,7 @@
 // Escape closes it. Open state is owned by the viewer (toggled by the ? shortcut).
 
 import { useEffect, useRef } from 'react';
+import { CloseButton } from './CloseButton.tsx';
 import { KEYMAP } from './keymap.ts';
 
 export interface KeyboardHelpProps {
@@ -25,6 +26,11 @@ const CAMERA_HELP: readonly { keys: string; description: string }[] = [
   { keys: 'T G', description: 'Crane up / down (vertical)' },
   { keys: ', .', description: 'Roll left / right' },
   { keys: '- =', description: 'Widen / narrow field of view' },
+];
+
+// Analysis-dock shortcuts handled within the panels (not the global keymap).
+const ANALYSIS_HELP: readonly { keys: string; description: string }[] = [
+  { keys: 'Cmd/Ctrl+Enter', description: 'Re-run the focused task card (or run the script)' },
 ];
 
 export function KeyboardHelp(props: KeyboardHelpProps): JSX.Element | null {
@@ -56,6 +62,11 @@ export function KeyboardHelp(props: KeyboardHelpProps): JSX.Element | null {
       tabIndex={-1}
       ref={ref}
     >
+      <CloseButton
+        onClose={props.onClose}
+        label="Close keyboard help"
+        className="bessel-close-button--corner"
+      />
       <h2>Keyboard shortcuts</h2>
       <dl>
         {KEYMAP.map((b) => (
@@ -78,9 +89,17 @@ export function KeyboardHelp(props: KeyboardHelpProps): JSX.Element | null {
           </div>
         ))}
       </dl>
-      <button type="button" onClick={props.onClose}>
-        Close
-      </button>
+      <h2>Analysis</h2>
+      <dl>
+        {ANALYSIS_HELP.map((b) => (
+          <div key={b.keys}>
+            <dt>
+              <kbd>{b.keys}</kbd>
+            </dt>
+            <dd>{b.description}</dd>
+          </div>
+        ))}
+      </dl>
     </div>
   );
 }

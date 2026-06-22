@@ -15,7 +15,7 @@
 import { useCallback, useState, type KeyboardEvent } from 'react';
 import { AnalysisContextBar } from './AnalysisContextBar.tsx';
 import { AnalysisLauncher, type LauncherEntry } from './AnalysisLauncher.tsx';
-import { PresetBar, type PresetEntry } from './PresetBar.tsx';
+import { PresetBar, type PresetEntry, type MissionPreset } from './PresetBar.tsx';
 import {
   AccessCommsPanel,
   ConjunctionPanel,
@@ -57,8 +57,22 @@ export function AnalyzeWorkbench(props: AnalyzeWorkbenchProps): JSX.Element {
   // The launcher writes a per-tab expand request. The token makes a repeated id re-fire;
   // we only pass the request to the panel that owns it, so other panels stay untouched.
   const [launch, setLaunch] = useState<{ tab: AnalyzeTab; req: ExpandRequest } | null>(null);
+  // The last-applied preset, so its chip alone reads pressed. Cleared on any non-preset
+  // navigation (a tab click, an arrow move, a launcher jump), since those leave the
+  // preset's pre-expanded context. Keying off the tab would light both chips on a shared
+  // tab (Comms and Observation are both access-comms).
+  const [activePreset, setActivePreset] = useState<MissionPreset | null>(null);
+  // Switch tabs through one helper so direct navigation always clears the active preset.
+  const selectTab = useCallback(
+    (tab: AnalyzeTab): void => {
+      setActivePreset(null);
+      onTab(tab);
+    },
+    [onTab],
+  );
   const onLaunch = useCallback(
     (entry: LauncherEntry): void => {
+      setActivePreset(null);
       onTab(entry.tab);
       setLaunch((prev) => ({ tab: entry.tab, req: { id: entry.id, token: (prev?.req.token ?? 0) + 1 } }));
     },
@@ -68,6 +82,7 @@ export function AnalyzeWorkbench(props: AnalyzeWorkbenchProps): JSX.Element {
   // home tab and pre-expand its primary cards (an ExpandRequest carrying the ordered ids).
   const onPreset = useCallback(
     (entry: PresetEntry): void => {
+      setActivePreset(entry.preset);
       onTab(entry.tab);
       setLaunch((prev) => ({
         tab: entry.tab,
@@ -82,10 +97,10 @@ export function AnalyzeWorkbench(props: AnalyzeWorkbenchProps): JSX.Element {
   const onKeyNav = useCallback(
     (ev: KeyboardEvent<HTMLDivElement>): void => {
       const i = TABS.findIndex((t) => t.id === activeTab);
-      if (ev.key === 'ArrowRight') onTab(TABS[(i + 1) % TABS.length]!.id);
-      else if (ev.key === 'ArrowLeft') onTab(TABS[(i - 1 + TABS.length) % TABS.length]!.id);
+      if (ev.key === 'ArrowRight') selectTab(TABS[(i + 1) % TABS.length]!.id);
+      else if (ev.key === 'ArrowLeft') selectTab(TABS[(i - 1 + TABS.length) % TABS.length]!.id);
     },
-    [activeTab, onTab],
+    [activeTab, selectTab],
   );
 
   return (
@@ -115,7 +130,7 @@ export function AnalyzeWorkbench(props: AnalyzeWorkbenchProps): JSX.Element {
             aria-controls="analyze-tabpanel"
             tabIndex={activeTab === t.id ? 0 : -1}
             data-testid={`tab-${t.id}`}
-            onClick={() => onTab(t.id)}
+            onClick={() => selectTab(t.id)}
           >
             {t.label}
           </button>
@@ -129,7 +144,7 @@ export function AnalyzeWorkbench(props: AnalyzeWorkbenchProps): JSX.Element {
         data-testid="analyze-tabpanel"
         tabIndex={0}
       >
-        <PresetBar activeTab={activeTab} onPreset={onPreset} />
+        <PresetBar activePreset={activePreset} onPreset={onPreset} />
         <AnalysisLauncher onLaunch={onLaunch} />
         <PanelSuspense>
           {activeTab === 'orbit-maneuver' && (

@@ -37,6 +37,24 @@ describe('StationRegistryControl', () => {
     expect(out).toContain('data-testid="station-active-note"');
     expect(out).toContain('data-testid="station-remove"');
   });
+
+  it('renders a per-station Edit control for the active station only when onUpdateStation is wired', () => {
+    const store = createAppStore();
+    store.setState((s) => ({
+      scenario: {
+        ...s.scenario,
+        stations: [{ id: 'dss-14', name: 'Goldstone', lonRad: -2, latRad: 0.6, altKm: 1, minElevationRad: 0.175 }],
+        activeStationId: 'dss-14',
+      },
+    }));
+    // Without the update prop the Edit affordance is absent (the parent has not wired it).
+    expect(control(store)).not.toContain('data-testid="station-edit-dss-14"');
+    // With it wired, the per-row Edit control appears keyed by the active station id.
+    const withEdit = renderToStaticMarkup(
+      createElement(StationRegistryControl, { engine: null, store, onUpdateStation: () => {} }),
+    );
+    expect(withEdit).toContain('data-testid="station-edit-dss-14"');
+  });
 });
 
 describe('AnalysisContextBar embeds the station registry', () => {

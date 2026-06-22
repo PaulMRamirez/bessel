@@ -2,7 +2,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, it, expect } from 'vitest';
 import { CompareTray } from './CompareTray.tsx';
-import { createAppStore } from '../store/index.ts';
+import { createAppStore, KEPT_SNAPSHOT_LIMIT } from '../store/index.ts';
 
 describe('CompareTray (B21)', () => {
   it('shows an empty hint with no kept snapshots', () => {
@@ -28,6 +28,50 @@ describe('CompareTray (B21)', () => {
     expect(out).toContain('data-testid="snapshot-remove-snap-1"');
     expect(out).toContain('data-testid="compare-csv"');
     expect(out).toContain('data-testid="compare-clear"');
+  });
+
+  it('keeps the chip label non-interactive and confines removal to the ✕ button', () => {
+    const store = createAppStore();
+    store.setState({
+      keptSnapshots: [
+        { id: 'snap-1', domain: 'access', label: 'access 1', metrics: { 'coverage %': '80.0' } },
+      ],
+    });
+    const out = renderToStaticMarkup(createElement(CompareTray, { engine: null, store }));
+    // The label is a plain span (the chip container is not a button), so clicking the
+    // variant name cannot destroy the snapshot.
+    expect(out).toContain('class="bessel-snapshot-chip-label"');
+    // The remove control is the dedicated ✕ button, carrying the testid and accessible name.
+    expect(out).toContain('data-testid="snapshot-remove-snap-1"');
+    expect(out).toContain('aria-label="Remove access 1 from compare"');
+  });
+
+  it('shows a kept-count badge without a full note below the limit', () => {
+    const store = createAppStore();
+    store.setState({
+      keptSnapshots: [
+        { id: 'snap-1', domain: 'access', label: 'access 1', metrics: { 'coverage %': '80.0' } },
+      ],
+    });
+    const out = renderToStaticMarkup(createElement(CompareTray, { engine: null, store }));
+    expect(out).toContain('data-testid="compare-kept-count"');
+    expect(out).toContain(`Kept 1 / ${KEPT_SNAPSHOT_LIMIT}`);
+    expect(out).not.toContain('data-testid="compare-tray-full"');
+  });
+
+  it('shows the "Tray full" note when kept snapshots reach the limit', () => {
+    const store = createAppStore();
+    store.setState({
+      keptSnapshots: Array.from({ length: KEPT_SNAPSHOT_LIMIT }, (_, i) => ({
+        id: `snap-${i}`,
+        domain: 'access' as const,
+        label: `access ${i}`,
+        metrics: { 'coverage %': '80.0' },
+      })),
+    });
+    const out = renderToStaticMarkup(createElement(CompareTray, { engine: null, store }));
+    expect(out).toContain(`Kept ${KEPT_SNAPSHOT_LIMIT} / ${KEPT_SNAPSHOT_LIMIT}`);
+    expect(out).toContain('data-testid="compare-tray-full"');
   });
 
   it('renders one grouped table per domain when snapshots span domains', () => {

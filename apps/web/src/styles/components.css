@@ -220,6 +220,22 @@
   font-feature-settings: var(--feat-mono);
 }
 
+/* The residual readout doubles as the entry point to the telemetry overlay: a bare
+   button that reads as text but is keyboard and pointer operable. */
+.bessel-hud-residual-link {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+
+.bessel-hud-residual-link:hover,
+.bessel-hud-residual-link:focus-visible {
+  text-decoration: underline;
+}
+
 .bessel-hud-track {
   color: var(--text-1);
   font-family: var(--font-mono);
@@ -750,6 +766,27 @@ button[aria-pressed='true'] {
   z-index: 30;
 }
 
+/* The pin toggle on a pinnable popover (the Script console): a pinned panel does
+   not auto-dismiss on an outside click. Parked in the top-right of the panel. */
+.bessel-popover-pin {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  line-height: 1;
+  padding: var(--space-1);
+  opacity: 0.7;
+}
+
+.bessel-popover-pin[aria-pressed='true'],
+.bessel-popover-pin:hover,
+.bessel-popover-pin:focus-visible {
+  opacity: 1;
+}
+
 .bessel-popover-left {
   left: 0;
 }
@@ -967,6 +1004,32 @@ button[aria-pressed='true'] {
 
 .bessel-workbench-close:hover {
   color: var(--text-0);
+}
+
+/* The shared close glyph (CloseButton): one dismiss affordance for every surface,
+   so a header X always means CLOSE. A bare, low-emphasis target that brightens on
+   hover/focus; placement (inline vs absolute corner) is left to the host context. */
+.bessel-close-button {
+  background: transparent;
+  border: none;
+  color: var(--text-2);
+  cursor: pointer;
+  font-size: 0.85rem;
+  line-height: 1;
+  padding: var(--space-1);
+  border-radius: var(--radius-sm, 4px);
+}
+
+.bessel-close-button:hover,
+.bessel-close-button:focus-visible {
+  color: var(--text-0);
+}
+
+/* Corner variant: pin the close to the top-right of a positioned container. */
+.bessel-close-button--corner {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
 }
 
 .bessel-tabs {
@@ -1235,16 +1298,64 @@ button[aria-pressed='true'] {
   margin-bottom: var(--space-1);
 }
 
-.bessel-snapshot-remove {
-  margin-left: var(--space-1);
+/* A binding chip: the currently bound pass / pass-pair shown as a clearable token, so
+   what a worksheet or slew check is bound to is visible and dismissable inline. */
+.bessel-binding-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-1);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 4px);
+  font-size: 0.7rem;
+  color: var(--text-1);
+}
+
+.bessel-binding-chip-clear {
   background: transparent;
   border: none;
   color: var(--text-2);
   cursor: pointer;
   font-size: 0.7rem;
+  line-height: 1;
+  padding: 0;
 }
 
-.bessel-snapshot-remove:hover {
+.bessel-binding-chip-clear:hover,
+.bessel-binding-chip-clear:focus-visible {
+  color: var(--text-0);
+}
+
+/* A kept-snapshot chip: a non-interactive label plus a dedicated remove control, so
+   clicking the variant name no longer destroys the snapshot (only the ✕ removes). */
+.bessel-snapshot-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-1);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 4px);
+  font-size: 0.7rem;
+}
+
+.bessel-snapshot-chip-label {
+  color: var(--text-1);
+}
+
+.bessel-snapshot-remove {
+  background: transparent;
+  border: none;
+  color: var(--text-2);
+  cursor: pointer;
+  font-size: 0.7rem;
+  line-height: 1;
+  padding: 0;
+}
+
+.bessel-snapshot-remove:hover,
+.bessel-snapshot-remove:focus-visible {
   color: var(--text-0);
 }
 
@@ -1946,6 +2057,84 @@ button[aria-pressed='true'] {
   color: var(--text-1);
 }
 
+/* Saved scripts as a per-row list (Load + per-row remove), consistent with saved
+   views (BookmarksPanel), replacing the former select + gated Delete two-step. */
+.bessel-script-saved-list {
+  list-style: none;
+  margin: var(--space-1) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.bessel-script-saved-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.bessel-script-saved-load {
+  flex: 1;
+  text-align: left;
+  background: transparent;
+  border-color: transparent;
+}
+
+.bessel-script-saved-delete {
+  padding: 0 0.4rem;
+  line-height: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+.bessel-script-saved-delete:hover,
+.bessel-script-saved-delete:focus-visible {
+  color: var(--text-0);
+}
+
+.bessel-script-saved-empty {
+  color: var(--text-1);
+  margin: var(--space-1) 0 0;
+  font-size: 0.78rem;
+}
+
+/* Accordion-level expand/collapse-all control, shown only when the card count
+   exceeds the at-most-two-expanded cap (the discoverable escape hatch). */
+.bessel-taskcard-accordion-controls {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--space-1);
+}
+
+/* Ground-track map: enlarge toggle row and the on-map legend swatches. */
+.bessel-groundtrack-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.bessel-groundtrack-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.bessel-groundtrack-legend-line {
+  stroke: var(--data-accent);
+}
+
+.bessel-groundtrack-legend-station {
+  fill: var(--accent);
+}
+
+.bessel-groundtrack-station-label {
+  fill: var(--text-1);
+  font-size: 0.62rem;
+}
+
 .bessel-script-verbs {
   list-style: none;
   margin: var(--space-1) 0 0;
@@ -1960,7 +2149,9 @@ button[aria-pressed='true'] {
 }
 
 .bessel-script-arity {
-  color: var(--text-2);
+  /* text-1, not text-2: the verb reference is now open by default, so this arity
+     hint is always scanned and must clear AA contrast (text-2 sat at 4.36:1). */
+  color: var(--text-1);
 }
 
 /* Utilities -------------------------------------------------------------- */

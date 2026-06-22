@@ -142,6 +142,45 @@ describe('GroundTrackMap', () => {
     );
     expect((out.match(/groundtrack-station-overlay/g) ?? []).length).toBe(2);
   });
+
+  it('renders an enlarge toggle and a legend key (F28/F29)', () => {
+    const out = html(createElement(GroundTrackMap, { lon: [0, 0.1], lat: [0, 0.1] }));
+    expect(out).toContain('data-testid="groundtrack-enlarge"');
+    expect(out).toContain('Enlarge');
+    expect(out).toContain('data-testid="groundtrack-legend"');
+    expect(out).toContain('Station');
+  });
+
+  it('omits on-map station labels at thumbnail size but renders them when forced (F28)', () => {
+    const stations = [{ id: 's1', name: 'Madrid', lonRad: -0.06, latRad: 0.7 }];
+    const thumb = html(createElement(GroundTrackMap, { lon: [0], lat: [0], stations }));
+    // The <title> fallback survives; the on-map text label is gated off at thumbnail size.
+    expect(thumb).toContain('<title>Madrid</title>');
+    expect(thumb).not.toContain('data-testid="groundtrack-station-label"');
+
+    const labelled = html(
+      createElement(GroundTrackMap, { lon: [0], lat: [0], stations, showLabels: true }),
+    );
+    expect(labelled).toContain('data-testid="groundtrack-station-label"');
+    expect(labelled).toContain('>Madrid</text>');
+  });
+
+  it('clamps a station label inside the map box (F28)', () => {
+    // A station hard against the eastern edge must keep its label x within [0, width].
+    const width = 280;
+    const out = html(
+      createElement(GroundTrackMap, {
+        lon: [0],
+        lat: [0],
+        showLabels: true,
+        width,
+        stations: [{ id: 'e', name: 'Edge', lonRad: Math.PI - 0.001, latRad: 0 }],
+      }),
+    );
+    const x = Number(out.match(/groundtrack-station-label"[^>]*\bx="([\d.]+)"/)?.[1] ?? '-1');
+    expect(x).toBeGreaterThanOrEqual(0);
+    expect(x).toBeLessThanOrEqual(width);
+  });
 });
 
 describe('ReportTable', () => {

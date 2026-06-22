@@ -75,8 +75,7 @@ export function PorkchopPlot(props: PorkchopPlotProps): JSX.Element {
           strokeWidth={2}
         >
           <title>
-            min delta-v {best.deltaVKmS.toFixed(4)} km/s at +{departureDays(best.departureEt).toFixed(1)} d
-            departure, TOF {(best.tofSec / 86400).toFixed(1)} d
+            {`min delta-v ${best.deltaVKmS.toFixed(4)} km/s at +${departureDays(best.departureEt).toFixed(1)} d departure, TOF ${(best.tofSec / 86400).toFixed(1)} d`}
           </title>
         </circle>
       ) : null}

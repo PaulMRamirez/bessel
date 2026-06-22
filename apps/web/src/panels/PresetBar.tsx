@@ -36,15 +36,17 @@ export const PRESET_REGISTRY: readonly PresetEntry[] = [
 ];
 
 export interface PresetBarProps {
-  /** The currently active tab, used to mark the matching preset chip as pressed. */
-  readonly activeTab: AnalyzeTab;
+  /** The last-applied preset, or null after any non-preset navigation. Marks exactly
+   *  that chip pressed (keying off the tab would light BOTH chips that share a tab,
+   *  e.g. Comms and Observation both live on access-comms). */
+  readonly activePreset: MissionPreset | null;
   /** Apply a preset: switch to its tab and pre-expand its primary cards. */
   readonly onPreset: (entry: PresetEntry) => void;
 }
 
 /** A row of mission-profile chips (real buttons, keyboard and screen-reader operable).
- *  The chip whose tab is active reads aria-pressed; presets are an accelerator only, so
- *  the pressed state is a hint, not an exclusive mode. */
+ *  The last-applied chip reads aria-pressed; presets are an accelerator only, so the
+ *  pressed state is a hint, not an exclusive mode, and clears on other navigation. */
 export function PresetBar(props: PresetBarProps): JSX.Element {
   return (
     <div
@@ -58,7 +60,7 @@ export function PresetBar(props: PresetBarProps): JSX.Element {
           key={entry.preset}
           type="button"
           className="bessel-mission-preset"
-          aria-pressed={props.activeTab === entry.tab}
+          aria-pressed={props.activePreset === entry.preset}
           data-testid={`mission-preset-${entry.preset}`}
           title={`Open the ${entry.preset} workflow and expand its primary tasks`}
           onClick={() => props.onPreset(entry)}

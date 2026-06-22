@@ -13,6 +13,12 @@ import { DEG2RAD, RAD2DEG } from '../angles.ts';
 export interface StationRegistryControlProps {
   readonly engine: BesselEngine | null;
   readonly store: AppStore;
+  /**
+   * [ux-f30] Overwrite an existing station by id (the Edit-into-draft update flow). The parent
+   * wires this to engine.updateStation(station), which dispatches the reducer's update action
+   * (replace-by-id). Optional: when absent the per-row Edit controls are not rendered.
+   */
+  readonly onUpdateStation?: (station: GroundStation) => void;
 }
 
 /** The new-station draft the add form edits, in UI units (degrees). */
@@ -32,14 +38,30 @@ function stationId(name: string, count: number): string {
   return `${slug || 'station'}-${count + 1}`;
 }
 
-export function StationRegistryControl({ engine, store }: StationRegistryControlProps): JSX.Element {
+export function StationRegistryControl({ engine, store, onUpdateStation }: StationRegistryControlProps): JSX.Element {
   const stations = useStore(store, (s) => s.scenario.stations);
   const activeStationId = useStore(store, (s) => s.scenario.activeStationId);
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState<StationDraft>(EMPTY_DRAFT);
   const [error, setError] = useState<string | null>(null);
+  // [ux-f30] The id being edited; non-null switches the draft form into update mode (overwrite by id).
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const set = (patch: Partial<StationDraft>): void => setDraft((d) => ({ ...d, ...patch }));
+
+  /** [ux-f30] Load a station's current values back into the draft form and switch to update mode. */
+  const editStation = (s: GroundStation): void => {
+    setDraft({
+      name: s.name,
+      lonDeg: String(s.lonRad * RAD2DEG),
+      latDeg: String(s.latRad * RAD2DEG),
+      altKm: String(s.altKm),
+      minElevationDeg: String((s.minElevationRad ?? 0) * RAD2DEG),
+    });
+    setEditingId(s.id);
+    setAdding(true);
+    setError(null);
+  };
 
   const submit = (): void => {
     const lon = Number(draft.lonDeg);
@@ -55,7 +77,8 @@ export function StationRegistryControl({ engine, store }: StationRegistryControl
       return;
     }
     const station: GroundStation = {
-      id: stationId(draft.name, stations.length),
+      // In update mode keep the existing id (overwrite by id); in add mode mint a fresh one.
+      id: editingId ?? stationId(draft.name, stations.length),
       name: draft.name.trim(),
       lonRad: lon * DEG2RAD,
       latRad: lat * DEG2RAD,
@@ -63,9 +86,14 @@ export function StationRegistryControl({ engine, store }: StationRegistryControl
       minElevationRad: minEl * DEG2RAD,
     };
     try {
-      engine?.addStation(station);
+      if (editingId) {
+        onUpdateStation?.(station);
+      } else {
+        engine?.addStation(station);
+      }
       setDraft(EMPTY_DRAFT);
       setAdding(false);
+      setEditingId(null);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -89,6 +117,19 @@ export function StationRegistryControl({ engine, store }: StationRegistryControl
           ))}
         </select>
       </label>
+      {activeStationId && onUpdateStation ? (
+        <button
+          type="button"
+          data-testid={`station-edit-${activeStationId}`}
+          aria-label="Edit the active station"
+          onClick={() => {
+            const s = stations.find((st) => st.id === activeStationId);
+            if (s) editStation(s);
+          }}
+        >
+          Edit
+        </button>
+      ) : null}
       {activeStationId ? (
         <button
           type="button"
@@ -105,6 +146,8 @@ export function StationRegistryControl({ engine, store }: StationRegistryControl
         data-testid="station-add-toggle"
         onClick={() => {
           setAdding((v) => !v);
+          setDraft(EMPTY_DRAFT);
+          setEditingId(null);
           setError(null);
         }}
       >
@@ -161,9 +204,15 @@ export function StationRegistryControl({ engine, store }: StationRegistryControl
               onChange={(ev) => set({ minElevationDeg: ev.target.value })}
             />
           </label>
-          <button type="button" data-testid="station-save" onClick={submit}>
-            Save station
-          </button>
+          {editingId ? (
+            <button type="button" data-testid="station-update" onClick={submit}>
+              Update station
+            </button>
+          ) : (
+            <button type="button" data-testid="station-save" onClick={submit}>
+              Save station
+            </button>
+          )}
           {error ? (
             <p className="bessel-loader-hint" role="alert" data-testid="station-error">
               {error}

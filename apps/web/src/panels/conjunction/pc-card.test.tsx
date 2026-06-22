@@ -44,6 +44,26 @@ describe('PcCard carrier + keep affordances (Wave 2B)', () => {
     expect(out).toContain('data-testid="keep-conjunction-event"');
   });
 
+  it('offers a Copy affordance for the Pc readouts on a selected event', () => {
+    const store = createAppStore();
+    seededEvent(store);
+    const out = render(store);
+    expect(out).toContain('data-testid="pc-copy"');
+    expect(out).toContain('aria-label="Copy collision probability"');
+  });
+
+  it('renders the Export CDM action as a secondary (not ghost) button', () => {
+    const store = createAppStore();
+    seededEvent(store);
+    const out = render(store);
+    // The secondary variant paints a neutral surface (--bg-2); ghost is transparent.
+    const exportIdx = out.indexOf('data-testid="export-cdm"');
+    expect(exportIdx).toBeGreaterThan(-1);
+    const tagStart = out.lastIndexOf('<button', exportIdx);
+    const tagEnd = out.indexOf('>', exportIdx);
+    expect(out.slice(tagStart, tagEnd)).toContain('var(--bg-2)');
+  });
+
   it('shows neither carrier nor keep until an event is selected', () => {
     const store = createAppStore();
     store.setState({

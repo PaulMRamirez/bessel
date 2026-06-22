@@ -7,7 +7,9 @@
 // owns the geometry + the greedy scheduler. Presentational + the engine compute call.
 
 import { createElement } from 'react';
-import { IntervalTimeline } from '@bessel/ui';
+import { IntervalTimeline, downloadBlob } from '@bessel/ui';
+import { Button } from '@bessel/selene-design';
+import { tableToCsv } from '@bessel/interop';
 import type { BesselEngine } from '../engine/index.ts';
 import {
   useStore,
@@ -35,6 +37,55 @@ interface ObservationScheduleCardProps {
 
 /** Format an ET seconds value into a compact relative-minutes label for the schedule rows. */
 const minsFrom = (et: number, t0: number): string => `${((et - t0) / 60).toFixed(1)} min`;
+
+/**
+ * Serialize a built schedule to CSV: one row per scheduled slot (window start/stop as ET seconds
+ * and as minutes from the span start, plus the slew from the previous slot), then one row per
+ * unscheduled target with its located reason. Self-contained leaf, mirrors the sibling exports
+ * (link worksheet, coverage FOM) that use tableToCsv + downloadBlob.
+ */
+export function scheduleToCsv(schedule: ObservationScheduleResult): string {
+  const t0 = schedule.span[0];
+  const rows: (readonly (string | number)[])[] = schedule.slots.map((s) => [
+    'scheduled',
+    s.targetName,
+    s.start,
+    s.stop,
+    Number(((s.start - t0) / 60).toFixed(3)),
+    Number(((s.stop - t0) / 60).toFixed(3)),
+    s.slewFromPrevDeg,
+    s.slewFromPrevSec,
+    '',
+  ]);
+  for (const u of schedule.unscheduled) {
+    rows.push(['unscheduled', u.targetName, '', '', '', '', '', '', u.reason]);
+  }
+  return tableToCsv(
+    [
+      'status',
+      'target',
+      'start_et_s',
+      'stop_et_s',
+      'start_min',
+      'stop_min',
+      'slew_deg',
+      'slew_s',
+      'reason',
+    ],
+    rows,
+  );
+}
+
+/**
+ * Drop a single target name from the raw target-list text, preserving the order of the remaining
+ * targets. Re-serializes through the parsed, de-duplicated list so the per-row remove control and
+ * the text input stay in sync (the input is the single source of truth for the target set).
+ */
+export function removeTargetFromText(raw: string, name: string): string {
+  return parseTargetList(raw)
+    .filter((t) => t !== name)
+    .join(', ');
+}
 
 function ObservationScheduleBody(props: ObservationScheduleCardProps): JSX.Element {
   const { engine, store } = props;
@@ -102,7 +153,21 @@ function ObservationScheduleBody(props: ObservationScheduleCardProps): JSX.Eleme
       >
         Build schedule
       </Action>
-      {schedule ? <ScheduleView schedule={schedule} /> : (
+      <Button
+        variant="ghost"
+        full
+        testId="observation-clear-targets"
+        disabled={targets.length === 0}
+        onClick={() => props.setTargetText('')}
+      >
+        Clear targets
+      </Button>
+      {schedule ? (
+        <ScheduleView
+          schedule={schedule}
+          onRemoveTarget={(name) => props.setTargetText(removeTargetFromText(props.targetText, name))}
+        />
+      ) : (
         <p className="bessel-loader-hint">
           An ordered, non-overlapping observation timeline across the targets, plus any conflicts.
         </p>
@@ -112,10 +177,16 @@ function ObservationScheduleBody(props: ObservationScheduleCardProps): JSX.Eleme
   );
 }
 
-function ScheduleView(props: { schedule: ObservationScheduleResult }): JSX.Element {
-  const { schedule } = props;
+function ScheduleView(props: {
+  schedule: ObservationScheduleResult;
+  /** Drop a target from the input list (the input is the source of truth for the target set). */
+  onRemoveTarget: (name: string) => void;
+}): JSX.Element {
+  const { schedule, onRemoveTarget } = props;
   const t0 = schedule.span[0];
   const intervals = schedule.slots.map((s) => [s.start, s.stop] as [number, number]);
+  const exportCsv = (): void =>
+    downloadBlob(new Blob([scheduleToCsv(schedule)], { type: 'text/csv' }), 'observation-schedule.csv');
   return (
     <div data-testid="multi-target-schedule">
       <div className="bessel-panel-title">{schedule.label}</div>
@@ -134,6 +205,16 @@ function ScheduleView(props: { schedule: ObservationScheduleResult }): JSX.Eleme
             <li key={`${s.targetName}-${i}`} data-testid={`schedule-slot-${i}`}>
               {s.targetName}: {minsFrom(s.start, t0)} to {minsFrom(s.stop, t0)}, slew{' '}
               {fmt(s.slewFromPrevDeg, 1)} deg in {fmt(s.slewFromPrevSec, 1)} s
+              <Button
+                variant="ghost"
+                iconOnly
+                testId={`schedule-slot-remove-${s.targetName}`}
+                ariaLabel={`Remove ${s.targetName}`}
+                title={`Remove ${s.targetName}`}
+                onClick={() => onRemoveTarget(s.targetName)}
+              >
+                &times;
+              </Button>
             </li>
           ))}
         </ol>
@@ -142,9 +223,22 @@ function ScheduleView(props: { schedule: ObservationScheduleResult }): JSX.Eleme
         {schedule.unscheduled.map((u) => (
           <li key={u.targetName} data-testid={`schedule-unscheduled-${u.targetName}`}>
             {u.targetName}: {u.reason}
+            <Button
+              variant="ghost"
+              iconOnly
+              testId={`schedule-unscheduled-remove-${u.targetName}`}
+              ariaLabel={`Remove ${u.targetName}`}
+              title={`Remove ${u.targetName}`}
+              onClick={() => onRemoveTarget(u.targetName)}
+            >
+              &times;
+            </Button>
           </li>
         ))}
       </ul>
+      <Button variant="secondary" className="bessel-csv-button" testId="observation-export-csv" onClick={exportCsv}>
+        Export schedule CSV
+      </Button>
     </div>
   );
 }

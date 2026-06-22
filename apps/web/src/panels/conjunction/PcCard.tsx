@@ -8,7 +8,7 @@ import { useMemo, useState } from 'react';
 import { Button } from '@bessel/selene-design';
 import type { ConjunctionEvent } from '@bessel/conjunction';
 import type { BesselEngine } from '../../engine/index.ts';
-import { useStore, type AppStore } from '../../store/index.ts';
+import { useStore, type AppStore, type ConjunctionEventResult } from '../../store/index.ts';
 import { Keep, fmt, useTrayFull } from '../analysis-shared.tsx';
 import { BPlaneView } from './BPlaneView.tsx';
 import { CovarianceInputForm } from './CovarianceInputForm.tsx';
@@ -22,6 +22,16 @@ function pcClass(pc: number | null): string {
   if (pc >= 1e-4) return 'bessel-pc-high';
   if (pc >= 1e-6) return 'bessel-pc-medium';
   return 'bessel-pc-low';
+}
+
+/** A copyable plain-text rendering of the Pc readouts, mirroring the displayed values/labels. */
+function pcToText(result: ConjunctionEventResult): string {
+  const full = result.pcFull === null ? 'n/a (no covariance in this catalog)' : result.pcFull.toExponential(3);
+  return [
+    `${result.primaryId} vs ${result.secondaryId}: miss ${fmt(result.missKm, 3)} km, rel speed ${fmt(result.relSpeedKmS, 3)} km/s, combined radius ${fmt(result.radiusKm * 1000, 1)} m.`,
+    `Full-covariance Pc: ${full}`,
+    `Max Pc (Alfano bound): ${result.pcMax.toExponential(3)}`,
+  ].join('\n');
 }
 
 /** Sort the events by the selected key (descending Pc / ascending miss / ascending TCA), pure. */
@@ -144,6 +154,14 @@ export function PcCard(props: { readonly engine: BesselEngine | null; readonly s
           <p className="bessel-analysis-stat" data-testid="pc-max">
             Max Pc (Alfano bound): {eventResult.pcMax.toExponential(3)}
           </p>
+          <Button
+            variant="ghost"
+            testId="pc-copy"
+            ariaLabel="Copy collision probability"
+            onClick={() => void navigator.clipboard?.writeText(pcToText(eventResult))}
+          >
+            Copy
+          </Button>
           <BPlaneView event={eventResult} />
 
           {/* Explicit covariance input: shown when the selected pair carried no covariance (OEM/TLE),
@@ -158,7 +176,7 @@ export function PcCard(props: { readonly engine: BesselEngine | null; readonly s
           )}
 
           {/* Export the selected event as a CCSDS-CDM-style record through the unified export path. */}
-          <Button variant="ghost" testId="export-cdm" onClick={() => void engine?.exportEventCdm()}>
+          <Button variant="secondary" testId="export-cdm" onClick={() => void engine?.exportEventCdm()}>
             Export CDM
           </Button>
 

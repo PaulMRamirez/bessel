@@ -67,6 +67,14 @@ test('lighting analysis computes and renders eclipse intervals', async ({ page }
   expect(clip).toContain('et (s)');
   expect(clip).toMatch(/\d/);
   await page.getByTestId('range-result-precision').selectOption('3');
+
+  // Cmd/Ctrl+Enter inside a task card re-runs its primary action. Focusing the run
+  // button and pressing the chord proves the handler fires: a modifier+Enter does NOT
+  // natively activate a button, so only the card's re-run handler can trigger it here.
+  await expandCard(page, 'beta');
+  await page.getByTestId('compute-beta').focus();
+  await page.keyboard.press('ControlOrMeta+Enter');
+  await expect(page.getByTestId('beta-chart')).toBeVisible({ timeout: 20_000 });
 });
 
 test('access analysis assembles the constraint stack, link budget, and station worksheet', async ({ page }) => {

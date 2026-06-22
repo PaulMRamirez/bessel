@@ -30,6 +30,13 @@ test('the scripting console runs a cosmoscripting program against the viewer', a
   const output = await page.getByTestId('script-output').textContent();
   expect(output).toContain('gotoObject Earth');
   expect(output).toContain('setTimeRate 3600');
+
+  // Pinning the console keeps it open across a canvas click (it no longer
+  // auto-dismisses), so the working surface survives interacting with the scene.
+  await page.getByTestId('script-menu-pin').click();
+  await expect(page.getByTestId('script-menu-pin')).toHaveAttribute('aria-pressed', 'true');
+  await page.getByTestId('viewport').click({ position: { x: 5, y: 5 } });
+  await expect(input).toBeVisible();
 });
 
 test('the scripting console saves, reloads, and runs a named script with Cmd+Enter', async ({
@@ -48,8 +55,8 @@ test('the scripting console saves, reloads, and runs a named script with Cmd+Ent
   await page.getByTestId('script-save').click();
   await input.fill('pause');
 
-  // Reloading the saved script from the menu restores its source.
-  await page.getByTestId('script-load').selectOption('mars-run');
+  // Reloading the saved script from the per-row list restores its source.
+  await page.getByTestId('script-load-mars-run').click();
   await expect(input).toHaveValue('gotoObject Mars\nsetTimeRate 60');
 
   // Cmd/Ctrl+Enter in the editor runs without clicking the button.

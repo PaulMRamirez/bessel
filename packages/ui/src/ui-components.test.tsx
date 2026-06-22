@@ -82,6 +82,8 @@ describe('@bessel/ui ReadoutPanel', () => {
     expect(out).toContain('42.3 deg');
     expect(out).toContain('n/a');
     expect(out).toContain('aria-label="Geometry readouts for Saturn"');
+    expect(out).toContain('data-testid="readout-copy"');
+    expect(out).toContain('aria-label="Copy readouts"');
   });
 });
 
@@ -191,6 +193,26 @@ describe('@bessel/ui SettingsPanel', () => {
     expect(out).toContain('data-testid="setting-shadows"');
     expect(out).toContain('data-testid="setting-realImagery"');
     expect(out).toContain('Visualization');
+    // No reset affordance unless the parent opts in.
+    expect(out).not.toContain('data-testid="settings-reset"');
+  });
+
+  it('renders a reset button only when onReset is provided', () => {
+    const settings = {
+      trajectory: true,
+      orbits: true,
+      labels: true,
+      fov: false,
+      footprint: true,
+      axes: false,
+      stars: true,
+      atmosphere: false,
+      shadows: false,
+      realImagery: false,
+    };
+    const out = html(createElement(SettingsPanel, { settings, onChange: () => {}, onReset: () => {} }));
+    expect(out).toContain('data-testid="settings-reset"');
+    expect(out).toContain('Reset to defaults');
   });
 });
 

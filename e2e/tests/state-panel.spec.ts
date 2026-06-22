@@ -43,3 +43,19 @@ test('the State panel shows r/v and osculating elements and switches frame', asy
     JSON.stringify(light.violations.map((v) => ({ id: v.id, impact: v.impact })), null, 2),
   ).toEqual([]);
 });
+
+// The inspector card is dismissable: a single header close clears the selection and
+// leaves Measure mode, so the user can declutter the canvas without hunting for a
+// gated "Clear selection" inside the Measure section.
+test('the inspector card has a header close that dismisses it', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
+  await loadCassiniSample(page);
+
+  await expect(page.getByTestId('inspector-card')).toBeVisible({ timeout: 10_000 });
+  const close = page.getByTestId('inspector-close');
+  await expect(close).toHaveAttribute('aria-label', 'Close selection details');
+
+  await close.click();
+  await expect(page.getByTestId('inspector-card')).toHaveCount(0);
+});

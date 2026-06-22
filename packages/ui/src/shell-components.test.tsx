@@ -197,9 +197,9 @@ describe('@bessel/ui ScriptConsole', () => {
     expect(out).toContain('data-testid="script-run"');
     expect(out).toContain('data-testid="script-clear-log"');
     expect(out).toContain('data-testid="script-save"');
-    expect(out).toContain('data-testid="script-load"');
+    expect(out).toContain('data-testid="script-saved-list"');
     expect(out).toContain('data-testid="script-verbs"');
-    // The saved names appear as load options and the verbs in the reference list.
+    // The saved names appear as per-row Load buttons and the verbs in the reference list.
     expect(out).toContain('flyby');
     expect(out).toContain('survey');
     expect(out).toContain('gotoObject');

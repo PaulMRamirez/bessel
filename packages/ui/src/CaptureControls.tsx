@@ -1,5 +1,9 @@
 // Capture controls: a still-image button and a record/stop toggle. Presentational;
-// the viewer supplies the canvas and capture handlers.
+// the viewer supplies the canvas and capture handlers. Both controls are
+// iconified: glyph footprints with accessible names via ariaLabel and Tooltip.
+
+import { Button } from '@bessel/selene-design';
+import { Tooltip } from './Tooltip';
 
 export interface CaptureControlsProps {
   readonly recording: boolean;
@@ -8,19 +12,33 @@ export interface CaptureControlsProps {
 }
 
 export function CaptureControls(props: CaptureControlsProps): JSX.Element {
+  const recordLabel = props.recording ? 'Stop recording' : 'Record video';
   return (
     <div className="bessel-capture" role="group" aria-label="Capture">
-      <button type="button" onClick={props.onCaptureStill} data-testid="capture-still">
-        Capture image
-      </button>
-      <button
-        type="button"
-        onClick={props.onToggleRecording}
-        aria-pressed={props.recording}
-        data-testid="capture-record"
-      >
-        {props.recording ? 'Stop recording' : 'Record video'}
-      </button>
+      <Tooltip label="Capture image">
+        <Button
+          iconOnly
+          ariaLabel="Capture image"
+          onClick={props.onCaptureStill}
+          testId="capture-still"
+        >
+          ◉
+        </Button>
+      </Tooltip>
+      <Tooltip label={recordLabel}>
+        <Button
+          iconOnly
+          variant={props.recording ? 'critical' : 'secondary'}
+          ariaLabel={recordLabel}
+          pressed={props.recording}
+          onClick={props.onToggleRecording}
+          testId="capture-record"
+        >
+          <span style={{ color: props.recording ? undefined : 'var(--red-hot)' }}>
+            {props.recording ? '■' : '●'}
+          </span>
+        </Button>
+      </Tooltip>
     </div>
   );
 }
