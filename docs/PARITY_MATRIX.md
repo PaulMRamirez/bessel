@@ -664,8 +664,8 @@ gap, with the warning path as evidence.
 Rendering and worker integration of the above:
 - The coverage-grid result renders as a camera-relative contour overlay on the
   focus body (Section 5 row "Coverage-grid contour overlay").
-- All-vs-all conjunction screening runs off the main thread in a worker pool with
-  progress and cancel: `apps/web/src/screening.worker.ts`,
+- All-vs-all conjunction screening runs off the main thread in a dedicated (single)
+  Web Worker with progress and cancel: `apps/web/src/screening.worker.ts`,
   `apps/web/src/screening-client.ts`.
 - The analysis workbench tools are parameterized with input forms and per-result
   CSV export: `apps/web/src/panels/AnalysisPanel.tsx`,

@@ -157,7 +157,7 @@ function CatalogScreen(props: {
           {screening.events.map((ev) => (
             <li key={`${ev.primaryId}-${ev.secondaryId}`} data-testid="screen-event">
               {ev.primaryId} vs {ev.secondaryId}: miss {fmt(ev.missKm, 3)} km at TCA{' '}
-              {fmt(ev.tca / 60, 1)} min
+              {fmt((ev.tca - screening.epoch) / 60, 1)} min
             </li>
           ))}
         </ul>

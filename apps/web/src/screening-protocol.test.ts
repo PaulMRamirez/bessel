@@ -49,29 +49,33 @@ describe('validateScreeningRequest', () => {
 });
 
 describe('reduceScreening', () => {
-  it('start resets to running with a zeroed bar and clears prior events', () => {
-    const prior = { status: 'done' as const, done: 4, total: 4, events: [event] };
-    expect(reduceScreening(prior, { kind: 'start', total: 4 })).toEqual({
+  it('start resets to running with a zeroed bar, records the epoch, and clears prior events', () => {
+    const prior = { status: 'done' as const, done: 4, total: 4, epoch: 0, events: [event] };
+    expect(reduceScreening(prior, { kind: 'start', total: 4, epoch: 1000 })).toEqual({
       status: 'running',
       done: 0,
       total: 4,
+      epoch: 1000,
       events: null,
     });
   });
 
-  it('progress advances done/total while running', () => {
-    const next = reduceScreening(INITIAL_SCREENING, { kind: 'progress', done: 2, total: 4 });
+  it('progress advances done/total while running and preserves the epoch', () => {
+    const running = { status: 'running' as const, done: 0, total: 4, epoch: 1000, events: null };
+    const next = reduceScreening(running, { kind: 'progress', done: 2, total: 4 });
     expect(next.status).toBe('running');
     expect(next.done).toBe(2);
     expect(next.total).toBe(4);
+    expect(next.epoch).toBe(1000);
   });
 
-  it('result lands the events, marks done, and fills the bar', () => {
-    const running = { status: 'running' as const, done: 1, total: 4, events: null };
+  it('result lands the events, marks done, fills the bar, and keeps the epoch', () => {
+    const running = { status: 'running' as const, done: 1, total: 4, epoch: 1000, events: null };
     const next = reduceScreening(running, { kind: 'result', events: [event] });
     expect(next.status).toBe('done');
     expect(next.events).toEqual([event]);
     expect(next.done).toBe(4);
+    expect(next.epoch).toBe(1000);
   });
 
   it('error carries the located message', () => {
@@ -80,7 +84,7 @@ describe('reduceScreening', () => {
   });
 
   it('cancel returns to the idle slice', () => {
-    const running = { status: 'running' as const, done: 2, total: 4, events: null };
+    const running = { status: 'running' as const, done: 2, total: 4, epoch: 1000, events: null };
     expect(reduceScreening(running, { kind: 'cancel' })).toEqual(INITIAL_SCREENING);
   });
 });

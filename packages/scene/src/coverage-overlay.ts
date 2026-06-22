@@ -22,8 +22,11 @@ export interface CoverageOverlayCell {
 export interface CoverageOverlaySpec {
   /** Body the overlay is draped on (the anchor whose position the scene tracks). */
   readonly anchorBody: string;
-  /** Surface radius (km) of the body the grid sits on. */
+  /** Equatorial surface radius (km) of the body the grid sits on. */
   readonly bodyRadiusKm: number;
+  /** Polar surface radius (km) for an oblate body; defaults to bodyRadiusKm (a sphere) when
+   *  absent, so an oblate body's pole cells sit on the (a, a, c) ellipsoid, not a sphere. */
+  readonly polarRadiusKm?: number;
   /** Number of latitude rows and longitude columns the cell centers form. */
   readonly latCount: number;
   readonly lonCount: number;
@@ -51,10 +54,22 @@ export interface OverlayBuffers {
   readonly vertexCount: number;
 }
 
-// A point on the body sphere (scene units, body-centered) from lat/lon and a radius.
-function spherePoint(latRad: number, lonRad: number, radius: number): [number, number, number] {
+// A point on the body ellipsoid (scene units, body-centered) from lat/lon: the equatorial
+// (x, z plane) is scaled by `equRadius`, the polar (y) axis by `polRadius`. With the two equal
+// this is a sphere; on an oblate body (polRadius < equRadius) the pole cells sit closer to the
+// center, so the draped overlay follows the flattening instead of detaching at the poles.
+function spherePoint(
+  latRad: number,
+  lonRad: number,
+  equRadius: number,
+  polRadius: number,
+): [number, number, number] {
   const cosLat = Math.cos(latRad);
-  return [radius * cosLat * Math.cos(lonRad), radius * Math.sin(latRad), radius * cosLat * Math.sin(lonRad)];
+  return [
+    equRadius * cosLat * Math.cos(lonRad),
+    polRadius * Math.sin(latRad),
+    equRadius * cosLat * Math.sin(lonRad),
+  ];
 }
 
 /**
@@ -77,7 +92,13 @@ export function buildCoverageOverlayBuffers(spec: CoverageOverlaySpec): OverlayB
   if (!(bodyRadiusKm > 0)) {
     throw new CoverageOverlayError(`bodyRadiusKm must be positive (got ${bodyRadiusKm})`);
   }
-  const radius = bodyRadiusKm * SCALE * (spec.liftFraction ?? 1.01);
+  const polarRadiusKm = spec.polarRadiusKm ?? bodyRadiusKm;
+  if (!(polarRadiusKm > 0)) {
+    throw new CoverageOverlayError(`polarRadiusKm must be positive (got ${polarRadiusKm})`);
+  }
+  const lift = spec.liftFraction ?? 1.01;
+  const equRadius = bodyRadiusKm * SCALE * lift;
+  const polRadius = polarRadiusKm * SCALE * lift;
 
   // Half the spacing to each neighbor, so quads centered on cell centers tile. With one
   // row/column the cell spans a small fixed patch rather than collapsing to a line.
@@ -91,11 +112,11 @@ export function buildCoverageOverlayBuffers(spec: CoverageOverlaySpec): OverlayB
     const lat1 = cell.latRad + latStep;
     const lon0 = cell.lonRad - lonStep;
     const lon1 = cell.lonRad + lonStep;
-    // Quad corners on the sphere: (lat0,lon0), (lat0,lon1), (lat1,lon1), (lat1,lon0).
-    const c00 = spherePoint(lat0, lon0, radius);
-    const c01 = spherePoint(lat0, lon1, radius);
-    const c11 = spherePoint(lat1, lon1, radius);
-    const c10 = spherePoint(lat1, lon0, radius);
+    // Quad corners on the ellipsoid: (lat0,lon0), (lat0,lon1), (lat1,lon1), (lat1,lon0).
+    const c00 = spherePoint(lat0, lon0, equRadius, polRadius);
+    const c01 = spherePoint(lat0, lon1, equRadius, polRadius);
+    const c11 = spherePoint(lat1, lon1, equRadius, polRadius);
+    const c10 = spherePoint(lat1, lon0, equRadius, polRadius);
     const rgb = viridis(cell.fom);
     // Two triangles per quad (CCW): (c00,c01,c11) and (c00,c11,c10).
     for (const corner of [c00, c01, c11, c00, c11, c10]) {

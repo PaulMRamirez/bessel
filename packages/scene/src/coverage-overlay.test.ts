@@ -64,6 +64,41 @@ describe('buildCoverageOverlayBuffers', () => {
     expect(position.count).toBeGreaterThan(0);
     expect(mesh.geometry.getAttribute('color').count).toBe(position.count);
   });
+
+  it('drapes a flattened body on the (a, a, c) ellipsoid so a pole cell sits nearer the center', () => {
+    // A single near-pole cell (high latitude). The polar axis maps to the y component (index 1),
+    // so a flattened body (polarRadiusKm < bodyRadiusKm) must pull the pole vertex toward y = 0.
+    const poleCell: CoverageOverlaySpec = {
+      anchorBody: 'Saturn',
+      bodyRadiusKm: 60268, // Saturn equatorial
+      latCount: 1,
+      lonCount: 1,
+      cells: [{ latRad: 1.5, lonRad: 0, fom: 1 }],
+    };
+    const sphere = buildCoverageOverlayBuffers(poleCell);
+    const oblate = buildCoverageOverlayBuffers({ ...poleCell, polarRadiusKm: 54364 }); // Saturn polar
+    // Maximum |y| (the polar-axis reach) over all vertices; the flattened body reaches less far.
+    const maxAbsY = (buf: Float32Array): number => {
+      let m = 0;
+      for (let i = 1; i < buf.length; i += 3) m = Math.max(m, Math.abs(buf[i]!));
+      return m;
+    };
+    expect(maxAbsY(oblate.positions)).toBeLessThan(maxAbsY(sphere.positions));
+    // The flattening ratio carries through (within the lift factor, which cancels in the ratio).
+    expect(maxAbsY(oblate.positions) / maxAbsY(sphere.positions)).toBeCloseTo(54364 / 60268, 4);
+  });
+
+  it('defaults the polar radius to the equatorial radius (a sphere) when absent', () => {
+    const spec = sampleSpec();
+    const withDefault = buildCoverageOverlayBuffers(spec);
+    const explicitEqual = buildCoverageOverlayBuffers({ ...spec, polarRadiusKm: spec.bodyRadiusKm });
+    expect(Array.from(withDefault.positions)).toEqual(Array.from(explicitEqual.positions));
+  });
+
+  it('fails loudly on a non-positive polar radius', () => {
+    const bad = { ...sampleSpec(), polarRadiusKm: 0 };
+    expect(() => buildCoverageOverlayBuffers(bad)).toThrow(CoverageOverlayError);
+  });
 });
 
 describe('viridis colormap', () => {
