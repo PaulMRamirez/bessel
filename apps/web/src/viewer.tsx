@@ -399,6 +399,36 @@ export function BesselViewer(): JSX.Element {
           onCenter={(id) => engine?.centerOn(id)}
         />
       </PanelContainer>
+      {selection.length > 0 || measureMode ? (
+        <PanelContainer title="Selection" testId="inspector-card">
+          <div className="bessel-inspector-actions">
+            <CloseButton
+              onClose={() => engine?.closeInspector()}
+              label="Close selection details"
+              testId="inspector-close"
+            />
+          </div>
+          <ObjectInspector name={focus} kind={focusEntry?.kind} fields={inspectorFields} />
+          <ReadoutPanel target={focus} readouts={readouts} />
+          <MeasurePanel
+            from={measurement?.from ?? null}
+            to={measurement?.to ?? null}
+            distanceKm={measurement?.distanceKm ?? null}
+            relativeSpeedKmS={measurement?.relativeSpeedKmS ?? null}
+            angleDeg={measurement?.angleDeg ?? null}
+            measureMode={measureMode}
+            onToggleMode={() => engine?.toggleMeasureMode()}
+            onClear={() => engine?.clearSelection()}
+            hasSelection={selection.length > 0}
+          />
+          <StateVectorPanel
+            target={focus}
+            state={bodyState}
+            frame={stateFrame}
+            onFrameChange={(f) => engine?.setStateFrame(f)}
+          />
+        </PanelContainer>
+      ) : null}
       <PanelContainer title="Camera" testId="panel-camera" defaultCollapsed>
         <ViewControls
           onViewTopDown={() => engine?.viewTopDown()}
@@ -619,39 +649,6 @@ export function BesselViewer(): JSX.Element {
           readouts={readouts}
           onDismiss={() => engine?.setShowLiveGeometry(false)}
         />
-      ) : null}
-      {selection.length > 0 || measureMode ? (
-        <aside
-          className="bessel-inspector-card"
-          aria-label="Selection details"
-          data-testid="inspector-card"
-        >
-          <CloseButton
-            onClose={() => engine?.closeInspector()}
-            label="Close selection details"
-            testId="inspector-close"
-            className="bessel-close-button--corner"
-          />
-          <ObjectInspector name={focus} kind={focusEntry?.kind} fields={inspectorFields} />
-          <ReadoutPanel target={focus} readouts={readouts} />
-          <MeasurePanel
-            from={measurement?.from ?? null}
-            to={measurement?.to ?? null}
-            distanceKm={measurement?.distanceKm ?? null}
-            relativeSpeedKmS={measurement?.relativeSpeedKmS ?? null}
-            angleDeg={measurement?.angleDeg ?? null}
-            measureMode={measureMode}
-            onToggleMode={() => engine?.toggleMeasureMode()}
-            onClear={() => engine?.clearSelection()}
-            hasSelection={selection.length > 0}
-          />
-          <StateVectorPanel
-            target={focus}
-            state={bodyState}
-            frame={stateFrame}
-            onFrameChange={(f) => engine?.setStateFrame(f)}
-          />
-        </aside>
       ) : null}
       {!loadedName && !welcomeSeen ? (
         <WelcomeCard
