@@ -68,6 +68,14 @@ export interface GroundStation {
   readonly minElevationRad?: number;
 }
 
+/** The editable spacecraft source the Orbit & Maneuver propagation tools read: a pasted
+ *  two-line element set, or a loaded scene object picked by SPICE name. Replaces the former
+ *  hardcoded bundled sample TLE (analysis-UX Phase 1). The display name mirrors into
+ *  scenario.primarySpacecraft so other tabs share the same role-primary selection. */
+export type SpacecraftSource =
+  | { readonly kind: 'tle'; readonly name: string; readonly line1: string; readonly line2: string }
+  | { readonly kind: 'object'; readonly name: string };
+
 /** The typed Scenario Object Model: role SLOTS the analysis tasks read from instead of
  *  flat per-tool single-selects (design section 5, committed fix 1). A primary
  *  spacecraft, secondary object(s), a registry of ground stations with an active one,
@@ -77,6 +85,9 @@ export interface GroundStation {
 export interface ScenarioState {
   /** The role-primary spacecraft (the focus of most tasks), or null when unset. */
   readonly primarySpacecraft: string | null;
+  /** The editable propagation source backing primarySpacecraft (a pasted TLE or a picked
+   *  scene object), or null when no source is set (the Propagate card then shows a hint). */
+  readonly spacecraftSource: SpacecraftSource | null;
   /** Secondary objects (e.g. a conjunction secondary, a comparison body). */
   readonly secondaryObjects: readonly string[];
   /** The ground-station registry the access/comms/observation tasks point at. */
@@ -432,6 +443,10 @@ export interface McsResult {
   readonly iterations: number;
   /** Per-goal residual reports from the differential corrector. */
   readonly goals: readonly McsGoalReport[];
+  /** Per-iteration corrector residual norm (the convergence trace), empty when none ran. */
+  readonly residualHistory: readonly { readonly iter: number; readonly normF: number }[];
+  /** The solved prograde delta-v magnitude (km/s) the corrector found, or null when none ran. */
+  readonly solvedDvKmS: number | null;
   readonly label: string;
 }
 
@@ -478,6 +493,7 @@ export const initialAppState: AppState = {
   analysisContext: { spanSec: 86400, stepSec: 120, target: '', observer: '', frame: 'J2000' },
   scenario: {
     primarySpacecraft: null,
+    spacecraftSource: null,
     secondaryObjects: [],
     stations: [],
     activeStationId: null,

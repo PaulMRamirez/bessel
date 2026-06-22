@@ -1,16 +1,18 @@
-// The propagation workbench: ingest a TLE, run SGP4, publish an in-memory SPK Type-13
-// about the Earth, and read the arc back through the geometry pipeline as an altitude
-// time series and a ground track. Mission-independent (it propagates Earth orbits
-// from element sets), so it is always available, not gated on a loaded spacecraft.
-// (STK_PARITY_SPEC §4.1, Phase A.)
+// The propagation workbench: ingest a user-set spacecraft source (a pasted TLE or a picked
+// scene object), run SGP4 and the numerical HPOP integrator from THAT source (no bundled
+// sample fallback), publish each arc as an in-memory SPK about the Earth, and read it back
+// through the geometry pipeline as an altitude series and a ground track. SGP4 needs a TLE
+// source; HPOP also accepts a scene-object source (its osculating state). Mission-independent.
+// (STK_PARITY_SPEC §4.1; analysis-UX Phase 1.)
 
 import { useState } from 'react';
-import { Button, Tag } from '@bessel/selene-design';
+import { Button } from '@bessel/selene-design';
 import { GroundTrackMap, IntervalTimeline, TimeSeriesChart, downloadBlob } from '@bessel/ui';
 import { intervalsToCsv } from '@bessel/interop';
 import { type BesselEngine, type HpopForceModel } from '../engine/index.ts';
 import { useStore, type AppStore } from '../store/index.ts';
 import { RunStatusNote, busyLabel } from './RunStatus.tsx';
+import { SpacecraftSourceControl } from './SpacecraftSourceControl.tsx';
 
 // The HPOP force-model fidelity choices, in increasing order of physics modeled.
 const HPOP_MODELS: readonly { value: HpopForceModel; label: string }[] = [
@@ -34,19 +36,30 @@ export function PropagatePanel(props: PropagatePanelProps): JSX.Element {
   const tleOrbit = useStore(store, (s) => s.tleOrbit);
   const stationAccess = useStore(store, (s) => s.stationAccess);
   const hpopAltitude = useStore(store, (s) => s.hpopAltitude);
-  const objects = useStore(store, (s) => s.objects);
+  const source = useStore(store, (s) => s.scenario.spacecraftSource);
   const runStatus = useStore(store, (s) => s.runStatus);
-  const isSample = !objects.some((e) => e.kind === 'spacecraft');
   const [hpopModel, setHpopModel] = useState<HpopForceModel>('j2');
-  const tleBtn = busyLabel(runStatus['propagate-tle'], 'Propagate sample TLE (SGP4)', 'Computing...');
+
+  const hasSource = source !== null;
+  const isTle = source?.kind === 'tle';
+  const tleBtn = busyLabel(runStatus['propagate-tle'], 'Propagate (SGP4)', 'Computing...');
 
   return (
     <div className="bessel-analysis" data-testid="propagate-panel">
+      <SpacecraftSourceControl engine={engine} store={store} />
+
+      {hasSource ? null : (
+        <p className="bessel-loader-hint" data-testid="propagate-no-source">
+          Set a spacecraft source above to run SGP4 and HPOP and compare their altitude.
+        </p>
+      )}
+
       <Button
         variant="primary"
         full
         testId="propagate-tle"
-        disabled={tleBtn.disabled}
+        disabled={tleBtn.disabled || !isTle}
+        title={isTle ? undefined : 'SGP4 needs a pasted TLE source'}
         onClick={() => void engine?.propagateTle()}
       >
         {tleBtn.label}
@@ -54,11 +67,6 @@ export function PropagatePanel(props: PropagatePanelProps): JSX.Element {
       <RunStatusNote status={runStatus['propagate-tle']} id="propagate-tle" />
       {tleOrbit ? (
         <div data-testid="tle-result">
-          {isSample ? (
-            <span data-testid="sample-data-tag" style={{ display: 'inline-flex', marginBottom: 4 }}>
-              <Tag tone="amber">Sample data</Tag>
-            </span>
-          ) : null}
           <p className="bessel-analysis-stat" data-testid="tle-period">
             {tleOrbit.label}: period {tleOrbit.periodMin.toFixed(1)} min
           </p>
@@ -125,53 +133,51 @@ export function PropagatePanel(props: PropagatePanelProps): JSX.Element {
           ) : (
             <p className="bessel-loader-hint">Find visible passes over a ground station.</p>
           )}
-          <label>
-            HPOP force model
-            <select
-              value={hpopModel}
-              onChange={(ev) => setHpopModel(ev.target.value as HpopForceModel)}
-              data-testid="hpop-force-model"
-            >
-              {HPOP_MODELS.map((m) => (
-                <option key={m.value} value={m.value}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <p className="bessel-loader-hint" data-testid="hpop-frame-note">
-            Frame note: the TLE state is TEME, integrated as J2000 (an arcminute-scale
-            approximation near the epoch). SGP4 output is TEME -&gt; J2000.
-          </p>
-          <Button
-            variant="primary"
-            full
-            testId="propagate-hpop"
-            disabled={runStatus['propagate-hpop'] === 'running'}
-            onClick={() => void engine?.propagateHpop(hpopModel)}
-          >
-            {runStatus['propagate-hpop'] === 'running' ? 'Computing...' : 'Propagate numerically (HPOP)'}
-          </Button>
-          <RunStatusNote status={runStatus['propagate-hpop']} id="propagate-hpop" />
-          {hpopAltitude ? (
-            <div data-testid="hpop-result">
-              <div className="bessel-panel-title">{hpopAltitude.label}</div>
-              <TimeSeriesChart
-                et={hpopAltitude.et}
-                value={hpopAltitude.value}
-                label={hpopAltitude.label}
-                testId="hpop-altitude-chart"
-              />
-            </div>
-          ) : (
-            <p className="bessel-loader-hint">
-              Integrate the TLE state with the native Cowell propagator (DOPRI5 + J2).
-            </p>
-          )}
+        </div>
+      ) : null}
+
+      <label>
+        HPOP force model
+        <select
+          value={hpopModel}
+          onChange={(ev) => setHpopModel(ev.target.value as HpopForceModel)}
+          data-testid="hpop-force-model"
+        >
+          {HPOP_MODELS.map((m) => (
+            <option key={m.value} value={m.value}>
+              {m.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className="bessel-loader-hint" data-testid="hpop-frame-note">
+        Frame note: a TLE source state is TEME, integrated as J2000 (an arcminute-scale
+        approximation near the epoch). SGP4 output is TEME -&gt; J2000.
+      </p>
+      <Button
+        variant="primary"
+        full
+        testId="propagate-hpop"
+        disabled={runStatus['propagate-hpop'] === 'running' || !hasSource}
+        onClick={() => void engine?.propagateHpop(hpopModel)}
+      >
+        {runStatus['propagate-hpop'] === 'running' ? 'Computing...' : 'Propagate numerically (HPOP)'}
+      </Button>
+      <RunStatusNote status={runStatus['propagate-hpop']} id="propagate-hpop" />
+      {hpopAltitude ? (
+        <div data-testid="hpop-result">
+          <div className="bessel-panel-title">{hpopAltitude.label}</div>
+          <TimeSeriesChart
+            et={hpopAltitude.et}
+            value={hpopAltitude.value}
+            label={hpopAltitude.label}
+            testId="hpop-altitude-chart"
+          />
         </div>
       ) : (
         <p className="bessel-loader-hint">
-          Propagate the bundled TLE with SGP4 into an SPK and plot its altitude and ground track.
+          Integrate the source state with the native Cowell propagator and overlay it on the
+          SGP4 altitude (SGP4 vs HPOP).
         </p>
       )}
     </div>
