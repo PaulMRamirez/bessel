@@ -71,6 +71,18 @@ export {
 
 export { maxCollisionProbability } from './max-pc.ts';
 
+export {
+  propagateCovarianceToTca,
+  combinedEncounterCovariance,
+  collisionProbabilityPropagated,
+  twoBodyForceModel,
+  choleskyLower,
+  type Cov6x6,
+  type State6,
+  type PropagatedCovariance,
+  type CombinedEncounterCovariance,
+} from './cov-propagation.ts';
+
 export function collisionProbability2D(input: PcInput, samples = 240): number {
   const { radiusKm: R, sigmaXKm: sx, sigmaYKm: sy, missXKm: mx, missYKm: my } = input;
   if (R <= 0 || sx <= 0 || sy <= 0) return 0;

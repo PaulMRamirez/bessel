@@ -298,7 +298,11 @@ importers:
 
   packages/color: {}
 
-  packages/conjunction: {}
+  packages/conjunction:
+    dependencies:
+      '@bessel/propagator':
+        specifier: workspace:*
+        version: link:../propagator
 
   packages/coverage:
     dependencies:
