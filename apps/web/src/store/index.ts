@@ -10,6 +10,7 @@ export {
   type GroundStation,
   type AnalyzeTab,
   type KeptSnapshot,
+  type SnapshotDomain,
   type AccessFom,
   type AccessConstraintNote,
   type IntervalAnalysisResult,

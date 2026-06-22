@@ -12,7 +12,7 @@ import type { BesselEngine } from '../engine/index.ts';
 import { useStore, type AppStore } from '../store/index.ts';
 import { StatResult } from './analysis-result.tsx';
 import { RunStatusNote } from './RunStatus.tsx';
-import { Action, fmt } from './analysis-shared.tsx';
+import { Action, Keep, fmt, useTrayFull } from './analysis-shared.tsx';
 import { PorkchopPlot } from './PorkchopPlot.tsx';
 import { PorkchopForm, DEFAULT_PORKCHOP_FORM, type PorkchopFormState } from './PorkchopForm.tsx';
 
@@ -31,6 +31,7 @@ export function LambertPorkchopCard(props: LambertPorkchopCardProps): JSX.Elemen
   const porkchop = useStore(store, (s) => s.porkchop);
   const transfer = useStore(store, (s) => s.transfer);
   const objects = useStore(store, (s) => s.objects);
+  const trayFull = useTrayFull(store);
 
   // The body select offers the loaded objects plus the common transfer bodies, de-duplicated. A
   // heliocentric transfer is posed against planet BARYCENTERS (what an ephemeris like de440 carries
@@ -93,6 +94,11 @@ export function LambertPorkchopCard(props: LambertPorkchopCardProps): JSX.Elemen
             Send to MCS
           </Action>
           <RunStatusNote status={runStatus['send-to-mcs']} id="send-to-mcs" />
+          <Keep
+            domain="orbit-porkchop"
+            disabled={trayFull}
+            onKeep={() => engine?.keepSnapshot('orbit-porkchop')}
+          />
         </div>
       ) : (
         <p className="bessel-loader-hint">

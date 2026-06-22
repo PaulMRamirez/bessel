@@ -10,6 +10,7 @@ import { describe, it, expect } from 'vitest';
 import { PropagatePanel } from './PropagatePanel.tsx';
 import { MissionPanel } from './MissionPanel.tsx';
 import { LambertPorkchopCard } from './LambertPorkchopCard.tsx';
+import { OdPanel } from './OdPanel.tsx';
 import { createAppStore, type AppStore } from '../store/index.ts';
 import type { PorkchopResult } from '../engine/porkchop.ts';
 
@@ -130,6 +131,8 @@ describe('MissionPanel editable MCS builder', () => {
     expect(out).toContain('data-testid="mcs-solved-dv"');
     expect(out).toContain('data-testid="mcs-dc-report"');
     expect(out).toContain('converged');
+    // Wave 2B: a seeded MCS result is keepable for compare (keep-orbit-mcs).
+    expect(out).toContain('data-testid="keep-orbit-mcs"');
   });
 });
 
@@ -159,5 +162,61 @@ describe('LambertPorkchopCard configurable transfer + porkchop', () => {
     expect(out).toContain('data-testid="porkchop-min"');
     expect(out).toContain('data-testid="porkchop-best"');
     expect(out).toContain('data-testid="send-to-mcs"');
+    // Wave 2B: the solved porkchop best is keepable for compare (keep-orbit-porkchop).
+    expect(out).toContain('data-testid="keep-orbit-porkchop"');
+  });
+});
+
+describe('OdPanel covariance -> Conjunction carrier (Wave 2B)', () => {
+  const od = (store: AppStore): string =>
+    renderToStaticMarkup(createElement(OdPanel, { engine: null, store }));
+
+  const seedOd = (store: AppStore): void => {
+    store.setState({
+      odResult: {
+        estimate: [7000, 0, 0, 0, 7.5, 0],
+        positionErrorKm: 0.01,
+        velocityErrorKmS: 1e-5,
+        residualRms: 0.9,
+        iterations: 3,
+        observationCount: 60,
+        sigmaPositionKm: [0.05, 0.07, 0.09],
+        label: 'OD',
+      },
+    });
+  };
+
+  it('renders the "Use in Conjunction" carrier action once an OD result is present', () => {
+    const store = createAppStore();
+    seedOd(store);
+    const out = od(store);
+    expect(out).toContain('data-testid="od-to-conjunction"');
+    expect(out).toContain('data-testid="od-carrier-object"');
+  });
+
+  it('offers the selected conjunction event objects as the carrier destination', () => {
+    const store = createAppStore();
+    seedOd(store);
+    store.setState({
+      conjunctionEvent: {
+        index: 0,
+        primaryId: 'PRIMARY-A',
+        secondaryId: 'SECONDARY-B',
+        tca: 100,
+        pcFull: 1e-4,
+        pcMax: 3e-4,
+        missXKm: 0.1,
+        missYKm: 0.2,
+        missKm: 0.3,
+        radiusKm: 0.02,
+        relSpeedKmS: 7,
+        hasCovariance: false,
+        ellipses: [],
+        extentKm: 1,
+      },
+    });
+    const out = od(store);
+    expect(out).toContain('PRIMARY-A');
+    expect(out).toContain('SECONDARY-B');
   });
 });

@@ -20,7 +20,7 @@ import {
 } from '../store/index.ts';
 import { LinkWorksheetForm, SlewFeasibilityForm } from './analysis-tool-forms.tsx';
 import type { LinkWorksheetSpec, SlewFeasibilitySpec } from '../engine/analysis-defaults.ts';
-import { Action, fmt } from './analysis-shared.tsx';
+import { Action, Keep, fmt, useTrayFull } from './analysis-shared.tsx';
 import { RunStatusNote } from './RunStatus.tsx';
 import { RAD2DEG } from '../angles.ts';
 
@@ -44,6 +44,7 @@ function StationPassesBody(props: StationPassesCardProps): JSX.Element {
   const activeStationId = useStore(store, (s) => s.scenario.activeStationId);
   const selectedPassId = useStore(store, (s) => s.selectedPassId);
   const selectedPair = useStore(store, (s) => s.selectedWindowPair);
+  const trayFull = useTrayFull(store);
 
   return (
     <>
@@ -68,6 +69,11 @@ function StationPassesBody(props: StationPassesCardProps): JSX.Element {
         </p>
       )}
       <RunStatusNote status={props.runStatus} id="compute-station-passes" />
+      <Keep
+        domain="access-passes"
+        disabled={!passes || trayFull}
+        onKeep={() => engine?.keepSnapshot('access-passes')}
+      />
     </>
   );
 }
@@ -169,6 +175,7 @@ function LinkWorksheetBody(props: LinkWorksheetCardProps): JSX.Element {
   const { engine, store } = props;
   const worksheet = useStore(store, (s) => s.linkWorksheet);
   const selectedPassId = useStore(store, (s) => s.selectedPassId);
+  const trayFull = useTrayFull(store);
 
   return (
     <>
@@ -193,6 +200,11 @@ function LinkWorksheetBody(props: LinkWorksheetCardProps): JSX.Element {
         </p>
       )}
       <RunStatusNote status={props.runStatus} id="compute-link-worksheet" />
+      <Keep
+        domain="access-worksheet"
+        disabled={!worksheet || trayFull}
+        onKeep={() => engine?.keepSnapshot('access-worksheet')}
+      />
     </>
   );
 }
@@ -282,6 +294,7 @@ function SlewFeasibilityBody(props: SlewFeasibilityCardProps): JSX.Element {
   const { engine, store } = props;
   const verdict = useStore(store, (s) => s.slewFeasibility);
   const selectedPair = useStore(store, (s) => s.selectedWindowPair);
+  const trayFull = useTrayFull(store);
 
   return (
     <>
@@ -307,6 +320,11 @@ function SlewFeasibilityBody(props: SlewFeasibilityCardProps): JSX.Element {
         </p>
       )}
       <RunStatusNote status={props.runStatus} id="compute-slew-feasibility" />
+      <Keep
+        domain="access-slew"
+        disabled={!verdict || trayFull}
+        onKeep={() => engine?.keepSnapshot('access-slew')}
+      />
     </>
   );
 }

@@ -13,6 +13,7 @@ import type { BesselEngine } from '../engine/index.ts';
 import { useStore, type AppStore } from '../store/index.ts';
 import { RunStatusNote, busyLabel } from './RunStatus.tsx';
 import { McsSegmentEditor } from './McsSegmentEditor.tsx';
+import { Keep, useTrayFull } from './analysis-shared.tsx';
 import { mcsEditorReducer, type McsEditorAction } from '../engine/mcs-editor.ts';
 
 export interface MissionPanelProps {
@@ -27,6 +28,7 @@ export function MissionPanel(props: MissionPanelProps): JSX.Element {
   const { engine, store } = props;
   const result = useStore(store, (s) => s.mcsResult);
   const runStatus = useStore(store, (s) => s.runStatus);
+  const trayFull = useTrayFull(store);
   const run = busyLabel(runStatus['run-mcs'], 'Run mission sequence', 'Computing...');
   // [ux-p2-orbit] The editable MCS lives in the store so the porkchop "send to MCS" hop and this
   // editor share one design; edits dispatch through the same pure reducer over the store slice.
@@ -106,6 +108,7 @@ export function MissionPanel(props: MissionPanelProps): JSX.Element {
             label={result.altitude.label}
             testId="mcs-altitude-chart"
           />
+          <Keep domain="orbit-mcs" disabled={trayFull} onKeep={() => engine?.keepSnapshot('orbit-mcs')} />
         </div>
       ) : (
         <p className="bessel-loader-hint">

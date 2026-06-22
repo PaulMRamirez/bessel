@@ -3,9 +3,9 @@ import { createAppStore, KEPT_SNAPSHOT_LIMIT, type KeptSnapshot } from './app-st
 
 const snap = (id: string): KeptSnapshot => ({
   id,
-  tool: 'access',
-  name: id,
-  metrics: [{ label: 'coverage %', value: '80.0' }],
+  domain: 'access',
+  label: id,
+  metrics: { 'coverage %': '80.0' },
 });
 
 describe('compare tray slice', () => {
