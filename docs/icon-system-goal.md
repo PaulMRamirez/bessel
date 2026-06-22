@@ -1,6 +1,19 @@
 # Goal: a coherent, accessible icon system for Bessel
 
-Status: PLANNED (2026-06-22). Follows the UI simplification pass
+Status: IMPLEMENTED (2026-06-22) on the feat/icon-system branch. Library: Lucide
+(ISC), chosen by the workflow's evidence (license, currentColor theming, tree-shaking,
+style fit). The selene Icon component (universal Lucide via an explicit static map)
+and DomainIcon component (11 bespoke concept glyphs) shipped; the universal unicode
+glyphs were migrated, and F07/F08/F35 (FOV/Footprint/Share viewcontrols) resolved
+with the sensor-fov / sensor-footprint / share icons. Tabs and result cards carry
+concept icons. The bespoke set was persona blind-read AND human-visually reviewed: the
+first pass collided with common icons (FOV-as-beaker, propagate-as-eye, conjunction-as-x,
+walker-as-gear), so those were re-spun and re-rendered until each read correctly before
+sign-off. Budget intact: the whole system adds ~4 KB to the first-paint shell
+(284.98 of the 345 KB cap). On F35: the inline FOV/Footprint toggles were kept (now
+icons), not removed, since the instruments e2e asserts them as a contextual affordance.
+
+Follows the UI simplification pass
 (docs/ui-simplification-goal.md), which deferred F07/F08/F35 (the FOV/Footprint/
 Share viewcontrols strip) because the codebase had no real icon system, only
 unicode glyphs (font-dependent, inconsistent, some ambiguous). This goal builds

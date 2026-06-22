@@ -87,7 +87,7 @@ export interface IconProps {
 }
 
 /**
- * Icon — an inline SVG glyph that inherits color from `currentColor` (so it themes
+ * Icon: an inline SVG glyph that inherits color from `currentColor` (so it themes
  * across dark and the warm-amber light theme with no color prop) and sizes to the
  * control grid. It is always decorative: aria-hidden, contributing no accessible
  * name. The name lives on the enclosing Button (its ariaLabel). No icon font, no
