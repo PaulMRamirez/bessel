@@ -71,6 +71,16 @@ import { reduceScreening, INITIAL_SCREENING } from '../screening-protocol.ts';
 import { ingestCatalog, type IngestFormat, type IngestResult } from '../conjunction/ingest.ts';
 export type { IngestFormat };
 import { buildBPlaneGeometry, combineEncounter, encounterPlanePc } from '../conjunction/bplane-geometry.ts';
+// [ux-p2-conjunction] Explicit covariance input (an assumed covariance for an OEM/TLE catalog
+// that carried none) + the CDM-style export writer, co-located in this lazy chunk.
+import {
+  buildSuppliedCovariance,
+  type SuppliedCovariance,
+  type SuppliedCovarianceInput,
+} from '../conjunction/covariance-input.ts';
+export type { SuppliedCovarianceInput, CovarianceFrame } from '../conjunction/covariance-input.ts';
+import { writeCdm } from '../conjunction/cdm-write.ts';
+import { exportAnalysis } from '../export-analysis.ts';
 import type { ConjunctionEvent, SampledEphemeris } from '@bessel/conjunction';
 
 // Earth gravity constants for the numerical (HPOP) propagation. Published WGS-84/EGM
@@ -159,6 +169,10 @@ export interface ScreeningRef {
  *  Null until the first ingestion. */
 export interface ConjunctionCatalogRef {
   result: IngestResult | null;
+  /** [ux-p2-conjunction] Analyst-supplied per-object covariances (inertial 3x3 + 6-state),
+   *  keyed by object id, used when the ingested catalog carried none. The per-event Pc op
+   *  prefers an ingested covariance and falls back to a supplied one. */
+  supplied: Map<string, SuppliedCovariance>;
 }
 
 /** Build a concrete ProviderSpec from a report config (only frame-needing kinds use it). */
@@ -369,7 +383,8 @@ export function ingestConjunctionCatalog(
   // ingestCatalog throws a located IngestError on bad input; let it propagate to the wrapper.
   const result = ingestCatalog(format, text);
   ref.result = result;
-  // A fresh ingestion supersedes any prior screen result and selected event.
+  // A fresh ingestion supersedes any prior screen result, selected event, and supplied covariance.
+  ref.supplied.clear();
   store.setState({
     conjunctionIngest: {
       format: result.format,
@@ -380,6 +395,8 @@ export function ingestConjunctionCatalog(
     },
     screening: INITIAL_SCREENING,
     conjunctionEvent: null,
+    selectedConjunctionEventId: null,
+    conjunctionSuppliedCovariances: [],
   });
 }
 
@@ -407,6 +424,7 @@ export async function screenIngestedCatalog(
   store.setState((s) => ({
     screening: reduceScreening(s.screening, { kind: 'start', total: objects.length - 1, epoch: result.epoch }),
     conjunctionEvent: null,
+    selectedConjunctionEventId: null,
   }));
   try {
     const events = await client.start({ objects, thresholdKm, padKm }, (p) => {
@@ -445,6 +463,47 @@ function combinedRadiusKm(catalog: readonly SampledEphemeris[], primaryId: strin
   return find(primaryId) + find(secondaryId);
 }
 
+/** A per-object inertial 6-state + 3x3 position covariance for the encounter-plane reduction
+ *  (the common shape of an ingested CDM covariance and an analyst-supplied covariance). */
+interface PairCovariance {
+  readonly state6: ArrayLike<number>;
+  readonly posCov3: ArrayLike<number>;
+}
+
+/** Resolve a per-object covariance for the event, preferring the INGESTED (CDM) covariance and
+ *  falling back to an analyst-SUPPLIED one (covariance-input.ts), or null when neither exists. */
+function resolveEventCovariance(catalogRef: ConjunctionCatalogRef, id: string): PairCovariance | null {
+  const ingested = catalogRef.result?.covariances.get(id);
+  if (ingested) return ingested;
+  return catalogRef.supplied.get(id) ?? null;
+}
+
+/** Recover an object's inertial 6-state (km, km/s) at the event TCA from its SampledEphemeris,
+ *  by linear interpolation on the shared grid. Used so an analyst-supplied covariance for an
+ *  OEM/TLE object (which carried no ingested state) can build its RTN frame at the encounter.
+ *  Fails loud when the object id is not in the screened catalog. */
+function objectStateAtTca(catalog: readonly SampledEphemeris[], id: string, tca: number): Float64Array {
+  const e = catalog.find((o) => o.id === id);
+  if (!e) throw new Error(`object "${id}" is not in the ingested catalog`);
+  const n = e.et.length;
+  // Clamp to the grid ends, otherwise bracket tca and lerp position + velocity.
+  let i = 0;
+  if (tca <= e.et[0]!) i = 0;
+  else if (tca >= e.et[n - 1]!) i = n - 2;
+  else {
+    while (i < n - 2 && e.et[i + 1]! < tca) i++;
+  }
+  const t0 = e.et[i]!;
+  const t1 = e.et[i + 1]!;
+  const f = t1 > t0 ? Math.max(0, Math.min(1, (tca - t0) / (t1 - t0))) : 0;
+  const out = new Float64Array(6);
+  for (let c = 0; c < 3; c++) {
+    out[c] = e.pos[i * 3 + c]! + (e.pos[(i + 1) * 3 + c]! - e.pos[i * 3 + c]!) * f;
+    out[c + 3] = e.vel[i * 3 + c]! + (e.vel[(i + 1) * 3 + c]! - e.vel[i * 3 + c]!) * f;
+  }
+  return out;
+}
+
 /**
  * Per-event full-covariance Pc + Max-Pc + B-plane geometry for a selected screened event.
  * When BOTH objects carry an ingested covariance (CDM), the two position covariances combine
@@ -454,7 +513,10 @@ function combinedRadiusKm(catalog: readonly SampledEphemeris[], primaryId: strin
  * at the CDM TCA, so the combination is at the encounter epoch (no STM propagation needed, which
  * keeps the propagator integrator out of this lazy chunk). Max-Pc (the Alfano bound) is always
  * available from the screened miss + combined radius. Without covariances (OEM/TLE) only Max-Pc
- * is reported and the B-plane has no ellipse. Fails loud on a bad index / covariance.
+ * is reported and the B-plane has no ellipse, UNLESS the analyst has supplied an explicit
+ * covariance for both objects (covariance-input.ts); a supplied covariance is treated identically
+ * to an ingested one, so the full-covariance Pc becomes available. Also records the selected event
+ * id (first-class active selection). Fails loud on a bad index / covariance.
  */
 export function computeEventPc(store: AppStore, catalogRef: ConjunctionCatalogRef, index: number): void {
   const result = catalogRef.result;
@@ -462,9 +524,13 @@ export function computeEventPc(store: AppStore, catalogRef: ConjunctionCatalogRe
   const ev = selectScreenedEvent(store, index);
   const radiusKm = combinedRadiusKm(result.catalog, ev.primaryId, ev.secondaryId);
   const pcMax = maxCollisionProbability(ev.missKm, radiusKm);
+  // [ux-p2-conjunction] First-class active selection: record the selected event id so the Pc
+  // card row, the B-plane, and the covariance-input form all read the same selection.
+  store.setState({ selectedConjunctionEventId: index });
 
-  const primaryCov = result.covariances.get(ev.primaryId);
-  const secondaryCov = result.covariances.get(ev.secondaryId);
+  // Prefer an ingested (CDM) covariance, else an analyst-supplied one (covariance input).
+  const primaryCov = resolveEventCovariance(catalogRef, ev.primaryId);
+  const secondaryCov = resolveEventCovariance(catalogRef, ev.secondaryId);
   if (primaryCov && secondaryCov) {
     // Both objects carry a real covariance: combine the two position covariances at the encounter
     // epoch, project into the encounter plane, and integrate the full-covariance Foster Pc.
@@ -518,6 +584,97 @@ export function computeEventPc(store: AppStore, catalogRef: ConjunctionCatalogRe
       extentKm,
     },
   });
+}
+
+// [ux-p2-conjunction] Explicit covariance input + CDM-style export ops.
+
+/**
+ * Supply (or replace) an analyst-assumed covariance for one object in the ingested catalog, used
+ * when the source format carried none (OEM/TLE). The 3x3 input is validated + (for RTN) rotated to
+ * inertial using the object's own state at the selected event TCA, then stored on the catalog ref
+ * so the next per-event Pc uses it. After storing, the selected event's Pc is recomputed so the
+ * card updates immediately. Fails loud (CovarianceInputError) on a malformed / non-PD covariance.
+ */
+export function setSuppliedCovariance(
+  store: AppStore,
+  catalogRef: ConjunctionCatalogRef,
+  objectId: string,
+  input: SuppliedCovarianceInput,
+): void {
+  const result = catalogRef.result;
+  if (!result) throw new Error('no ingested catalog: ingest before supplying a covariance');
+  const selectedId = store.getState().selectedConjunctionEventId;
+  if (selectedId === null) throw new Error('select a screened event before supplying a covariance');
+  const ev = selectScreenedEvent(store, selectedId);
+  // The supplied covariance is referenced at the encounter epoch, so build the object's state at
+  // the event TCA (an ingested state for a CDM object, else interpolated from its ephemeris).
+  const ingestedState = result.covariances.get(objectId)?.state6;
+  const state6 = ingestedState ?? objectStateAtTca(result.catalog, objectId, ev.tca);
+  const built = buildSuppliedCovariance(input, state6);
+  catalogRef.supplied.set(objectId, built);
+  store.setState({ conjunctionSuppliedCovariances: [...catalogRef.supplied.keys()] });
+  // Recompute the selected event's Pc with the new covariance in place.
+  computeEventPc(store, catalogRef, selectedId);
+}
+
+/** Clear an analyst-supplied covariance for an object, then recompute the selected event Pc. */
+export function clearSuppliedCovariance(store: AppStore, catalogRef: ConjunctionCatalogRef, objectId: string): void {
+  if (!catalogRef.supplied.delete(objectId)) return;
+  store.setState({ conjunctionSuppliedCovariances: [...catalogRef.supplied.keys()] });
+  const selectedId = store.getState().selectedConjunctionEventId;
+  if (selectedId !== null && catalogRef.result) computeEventPc(store, catalogRef, selectedId);
+}
+
+/**
+ * Export the SELECTED conjunction event as a CCSDS-CDM-style KVN record (TCA, miss, relative
+ * speed, Pc, and the encounter-plane covariance when a full-covariance Pc was computed), via the
+ * unified exportAnalysis path's downloadBlob. Uses the per-event result already on the store (so
+ * it carries the supplied-or-ingested covariance the analyst chose). Fails loud when no event is
+ * selected. Returns the serialized text (so it is unit-testable through exportAnalysis). The TCA
+ * is formatted from the catalog UTC-seconds time base; deterministic (no wall clock).
+ */
+export function exportEventCdm(store: AppStore): string {
+  const ev = store.getState().conjunctionEvent;
+  if (!ev) throw new Error('no selected conjunction event to export');
+  const tcaIso = new Date(ev.tca * 1000).toISOString();
+  const pc = ev.pcFull ?? ev.pcMax;
+  const text = writeCdm({
+    tca: tcaIso,
+    creationDate: tcaIso,
+    missDistanceM: ev.missKm * 1000,
+    relativeSpeedMS: ev.relSpeedKmS * 1000,
+    collisionProbability: pc,
+    object1: { designator: ev.primaryId },
+    object2: { designator: ev.secondaryId },
+    ...(ev.hasCovariance && ev.ellipses.length > 0
+      ? { covariance: encounterCovarianceFromEllipses(ev.ellipses) }
+      : {}),
+  });
+  // Route the download through the unified export path (a CDM-style KVN export kind).
+  exportAnalysis(
+    { kind: 'cdm', text, filename: `cdm-${ev.primaryId}-${ev.secondaryId}.txt` },
+    undefined,
+  );
+  return text;
+}
+
+/** Reconstruct the encounter-plane 2x2 covariance (cxx, cxy, cyy; km^2) from the stored 1-sigma
+ *  ellipse (semi-axes + orientation) for the CDM covariance block: C = R diag(a^2, b^2) R^T. */
+function encounterCovarianceFromEllipses(
+  ellipses: readonly { sigma: number; semiMajorKm: number; semiMinorKm: number; angleRad: number }[],
+): { cxx: number; cxy: number; cyy: number } {
+  const one = ellipses.find((e) => e.sigma === 1) ?? ellipses[0]!;
+  const a = one.semiMajorKm; // 1-sigma major semi-axis (km)
+  const b = one.semiMinorKm; // 1-sigma minor semi-axis (km)
+  const c = Math.cos(one.angleRad);
+  const s = Math.sin(one.angleRad);
+  const la = a * a;
+  const lb = b * b;
+  return {
+    cxx: la * c * c + lb * s * s,
+    cxy: (la - lb) * c * s,
+    cyy: la * s * s + lb * c * c,
+  };
 }
 
 

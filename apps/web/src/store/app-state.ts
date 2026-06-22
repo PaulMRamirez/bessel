@@ -172,6 +172,14 @@ export interface AppState {
   /** The per-event full-covariance Pc + B-plane result for the selected screened event, or
    *  null until an event is selected (or while it is being computed). */
   conjunctionEvent: ConjunctionEventResult | null;
+  /** [ux-p2-conjunction] First-class active selection: the index (in the screened-events list)
+   *  of the currently selected conjunction event, or null when none is selected. The Pc card,
+   *  the B-plane, and a future avoidance carrier all read THIS so they reflect one selection. */
+  selectedConjunctionEventId: number | null;
+  /** [ux-p2-conjunction] The object ids the analyst has supplied an explicit covariance for
+   *  (the assumed covariance for an OEM/TLE catalog that carried none). The covariance matrices
+   *  live on the engine catalog ref; this is the panel readout of which objects have one. */
+  conjunctionSuppliedCovariances: readonly string[];
   /** Walker constellation summary from the last coverage/constellation run. */
   constellation: ConstellationResult | null;
   /** The designed constellation as the swept ASSET SET (published SPK ids), or null until
@@ -583,6 +591,8 @@ export const initialAppState: AppState = {
   screening: INITIAL_SCREENING,
   conjunctionIngest: null,
   conjunctionEvent: null,
+  selectedConjunctionEventId: null,
+  conjunctionSuppliedCovariances: [],
   constellation: null,
   designedConstellation: null,
   coverageGrid: null,

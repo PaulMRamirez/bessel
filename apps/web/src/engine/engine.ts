@@ -82,6 +82,8 @@ import type {
   ConjunctionCatalogRef,
   IngestFormat,
   IngestScreenOpts,
+  // [ux-p2-conjunction] the analyst-supplied covariance input type.
+  SuppliedCovarianceInput,
 } from './analysis-ops.ts';
 
 // True when two optional angles are equal or both absent (within tolerance).
@@ -220,7 +222,7 @@ export class BesselEngine {
   // [ux-p1-conjunction] The most recently ingested REAL conjunction catalog (CDM/OEM/TLE) +
   // per-object covariances, shared by the ingest/screen/per-event-Pc ops across separate
   // dynamic-import calls. Null until the first ingestion.
-  private readonly conjunctionCatalogRef: ConjunctionCatalogRef = { result: null };
+  private readonly conjunctionCatalogRef: ConjunctionCatalogRef = { result: null, supplied: new Map() };
   // The designed-constellation sequence + published asset SPK ids, shared by the (lazily
   // imported) coverage ops so the Walker design FEEDS the sweep across separate dynamic-import
   // calls: designConstellation publishes the asset set into it; sweepCoverage reads it.
@@ -902,6 +904,30 @@ export class BesselEngine {
     await this.runTool('compute-event-pc', async () => {
       const ops = await import('./analysis-ops.ts');
       ops.computeEventPc(this.store, this.conjunctionCatalogRef, index);
+    });
+  }
+
+  /** [ux-p2-conjunction] Supply an analyst-assumed covariance for an object whose ingested format
+   *  carried none (OEM/TLE), then recompute the selected event Pc. Fails loud on a non-PD matrix. */
+  async setSuppliedCovariance(objectId: string, input: SuppliedCovarianceInput): Promise<void> {
+    await this.runTool('supply-covariance', async () => {
+      const ops = await import('./analysis-ops.ts');
+      ops.setSuppliedCovariance(this.store, this.conjunctionCatalogRef, objectId, input);
+    });
+  }
+
+  /** [ux-p2-conjunction] Clear an analyst-supplied covariance for an object and recompute. */
+  async clearSuppliedCovariance(objectId: string): Promise<void> {
+    const ops = await import('./analysis-ops.ts');
+    ops.clearSuppliedCovariance(this.store, this.conjunctionCatalogRef, objectId);
+  }
+
+  /** [ux-p2-conjunction] Export the selected conjunction event as a CCSDS-CDM-style KVN record
+   *  (TCA, miss, relative state, Pc, covariance) through the unified export path. */
+  async exportEventCdm(): Promise<void> {
+    await this.runTool('export-cdm', async () => {
+      const ops = await import('./analysis-ops.ts');
+      ops.exportEventCdm(this.store);
     });
   }
 

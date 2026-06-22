@@ -322,6 +322,80 @@ describe('Conjunction panel REAL ingestion + screening (worker)', () => {
     expect(out).toContain('data-testid="bplane-ellipse-3sigma"');
     expect(out).toContain('data-testid="bplane-miss"');
     expect(out).toContain('data-testid="bplane-hardbody"');
+    // [ux-p2-conjunction] the per-event result always offers the CDM export.
+    expect(out).toContain('data-testid="export-cdm"');
+  });
+
+  it('reflects the first-class active selection on the event row (aria-selected)', () => {
+    const store = createAppStore();
+    store.setState({
+      conjunctionIngest: { format: 'cdm', objectCount: 2, covarianceCount: 2, ids: ['A', 'B'], note: '' },
+      screening: {
+        status: 'done',
+        done: 1,
+        total: 1,
+        epoch: 0,
+        events: [{ primaryId: 'A', secondaryId: 'B', tca: 60, missKm: 1, relSpeedKmS: 0.5, pc: 1e-5 }],
+      },
+      selectedConjunctionEventId: 0,
+    });
+    const out = conjunction(store, true);
+    expect(out).toContain('aria-selected="true"');
+    expect(out).toContain('bessel-event-row-active');
+  });
+
+  it('shows the covariance-input form (cov-frame + param-cov-sigma) when the pair carries no covariance', () => {
+    const store = createAppStore();
+    store.setState({
+      conjunctionIngest: { format: 'tle', objectCount: 2, covarianceCount: 0, ids: ['A', 'B'], note: '' },
+      selectedConjunctionEventId: 0,
+      conjunctionEvent: {
+        index: 0,
+        primaryId: 'A',
+        secondaryId: 'B',
+        tca: 60,
+        pcFull: null,
+        pcMax: 2.2e-4,
+        missXKm: 1.5,
+        missYKm: 0,
+        missKm: 1.5,
+        radiusKm: 0.01,
+        relSpeedKmS: 0.12,
+        hasCovariance: false,
+        ellipses: [],
+        extentKm: 2,
+      },
+    });
+    const out = conjunction(store, true);
+    expect(out).toContain('data-testid="covariance-input"');
+    expect(out).toContain('data-testid="cov-frame"');
+    expect(out).toContain('data-testid="param-cov-sigma"');
+    expect(out).toContain('data-testid="export-cdm"');
+  });
+
+  it('hides the covariance-input form once the event carries a (supplied or ingested) covariance', () => {
+    const store = createAppStore();
+    store.setState({
+      conjunctionIngest: { format: 'cdm', objectCount: 2, covarianceCount: 2, ids: ['A', 'B'], note: '' },
+      conjunctionEvent: {
+        index: 0,
+        primaryId: 'A',
+        secondaryId: 'B',
+        tca: 60,
+        pcFull: 1.2e-4,
+        pcMax: 3.4e-4,
+        missXKm: 1.5,
+        missYKm: 0.5,
+        missKm: 1.58,
+        radiusKm: 0.01,
+        relSpeedKmS: 0.12,
+        hasCovariance: true,
+        ellipses: [{ sigma: 1, semiMajorKm: 0.2, semiMinorKm: 0.1, angleRad: 0 }],
+        extentKm: 2,
+      },
+    });
+    const out = conjunction(store, true);
+    expect(out).not.toContain('data-testid="covariance-input"');
   });
 });
 
