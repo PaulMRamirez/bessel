@@ -6,8 +6,10 @@
 
 import { useState } from 'react';
 import { Button, Tag } from '@bessel/selene-design';
+import { downloadBlob } from '@bessel/ui';
+import { tableToCsv } from '@bessel/interop';
 import { type BesselEngine } from '../engine/index.ts';
-import { useStore, type AppStore } from '../store/index.ts';
+import { useStore, type AppStore, type OdResult } from '../store/index.ts';
 import { RunStatusNote, busyLabel } from './RunStatus.tsx';
 
 export interface OdPanelProps {
@@ -17,6 +19,34 @@ export interface OdPanelProps {
 
 const fmt = (n: number, digits = 4): string =>
   Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: digits }) : '-';
+
+/** A field/value table of the OD estimate, shared by the Copy and CSV affordances so
+ *  the two exports cannot drift from the on-screen values. */
+function odRows(r: OdResult): (readonly [string, string | number])[] {
+  return [
+    ['label', r.label],
+    ['residual_rms', r.residualRms],
+    ['observations', r.observationCount],
+    ['iterations', r.iterations],
+    ['estimate_x_km', r.estimate[0] ?? ''],
+    ['estimate_y_km', r.estimate[1] ?? ''],
+    ['estimate_z_km', r.estimate[2] ?? ''],
+    ['estimate_vx_km_s', r.estimate[3] ?? ''],
+    ['estimate_vy_km_s', r.estimate[4] ?? ''],
+    ['estimate_vz_km_s', r.estimate[5] ?? ''],
+    ['position_error_m', r.positionErrorKm * 1000],
+    ['velocity_error_mm_s', r.velocityErrorKmS * 1e6],
+    ['sigma_pos_x_m', r.sigmaPositionKm[0]! * 1000],
+    ['sigma_pos_y_m', r.sigmaPositionKm[1]! * 1000],
+    ['sigma_pos_z_m', r.sigmaPositionKm[2]! * 1000],
+  ];
+}
+
+function odToText(r: OdResult): string {
+  return odRows(r)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join('\n');
+}
 
 export function OdPanel(props: OdPanelProps): JSX.Element {
   const { engine, store } = props;
@@ -83,6 +113,30 @@ export function OdPanel(props: OdPanelProps): JSX.Element {
             Covariance (km): 1-sigma position x {fmt(result.sigmaPositionKm[0] * 1000, 1)} m, y{' '}
             {fmt(result.sigmaPositionKm[1] * 1000, 1)} m, z {fmt(result.sigmaPositionKm[2] * 1000, 1)} m
           </p>
+
+          <div className="bessel-result-toolbar">
+            <Button
+              variant="ghost"
+              testId="od-copy"
+              ariaLabel="Copy orbit determination estimate"
+              onClick={() => void navigator.clipboard?.writeText(odToText(result))}
+            >
+              Copy
+            </Button>
+            <Button
+              variant="secondary"
+              className="bessel-csv-button"
+              testId="od-csv"
+              onClick={() =>
+                downloadBlob(
+                  new Blob([tableToCsv(['field', 'value'], odRows(result))], { type: 'text/csv' }),
+                  'orbit-determination.csv',
+                )
+              }
+            >
+              Export CSV
+            </Button>
+          </div>
 
           {/* [ux-p2-wave2b] Carrier: send this OD covariance into the Conjunction supplied-covariance
               store for the chosen object, then switch to the Conjunction tab. Needs a selected

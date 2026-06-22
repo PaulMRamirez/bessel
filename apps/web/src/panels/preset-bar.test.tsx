@@ -58,22 +58,33 @@ describe('PRESET_REGISTRY', () => {
 
 describe('PresetBar', () => {
   it('renders the mission-presets group with a chip per preset', () => {
-    const out = html(createElement(PresetBar, { activeTab: 'orbit-maneuver', onPreset: () => undefined }));
+    const out = html(createElement(PresetBar, { activePreset: null, onPreset: () => undefined }));
     expect(out).toContain('data-testid="mission-presets"');
     for (const entry of PRESET_REGISTRY) {
       expect(out).toContain(`data-testid="mission-preset-${entry.preset}"`);
     }
   });
 
-  it('uses real buttons and marks the active tab preset as pressed', () => {
-    // On the conjunction tab the SSA chip (tab=conjunction) reads aria-pressed=true; the
-    // Comms chip (tab=access-comms) reads false. The chip's aria-pressed and data-testid sit
-    // on the same <button>, so match the attributes within one tag (order-independent).
-    const out = html(createElement(PresetBar, { activeTab: 'conjunction', onPreset: () => undefined }));
+  it('uses real buttons and marks exactly the last-applied preset as pressed', () => {
+    // With SSA applied, only the SSA chip reads aria-pressed=true; Observation (which
+    // shares the access-comms tab with Comms) stays false, the regression keying off the
+    // tab would light. The aria-pressed and data-testid sit on the same <button>, so match
+    // the attributes within one tag (order-independent).
+    const out = html(createElement(PresetBar, { activePreset: 'SSA', onPreset: () => undefined }));
     expect(out).toMatch(/<button[^>]*type="button"/);
     const tagFor = (preset: string): string | undefined =>
       out.match(new RegExp(`<button[^>]*data-testid="mission-preset-${preset}"[^>]*>`))?.[0];
     expect(tagFor('SSA')).toContain('aria-pressed="true"');
     expect(tagFor('Comms')).toContain('aria-pressed="false"');
+    expect(tagFor('Observation')).toContain('aria-pressed="false"');
+  });
+
+  it('marks no chip pressed after non-preset navigation (activePreset null)', () => {
+    const out = html(createElement(PresetBar, { activePreset: null, onPreset: () => undefined }));
+    const tagFor = (preset: string): string | undefined =>
+      out.match(new RegExp(`<button[^>]*data-testid="mission-preset-${preset}"[^>]*>`))?.[0];
+    for (const entry of PRESET_REGISTRY) {
+      expect(tagFor(entry.preset)).toContain('aria-pressed="false"');
+    }
   });
 });

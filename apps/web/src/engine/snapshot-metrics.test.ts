@@ -5,7 +5,12 @@
 
 import { describe, it, expect } from 'vitest';
 import { createAppStore } from '../store/index.ts';
-import { buildSnapshotMetrics, kindDomain, type SnapshotKind } from './snapshot-metrics.ts';
+import {
+  buildSnapshotMetrics,
+  buildSnapshotLabel,
+  kindDomain,
+  type SnapshotKind,
+} from './snapshot-metrics.ts';
 
 const series = (values: number[]) => ({
   et: Float64Array.from(values.map((_, i) => i)),
@@ -31,6 +36,34 @@ describe('snapshot kind -> domain grouping', () => {
       ['link', 'link'],
     ];
     for (const [kind, domain] of cases) expect(kindDomain(kind), kind).toBe(domain);
+  });
+});
+
+describe('buildSnapshotLabel identifies a coverage snapshot by its Walker design', () => {
+  it('labels a coverage snapshot Walker T/P/perPlane and captures the design in metrics', () => {
+    const store = createAppStore();
+    store.setState({
+      designedConstellation: { assetIds: ['a', 'b'], totalSats: 24, planes: 3, perPlane: 8 },
+      coverageGrid: {
+        areaWeightedPercentCoverage: 0.8,
+        cellCount: 9,
+        assetCount: 24,
+        metric: { id: 'revisit', label: 'Revisit (min)', unit: 'min', nFoldK: 1 },
+        summary: null,
+        // The grid arrays the panel renders are not read by the metric builder.
+      } as never,
+    });
+    const s = store.getState();
+    expect(buildSnapshotLabel('coverage', s, 2)).toBe('Walker 24/3/8');
+    const m = buildSnapshotMetrics('coverage', s);
+    expect(m?.Walker).toBe('24/3/8');
+    expect(m?.metric).toBe('Revisit (min)');
+  });
+
+  it('falls back to the sequenced default label when no design is present', () => {
+    const s = createAppStore().getState();
+    expect(buildSnapshotLabel('coverage', s, 5)).toBe('coverage 5');
+    expect(buildSnapshotLabel('lighting-beta', s, 3)).toBe('lighting-beta 3');
   });
 });
 

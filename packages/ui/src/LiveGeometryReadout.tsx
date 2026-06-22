@@ -8,6 +8,9 @@ import type { Readouts } from './ReadoutPanel.tsx';
 export interface LiveGeometryReadoutProps {
   readonly target: string;
   readonly readouts: Readouts;
+  /** When provided, a dismiss control hides the strip (the user restores it from
+   *  the visualization settings). Independent of the tracking/focus camera state. */
+  readonly onDismiss?: () => void;
 }
 
 function km(v: number | null): string {
@@ -42,6 +45,18 @@ export function LiveGeometryReadout(props: LiveGeometryReadoutProps): JSX.Elemen
         <span aria-hidden="true">Phase </span>
         {deg(r.phaseDeg)}
       </span>
+      {props.onDismiss ? (
+        <button
+          type="button"
+          className="bessel-close-button bessel-live-readout-dismiss"
+          onClick={props.onDismiss}
+          aria-label="Hide live geometry readout"
+          title="Hide live geometry readout"
+          data-testid="live-readout-dismiss"
+        >
+          {'✕'}
+        </button>
+      ) : null}
     </div>
   );
 }

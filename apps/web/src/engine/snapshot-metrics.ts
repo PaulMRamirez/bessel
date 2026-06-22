@@ -41,6 +41,20 @@ export function kindDomain(kind: SnapshotKind): SnapshotDomain {
 const n = (v: number, d = 2): string => (Number.isFinite(v) ? v.toFixed(d) : '-');
 
 /**
+ * The compare label for a snapshot kind. Defaults to "<kind> <seq>", but a coverage
+ * snapshot reads "Walker T/P/perPlane" from the designed constellation so the kept
+ * column identifies the DESIGN (24/3/8), not an opaque "coverage 1". Other kinds keep
+ * the sequenced default; the seq guarantees uniqueness when a design is absent.
+ */
+export function buildSnapshotLabel(kind: SnapshotKind, s: AppState, seq: number): string {
+  if (kind === 'coverage') {
+    const d = s.designedConstellation;
+    if (d) return `Walker ${d.totalSats}/${d.planes}/${d.perPlane}`;
+  }
+  return `${kind} ${seq}`;
+}
+
+/**
  * Build the decision metrics for a snapshot kind from the current store state, or null when the
  * underlying result is not present (so a Keep is a no-op). Every metric carries its unit in the
  * key so the compare table reads as a decision sheet.
@@ -147,11 +161,15 @@ export function buildSnapshotMetrics(kind: SnapshotKind, s: AppState): SnapshotM
     case 'coverage': {
       const g = s.coverageGrid;
       if (!g) return null;
-      const m: Record<string, string | number> = {
-        'area-weighted %': n(g.areaWeightedPercentCoverage * 100, 1),
-        cells: g.cellCount,
-        assets: g.assetCount,
-      };
+      const m: Record<string, string | number> = {};
+      // Lead with the DESIGN inputs so a kept coverage column captures what produced the
+      // numbers (the Walker pattern + selected FOM), not only the outcome.
+      const d = s.designedConstellation;
+      if (d) m.Walker = `${d.totalSats}/${d.planes}/${d.perPlane}`;
+      if (g.metric) m.metric = g.metric.label;
+      m['area-weighted %'] = n(g.areaWeightedPercentCoverage * 100, 1);
+      m.cells = g.cellCount;
+      m.assets = g.assetCount;
       if (g.summary) m['worst revisit (min)'] = n(g.summary.worstRevisitMaxSec / 60, 1);
       return m;
     }

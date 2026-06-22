@@ -172,6 +172,7 @@ export function BesselViewer(): JSX.Element {
   const cameraFrame = useStore(store, (s) => s.cameraFrame);
   const realImageryApplied = useStore(store, (s) => s.realImageryApplied);
   const settings = useStore(store, (s) => s.settings);
+  const showLiveGeometry = useStore(store, (s) => s.showLiveGeometry);
   const visibility = useStore(store, (s) => s.visibility);
   const readouts = useStore(store, (s) => s.readouts);
   const bodyState = useStore(store, (s) => s.bodyState);
@@ -242,7 +243,7 @@ export function BesselViewer(): JSX.Element {
   // The live geometry readout stays visible through a pass (independent of selection)
   // whenever tracking is on or the spacecraft itself is the focus.
   const focusIsSpacecraft = focusEntry?.kind === 'spacecraft';
-  const showLiveReadout = hasSpacecraft && (track || focusIsSpacecraft);
+  const showLiveReadout = hasSpacecraft && (track || focusIsSpacecraft) && showLiveGeometry;
 
   // Timeline annotations are computed in the engine/mission layer (where SPICE
   // lives) from arc boundaries plus a SPICE-found closest approach, and arrive
@@ -571,6 +572,8 @@ export function BesselViewer(): JSX.Element {
             settings={settings}
             onChange={(k, v) => engine?.setSetting(k, v)}
             onReset={() => engine?.resetSettings()}
+            showLiveGeometry={showLiveGeometry}
+            onToggleLiveGeometry={(v) => engine?.setShowLiveGeometry(v)}
           />
         </Popover>
         <Tooltip label="Keyboard shortcuts and help (press ?)">
@@ -588,7 +591,13 @@ export function BesselViewer(): JSX.Element {
       <KeyboardHelp open={helpOpen} onClose={() => engine?.setHelpOpen(false)} />
       {/* Always-visible geometry, bound to the tracked/focused object, so a canvas
           click that clears the selection does not blank the live numbers. */}
-      {showLiveReadout ? <LiveGeometryReadout target={focus} readouts={readouts} /> : null}
+      {showLiveReadout ? (
+        <LiveGeometryReadout
+          target={focus}
+          readouts={readouts}
+          onDismiss={() => engine?.setShowLiveGeometry(false)}
+        />
+      ) : null}
       {selection.length > 0 || measureMode ? (
         <aside
           className="bessel-inspector-card"

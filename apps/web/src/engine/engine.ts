@@ -63,6 +63,7 @@ import {
 } from '../store/index.ts';
 import {
   buildSnapshotMetrics,
+  buildSnapshotLabel,
   kindDomain,
   type SnapshotKind,
 } from './snapshot-metrics.ts';
@@ -773,7 +774,8 @@ export class BesselEngine {
     const domain = kindDomain(kind);
     const seq = (this.snapSeq += 1);
     const keptAt = this.store.getState().et;
-    const snapshot = { id: `snap-${seq}`, domain, label: `${kind} ${seq}`, metrics, keptAt };
+    const label = buildSnapshotLabel(kind, this.store.getState(), seq);
+    const snapshot = { id: `snap-${seq}`, domain, label, metrics, keptAt };
     // One functional update that re-checks the limit against the freshest state: two
     // rapid keeps must not both read a stale length and append past the cap. A no-op
     // (return the same array) when the tray is already full.
