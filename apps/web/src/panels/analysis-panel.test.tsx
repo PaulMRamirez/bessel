@@ -5,7 +5,12 @@ import { LightingGeometryPanel } from './LightingGeometryPanel.tsx';
 import { betaCard, eclipseCard, solarIntensityCard } from './lighting-cards.tsx';
 import { AccessCommsPanel } from './AccessCommsPanel.tsx';
 import { stationPassesCard, linkWorksheetCard, slewFeasibilityCard } from './access-comms-cards.tsx';
-import { DEFAULT_LINK_WORKSHEET, DEFAULT_SLEW_FEASIBILITY } from '../engine/analysis-defaults.ts';
+import { AccessConstraintForm } from './AccessConstraintForm.tsx';
+import {
+  DEFAULT_LINK_WORKSHEET,
+  DEFAULT_SLEW_FEASIBILITY,
+  DEFAULT_ACCESS_CONSTRAINTS,
+} from '../engine/analysis-defaults.ts';
 import { ConjunctionPanel } from './ConjunctionPanel.tsx';
 import { CoveragePanel } from './CoveragePanel.tsx';
 import { createAppStore, type AppStore } from '../store/index.ts';
@@ -502,16 +507,33 @@ describe('Access constraint stack + in-FOV pointing (Phase 1)', () => {
     }
   });
 
-  it('disables the az/el mask + terrain toggles when no ground station is active (Phase 2 ungate)', () => {
+  it('disables the az/el mask (no station) and terrain LOS (no terrain source) toggles by default', () => {
     const out = access(createAppStore());
     expect(out).toContain('data-testid="constraint-azelmask"');
     expect(out).toContain('data-testid="constraint-terrainlos"');
-    // Without an active station the az/el mask is disabled with a select-a-station hint, and the
-    // terrain LOS stays gated (Phase 3, still DEM-bound).
+    // Without an active station the az/el mask is disabled with a select-a-station hint.
     expect(out).toContain('select a ground station');
-    expect(out).toContain('Phase 3');
+    // The terrain-source selector is present (Phase 3 ungate); with the default 'none' source the
+    // terrain LOS toggle is disabled with a choose-a-source hint rather than gated to a later phase.
+    expect(out).toContain('data-testid="param-terrain-source"');
+    expect(out).toContain('choose a terrain source');
     const disabledCount = (out.match(/disabled=""/g) ?? []).length;
     expect(disabledCount).toBeGreaterThanOrEqual(2);
+  });
+
+  it('UNGATES the terrain LOS toggle once a terrain source is chosen (Phase 3)', () => {
+    // Render the constraint form directly with the sample-ridge source selected: the toggle is live
+    // (no disabled attribute) and the sample-data note is shown.
+    const withSource = renderToStaticMarkup(
+      createElement(AccessConstraintForm, {
+        value: { ...DEFAULT_ACCESS_CONSTRAINTS, terrainSource: 'sample-ridge', terrainLosEnabled: true },
+        onChange: () => undefined,
+      }),
+    );
+    expect(withSource).toContain('data-testid="terrain-sample-note"');
+    expect(withSource).toContain('Sample data');
+    // The terrain toggle is not disabled (no disabled="" attribute on its input) once a source is set.
+    expect(withSource).toMatch(/data-testid="constraint-terrainlos"(?![^>]*disabled)/);
   });
 
   it('UNGATES the az/el mask toggle once a ground station is active', () => {

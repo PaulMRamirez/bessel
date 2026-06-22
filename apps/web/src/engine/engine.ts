@@ -71,6 +71,7 @@ import type {
   FovPointingMode,
   LinkWorksheetSpec,
   SlewFeasibilitySpec,
+  ObservationScheduleSpec,
 } from './analysis-defaults.ts';
 import { bootScene, loadInstrument, type EngineCore } from './bootstrap.ts';
 import { applyViewModel } from './apply-view.ts';
@@ -895,6 +896,22 @@ export class BesselEngine {
     await this.runTool('compute-slew-feasibility', async () => {
       const ops = await import('./analysis-ops.ts');
       await ops.computeSlewFeasibility(e, this.store, this.isDisposed, spec);
+    });
+  }
+
+  /** [ux-p3-access] Build a conflict-free multi-target observation schedule: per-target in-FOV +
+   *  constraint windows assembled into an ordered, non-overlapping timeline where the attitude slew
+   *  between consecutive targets fits the gap, plus any unscheduled (conflicted) targets. */
+  async computeObservationSchedule(
+    spec: ObservationScheduleSpec,
+    constraints: AccessConstraintSpec,
+    opts: { spanSec?: number; stepSec?: number } = {},
+  ): Promise<void> {
+    const e = this.core;
+    if (!e) return;
+    await this.runTool('compute-observation-schedule', async () => {
+      const ops = await import('./analysis-ops.ts');
+      await ops.computeObservationSchedule(e, this.store, this.isDisposed, spec, constraints, opts);
     });
   }
 

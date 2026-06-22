@@ -208,6 +208,9 @@ export interface AppState {
   /** [ux-p2-access] The eigen-axis slew-feasibility verdict between the selected pass pair's
    *  pointings (does the slew fit in the gap), or null until a run. */
   slewFeasibility: SlewFeasibilityResult | null;
+  /** [ux-p3-access] The conflict-free multi-target observation schedule (ordered slots across
+   *  targets + the unscheduled/conflicted targets), or null until a run. */
+  observationSchedule: ObservationScheduleResult | null;
   /** Closest-approach + collision-probability summary from the last conjunction run. */
   conjunction: ConjunctionResult | null;
   /** Off-main-thread all-vs-all catalog screening: status, progress, and flagged events. */
@@ -622,6 +625,35 @@ export interface SlewFeasibilityResult {
   readonly label: string;
 }
 
+/** [ux-p3-access] One placed observation slot in the conflict-free multi-target schedule. */
+export interface ObservationScheduleSlot {
+  readonly targetName: string;
+  /** The observation start/stop (ET seconds): start is clamped to the slew-arrival time. */
+  readonly start: number;
+  readonly stop: number;
+  /** The eigen-axis slew angle (deg) + duration (s) from the previous slot (0 for the first slot). */
+  readonly slewFromPrevDeg: number;
+  readonly slewFromPrevSec: number;
+}
+
+/** [ux-p3-access] A target that could not be scheduled, with a located reason (conflict / no window). */
+export interface ObservationScheduleUnscheduled {
+  readonly targetName: string;
+  readonly reason: string;
+}
+
+/** [ux-p3-access] The conflict-free multi-target observation schedule: an ordered set of
+ *  non-overlapping slots across targets where the attitude slew between consecutive targets fits the
+ *  gap, plus the targets that could not be placed. Null until a run. */
+export interface ObservationScheduleResult {
+  readonly span: readonly [number, number];
+  /** The in-FOV pointing mode the schedule's windows were swept under. */
+  readonly pointing: 'nadir' | 'sun';
+  readonly slots: readonly ObservationScheduleSlot[];
+  readonly unscheduled: readonly ObservationScheduleUnscheduled[];
+  readonly label: string;
+}
+
 export interface TleOrbit {
   /** Altitude above the Earth ellipsoid over one day (km vs ET). */
   readonly altitude: Series;
@@ -738,6 +770,7 @@ export const initialAppState: AppState = {
   linkWorksheet: null,
   selectedWindowPair: null,
   slewFeasibility: null,
+  observationSchedule: null,
   conjunction: null,
   screening: INITIAL_SCREENING,
   conjunctionIngest: null,
