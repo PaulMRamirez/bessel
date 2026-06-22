@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   assembleConstraints,
   computeFovWindows,
+  resolveTerrainDem,
+  parseTargetList,
   OpsAccessError,
 } from './ops-access.ts';
 import { DEFAULT_ACCESS_CONSTRAINTS, type AccessConstraintSpec } from './analysis-defaults.ts';
@@ -28,6 +30,8 @@ describe('assembleConstraints (pure constraint-array assembly)', () => {
       sunKeepoutEnabled: true,
       sunKeepoutDeg: 30,
       azElMaskEnabled: false,
+      terrainLosEnabled: false,
+      terrainSource: 'none',
     };
     const out = assembleConstraints(spec, 'EARTH');
     expect(out.map((l) => l.constraint.kind)).toEqual([
@@ -68,6 +72,50 @@ describe('assembleConstraints (pure constraint-array assembly)', () => {
       sunKeepoutDeg: 0,
     };
     expect(() => assembleConstraints(bad, 'EARTH')).toThrow(OpsAccessError);
+  });
+
+  it('UNGATES terrain LOS when a terrain source is chosen, threading a DEM into the constraint', () => {
+    const spec: AccessConstraintSpec = {
+      ...DEFAULT_ACCESS_CONSTRAINTS,
+      losEnabled: false,
+      terrainLosEnabled: true,
+      terrainSource: 'sample-ridge',
+    };
+    const out = assembleConstraints(spec, 'MARS');
+    expect(out).toHaveLength(1);
+    const c = out[0]!.constraint;
+    expect(c.kind).toBe('terrainLos');
+    // The constraint carries the center body, its body-fixed frame, and a real DEM (heightAt).
+    expect(c).toMatchObject({ body: 'MARS', bodyFrame: 'IAU_MARS' });
+    if (c.kind === 'terrainLos') {
+      expect(typeof c.dem.heightAt).toBe('function');
+      expect(c.dem.heightAt(0, 0)).toBeGreaterThan(0);
+    }
+  });
+
+  it('fails loud when terrain LOS is enabled but no terrain source is selected', () => {
+    const bad: AccessConstraintSpec = {
+      ...DEFAULT_ACCESS_CONSTRAINTS,
+      terrainLosEnabled: true,
+      terrainSource: 'none',
+    };
+    expect(() => assembleConstraints(bad, 'EARTH')).toThrow(OpsAccessError);
+  });
+});
+
+describe('resolveTerrainDem', () => {
+  it('returns the sample ridge DEM for sample-ridge and null for none', () => {
+    expect(resolveTerrainDem('none')).toBeNull();
+    const dem = resolveTerrainDem('sample-ridge');
+    expect(dem).not.toBeNull();
+    expect(dem!.heightAt(0, 0)).toBeGreaterThan(0);
+  });
+});
+
+describe('parseTargetList', () => {
+  it('splits on commas/whitespace, trims, and de-duplicates while preserving order', () => {
+    expect(parseTargetList('Saturn, Titan  Sun, Titan')).toEqual(['Saturn', 'Titan', 'Sun']);
+    expect(parseTargetList('   ')).toEqual([]);
   });
 });
 

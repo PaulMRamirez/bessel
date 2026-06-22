@@ -33,6 +33,7 @@
     "@bessel/selene-design": "workspace:*",
     "@bessel/spice": "workspace:*",
     "@bessel/state": "workspace:*",
+    "@bessel/terrain": "workspace:*",
     "@bessel/timeline": "workspace:*",
     "@bessel/ui": "workspace:*",
     "react": "^18.3.1",

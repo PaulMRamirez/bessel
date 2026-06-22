@@ -238,6 +238,53 @@ test('the in-FOV tool computes instrument-target visibility windows', async ({ p
   await expect(page.getByTestId('compute-fov-status')).toContainText('Done', { timeout: 20_000 });
 });
 
+test('the terrain-LOS constraint is UNGATED once a terrain source is chosen (Phase 3)', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
+  await loadCassiniSample(page);
+  await openAnalyze(page, 'access-comms');
+  await expandCard(page, 'access');
+
+  // The terrain LOS toggle starts disabled (no terrain source). Choosing the built-in sample-ridge
+  // DEM source UNGATES it: the toggle becomes enabled and the sample-data note appears.
+  const terrain = page.getByTestId('constraint-terrainlos');
+  await expect(terrain).toBeDisabled();
+  await page.getByTestId('param-terrain-source').selectOption('sample-ridge');
+  await expect(page.getByTestId('terrain-sample-note')).toBeVisible();
+  await expect(terrain).toBeEnabled();
+
+  // Enable the terrain LOS constraint and recompute access: the run threads the sample DEM into the
+  // constraint stack and still produces a surviving access window (no error).
+  await terrain.check();
+  await page.getByTestId('compute-access').click();
+  await expect(page.getByTestId('access-timeline')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('compute-access-status')).toContainText('Done', { timeout: 20_000 });
+});
+
+test('the observation multi-target schedule builds a conflict-free timeline', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
+  await loadCassiniSample(page);
+  await openAnalyze(page, 'access-comms');
+
+  // The multi-target schedule card takes a target LIST, the pointing mode, and the constraint stack,
+  // then builds an ordered, non-overlapping schedule with the per-target slew honored, plus any
+  // unscheduled (conflicted) targets.
+  await expandCard(page, 'observation-schedule');
+  await expect(page.getByTestId('param-target-list')).toBeVisible();
+  // Titan and Sun are observation targets; Saturn (the mission center body) is reported unscheduled
+  // gracefully rather than aborting the run, exercising both the scheduled and unscheduled paths.
+  await page.getByTestId('param-target-list').fill('Titan, Sun, Saturn');
+  await page.getByTestId('compute-observation-schedule').click();
+
+  // The schedule surface appears: the timeline (a Gantt of the placed slots) and the unscheduled
+  // list, with a located success note.
+  await expect(page.getByTestId('multi-target-schedule')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('schedule-timeline')).toBeVisible();
+  await expect(page.getByTestId('schedule-unscheduled')).toBeVisible();
+  await expect(page.getByTestId('compute-observation-schedule-status')).toContainText('Done', { timeout: 20_000 });
+});
+
 test('analysis tools honor user-supplied parameters (span, target, secondary)', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });

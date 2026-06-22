@@ -15,6 +15,7 @@ import {
   type Facility,
   type AzElMaskConstraint,
 } from '@bessel/access';
+import { SAMPLE_RIDGE_DEM, type Dem } from '@bessel/terrain';
 import { figureOfMerit } from '@bessel/coverage';
 import { nadirAttitude, type Quaternion } from '@bessel/attitude';
 import { windowIntersect, type Window } from '@bessel/timeline';
@@ -30,13 +31,20 @@ import {
   DEFAULT_ACCESS_CONSTRAINTS,
   DEFAULT_LINK_WORKSHEET,
   DEFAULT_SLEW_FEASIBILITY,
+  DEFAULT_OBSERVATION_SCHEDULE,
   type AccessConstraintSpec,
   type LinkWorksheetSpec,
   type SlewFeasibilitySpec,
+  type ObservationScheduleSpec,
+  type TerrainSource,
 } from './analysis-defaults.ts';
 import { MODCOD_TABLE } from '@bessel/rf';
 import { assembleLinkWorksheet, type LinkWorksheetConfig, type PassGeometry } from '../panels/link-worksheet.ts';
 import { decideSlewFeasibility } from '../panels/slew-feasibility.ts';
+import {
+  buildObservationSchedule,
+  type ScheduleTarget,
+} from '../panels/observation-schedule.ts';
 import type {
   AppStore,
   AccessFom,
@@ -44,8 +52,16 @@ import type {
   ScenarioState,
   StationPass,
   LinkWorksheetCase,
+  ObservationScheduleResult,
 } from '../store/index.ts';
 import type { EngineCore } from './bootstrap.ts';
+
+/** [ux-p3-access] Resolve a terrain DEM from the selected terrain source: the built-in deterministic
+ *  SAMPLE ridge for 'sample-ridge', else null ('none', the toggle stays inert). A real arbitrary-DEM
+ *  source would extend the TerrainSource union and return its loaded DEM here. */
+export function resolveTerrainDem(source: TerrainSource): Dem | null {
+  return source === 'sample-ridge' ? SAMPLE_RIDGE_DEM : null;
+}
 
 /** The active registered ground station from the scenario slice, or null when none is selected.
  *  Inlined here (rather than imported from station-registry, which the eager engine shell already
@@ -75,8 +91,10 @@ export interface LabelledConstraint {
  *  stable order. Pure (no SPICE), so the assembly is unit-tested directly. The line-of-sight
  *  occulting body is the mission center body; range/range-rate/sun-keepout read their bands
  *  from the spec; the az/el mask (UNGATED in Phase 2) reads the ACTIVE ground station passed in,
- *  failing loud when the toggle is on but no station is active. A spec with nothing enabled yields
- *  an empty stack (computeAccess then returns the whole span). Fails loud on an inverted band. */
+ *  failing loud when the toggle is on but no station is active; the terrain LOS (UNGATED in Phase 3)
+ *  reads a DEM from the chosen terrain source (the built-in sample ridge), failing loud when enabled
+ *  with no source selected. A spec with nothing enabled yields an empty stack (computeAccess then
+ *  returns the whole span). Fails loud on an inverted band. */
 export function assembleConstraints(
   spec: AccessConstraintSpec,
   centerBody: string,
@@ -130,6 +148,25 @@ export function assembleConstraints(
     out.push({
       label: `Az/el mask at ${station.name} (>= ${((station.minElevationRad ?? 5 * DEG2RAD) * RAD2DEG).toFixed(1)} deg)`,
       constraint: { ...constraint, facility },
+    });
+  }
+  if (spec.terrainLosEnabled) {
+    // UNGATED in Phase 3: the terrain LOS reads a DEM from the chosen terrain source. Fail loud
+    // (rather than fabricate a flat DEM) when the toggle is on but no source is selected.
+    const dem = resolveTerrainDem(spec.terrainSource);
+    if (!dem) {
+      throw new OpsAccessError(
+        'terrain LOS is enabled but no terrain source is selected: choose a terrain source (e.g. the sample ridge)',
+      );
+    }
+    out.push({
+      label: `Terrain LOS over ${centerBody} (${spec.terrainSource} DEM)`,
+      constraint: {
+        kind: 'terrainLos',
+        body: centerBody,
+        bodyFrame: `IAU_${centerBody.toUpperCase()}`,
+        dem,
+      },
     });
   }
   return out;
@@ -201,6 +238,37 @@ export async function computeAccessStack(
   }
 }
 
+/** Sample the FOV-only in-view flags of one target over the span: the off-boresight angle under the
+ *  chosen pointing mode is within the FOV half-angle. Pure over the sampled ephemeris table; shared
+ *  by the single-target in-FOV sweep and the multi-target schedule so both read identical geometry. */
+function sweepFovFlags(
+  e: EngineCore,
+  pointing: FovPointing,
+  halfAngle: number,
+  obsTarget: string,
+  sc: string,
+  center: string,
+  span: readonly [number, number],
+  step: number,
+): { times: number[]; flags: boolean[] } {
+  const needsSun = pointing === 'sun';
+  const ZERO: readonly [number, number, number] = [0, 0, 0];
+  const times: number[] = [];
+  const flags: boolean[] = [];
+  for (let t = span[0]; t <= span[1]; t += step) {
+    const off = pointingOffAngleRad(
+      pointing,
+      positionAt(e.table, sc, t),
+      positionAt(e.table, center, t),
+      needsSun ? positionAt(e.table, 'Sun', t) : ZERO,
+      positionAt(e.table, obsTarget, t),
+    );
+    times.push(t);
+    flags.push(off <= halfAngle);
+  }
+  return { times, flags };
+}
+
 /**
  * Selectable-pointing in-FOV sweep: model the sensor boresight along the chosen mode (nadir
  * toward the center body, or sun toward the Sun) and find when the observation target falls
@@ -243,22 +311,8 @@ export async function computeFovWindows(
   const step = opts.stepSec ?? 120;
   try {
     const halfAngle = fovHalfAngleRad(inst.fov.boresight, inst.fov.bounds);
-    const times: number[] = [];
-    const flags: boolean[] = [];
-    // nadir mode never reads the Sun position; sample it only when sun-pointing to avoid
-    // touching a body that may not be in the table.
-    const ZERO: readonly [number, number, number] = [0, 0, 0];
-    for (let t = span[0]; t <= span[1]; t += step) {
-      const off = pointingOffAngleRad(
-        pointing,
-        positionAt(e.table, sc, t),
-        positionAt(e.table, center, t),
-        needsSun ? positionAt(e.table, 'Sun', t) : ZERO,
-        positionAt(e.table, obsTarget, t),
-      );
-      times.push(t);
-      flags.push(off <= halfAngle);
-    }
+    // nadir mode never reads the Sun position; the shared sweep samples it only when sun-pointing.
+    const { times, flags } = sweepFovFlags(e, pointing, halfAngle, obsTarget, sc, center, span, step);
     const fovOnly = intervalsFromFlags(times, flags);
     const pointingLabel = pointing === 'sun' ? 'Sun-pointed' : 'nadir-pointed';
     // Surviving window: the FOV-only window intersected with the assembled access stack, run
@@ -652,6 +706,164 @@ export async function computeSlewFeasibility(
   } catch (err) {
     if (!isDisposed()) store.setState({ slewFeasibility: null });
     console.error('slew feasibility failed', err);
+    throw err;
+  }
+}
+
+// -- [ux-p3-access] Multi-target observation schedule -------------------------------------------
+// computeObservationSchedule takes a LIST of observation targets, the active instrument/FOV + the
+// in-FOV pointing mode, and the access/keepout constraint stack; computes each target's in-FOV +
+// post-constraint surviving windows (the same geometry the single-target in-FOV card shows); models
+// the attitude the sensor holds while observing each target (the boresight aligned to the line of
+// sight at the observation start); then builds a CONFLICT-FREE SCHEDULE through the pure greedy
+// buildObservationSchedule, where the eigen-axis slew between consecutive scheduled targets must fit
+// the gap (reusing the Phase-2 slew model). The result is the ordered timeline + any unscheduled
+// (conflicted) targets. Requires a sensor + spacecraft; clears the result otherwise. Fails loud.
+
+/** A unit body-fixed line-of-sight direction from the spacecraft to a target at an epoch, sampled
+ *  from the ephemeris table. The schedule uses this to give each target a distinct pointing. */
+function losUnit(e: EngineCore, sc: string, target: string, t: number): [number, number, number] {
+  const s = positionAt(e.table, sc, t);
+  const g = positionAt(e.table, target, t);
+  const d: [number, number, number] = [g[0] - s[0], g[1] - s[1], g[2] - s[2]];
+  const m = Math.hypot(d[0], d[1], d[2]) || 1;
+  return [d[0] / m, d[1] / m, d[2] / m];
+}
+
+/** Build the minimal-rotation quaternion ([w,x,y,z]) that aligns the sensor boresight (+Z) to a
+ *  unit line-of-sight direction. Pure and deterministic: the slew model only needs the relative
+ *  attitude between two targets, and this gives each target a pointing fixed by its geometry. The
+ *  near-antiparallel case (los ~ -Z) falls back to a 180 deg rotation about +X. */
+function boresightToLosQuat(los: readonly [number, number, number]): Quaternion {
+  const z: [number, number, number] = [0, 0, 1];
+  const dot = z[0] * los[0] + z[1] * los[1] + z[2] * los[2];
+  if (dot > 1 - 1e-9) return [1, 0, 0, 0]; // already aligned
+  if (dot < -1 + 1e-9) return [0, 1, 0, 0]; // antiparallel: 180 deg about +X
+  // axis = z x los, angle = acos(dot); quaternion [cos(a/2), sin(a/2) * axis_hat].
+  const ax: [number, number, number] = [
+    z[1] * los[2] - z[2] * los[1],
+    z[2] * los[0] - z[0] * los[2],
+    z[0] * los[1] - z[1] * los[0],
+  ];
+  const axMag = Math.hypot(ax[0], ax[1], ax[2]) || 1;
+  const angle = Math.acos(Math.max(-1, Math.min(1, dot)));
+  const s = Math.sin(angle / 2);
+  return [Math.cos(angle / 2), (ax[0] / axMag) * s, (ax[1] / axMag) * s, (ax[2] / axMag) * s];
+}
+
+/** Parse a target list string (comma / whitespace separated) into de-duplicated trimmed names. */
+export function parseTargetList(raw: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const tok of raw.split(/[,\s]+/)) {
+    const name = tok.trim();
+    if (name && !seen.has(name)) {
+      seen.add(name);
+      out.push(name);
+    }
+  }
+  return out;
+}
+
+/**
+ * Multi-target observation schedule (analysis-UX Phase 3, observation planner). For each target in
+ * the list, sweep the in-FOV window under the pointing mode and intersect it with the assembled
+ * access/keepout constraint stack (the surviving windows), and resolve the attitude the sensor holds
+ * while observing it (boresight aligned to the line of sight at the first window start). Feed those
+ * into the pure greedy buildObservationSchedule to produce a conflict-free ordered timeline where the
+ * eigen-axis slew between consecutive targets fits the gap, plus the unscheduled (conflicted) targets.
+ * A target not in the sampled ephemeris table is reported unscheduled (no window) rather than failing
+ * the whole run. Requires a sensor + spacecraft; clears the result otherwise. Fails loud on bad input.
+ */
+export async function computeObservationSchedule(
+  e: EngineCore,
+  store: AppStore,
+  isDisposed: () => boolean,
+  spec: ObservationScheduleSpec = DEFAULT_OBSERVATION_SCHEDULE,
+  constraints: AccessConstraintSpec = DEFAULT_ACCESS_CONSTRAINTS,
+  opts: { spanSec?: number; stepSec?: number } = {},
+): Promise<void> {
+  const inst = e.instrument;
+  const sc = e.identity.spacecraftName;
+  const center = e.identity.centerBody;
+  if (!inst || !sc || !center || !e.table.byBody.has(sc) || !e.table.byBody.has(center)) {
+    store.setState({ observationSchedule: null });
+    return;
+  }
+  if (spec.targets.length === 0) {
+    throw new OpsAccessError('no observation targets: add at least one target to schedule');
+  }
+  const needsSun = spec.pointing === 'sun';
+  const t0 = e.clock.state.et;
+  const span: [number, number] = [t0, Math.min(t0 + (opts.spanSec ?? 86400), e.table.et1)];
+  const step = opts.stepSec ?? 120;
+  try {
+    const halfAngle = fovHalfAngleRad(inst.fov.boresight, inst.fov.bounds);
+    const labelled = assembleConstraints(constraints, center, activeStation(store.getState().scenario));
+    const scheduleTargets: ScheduleTarget[] = [];
+    // A target the geometry cannot place (the center body, an unsampled body, no Sun for sun-pointing,
+    // or a SPICE access error) is carried as an empty-window target with a located reason, so one bad
+    // target is reported as unscheduled rather than aborting the schedule. Spec errors still fail loud.
+    const unavailable = (name: string, reason: string): ScheduleTarget => ({
+      name,
+      windows: [],
+      attitude: [1, 0, 0, 0],
+      unavailableReason: reason,
+    });
+    for (const name of spec.targets) {
+      const gate =
+        name === center
+          ? 'target is the mission center body'
+          : !e.table.byBody.has(name)
+            ? 'target is not in the sampled ephemeris'
+            : needsSun && !e.table.byBody.has('Sun')
+              ? 'sun pointing needs the Sun sampled'
+              : null;
+      if (gate) {
+        scheduleTargets.push(unavailable(name, gate));
+        continue;
+      }
+      try {
+        const { times, flags } = sweepFovFlags(e, spec.pointing, halfAngle, name, sc, center, span, step);
+        const fovOnly = intervalsFromFlags(times, flags);
+        const accessWindow = await computeAccess(e.spice, {
+          observer: sc,
+          target: name,
+          span,
+          step,
+          constraints: labelled.map((l) => l.constraint),
+        });
+        const surviving = windowIntersect(fovOnly, accessWindow);
+        // The attitude held while observing: boresight aligned to the line of sight at the first
+        // surviving window start (or the span start when there is no window, an unused attitude then).
+        const refEpoch = surviving.length > 0 ? surviving[0]![0] : span[0];
+        scheduleTargets.push({ name, windows: surviving, attitude: boresightToLosQuat(losUnit(e, sc, name, refEpoch)) });
+      } catch (perTargetErr) {
+        scheduleTargets.push(unavailable(name, perTargetErr instanceof Error ? perTargetErr.message : String(perTargetErr)));
+      }
+    }
+    const schedule = buildObservationSchedule(scheduleTargets, {
+      maxRateDegPerSec: spec.maxRateDegPerSec,
+      maxAccelDegPerSec2: spec.maxAccelDegPerSec2,
+      minDwellSec: spec.minDwellSec,
+    });
+    const result: ObservationScheduleResult = {
+      span,
+      pointing: spec.pointing,
+      slots: schedule.slots.map((s) => ({
+        targetName: s.targetName,
+        start: s.start,
+        stop: s.stop,
+        slewFromPrevDeg: s.slewFromPrevDeg,
+        slewFromPrevSec: s.slewFromPrevSec,
+      })),
+      unscheduled: schedule.unscheduled.map((u) => ({ targetName: u.targetName, reason: u.reason })),
+      label: `${inst.descriptor.name} multi-target schedule (${spec.pointing}-pointed)`,
+    };
+    if (!isDisposed()) store.setState({ observationSchedule: result });
+  } catch (err) {
+    if (!isDisposed()) store.setState({ observationSchedule: null });
+    console.error('observation schedule failed', err);
     throw err;
   }
 }

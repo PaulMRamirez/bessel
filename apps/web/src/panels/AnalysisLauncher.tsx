@@ -32,6 +32,7 @@ export const LAUNCHER_REGISTRY: readonly LauncherEntry[] = [
   { id: 'access', title: 'Line-of-sight access', tab: 'access-comms', keywords: 'access visibility line of sight pass window' },
   { id: 'in-fov', title: 'In-FOV observation windows', tab: 'access-comms', keywords: 'fov field of view sensor instrument observation' },
   { id: 'link', title: 'Downlink budget', tab: 'access-comms', keywords: 'link budget comms downlink ebn0 eb/n0 radio' },
+  { id: 'observation-schedule', title: 'Observation multi-target schedule', tab: 'access-comms', keywords: 'observation schedule multi target timeline slew conflict plan' },
   { id: 'closest-approach', title: 'Closest approach (pair)', tab: 'conjunction', keywords: 'conjunction closest approach miss tca pc collision probability' },
   { id: 'catalog-screen', title: 'Catalog screening', tab: 'conjunction', keywords: 'catalog screen screening all-vs-all worker conjunction' },
   { id: 'constellation', title: 'Walker constellation', tab: 'coverage', keywords: 'walker constellation design planes satellites' },

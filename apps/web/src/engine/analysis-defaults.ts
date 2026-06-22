@@ -59,7 +59,20 @@ export interface AccessConstraintSpec {
    *  station's min-elevation floor. UNGATED in Phase 2 (the station registry supplies the facility);
    *  the access op skips it loudly when no station is active rather than fabricating one. */
   readonly azElMaskEnabled: boolean;
+  /** [ux-p3-access] Terrain line of sight: the observer-to-target line must clear the center body's
+   *  terrain (a DEM ray test per epoch). UNGATED in Phase 3 once a terrain source is chosen; the
+   *  access op skips it loudly when enabled with no source selected rather than fabricating a DEM. */
+  readonly terrainLosEnabled: boolean;
+  /** [ux-p3-access] Which terrain source supplies the DEM: 'none' (no source, the toggle is inert),
+   *  or 'sample-ridge' (the built-in deterministic sample ridge heightfield, clearly SAMPLE data).
+   *  A real arbitrary-DEM upload can extend this union later without touching the constraint plumbing. */
+  readonly terrainSource: TerrainSource;
 }
+
+/** [ux-p3-access] The terrain DEM source backing the terrainLos constraint. 'none' leaves the toggle
+ *  inert (no DEM); 'sample-ridge' uses the built-in SAMPLE ridge heightfield from @bessel/terrain.
+ *  Extend this union (e.g. an 'uploaded' kind) when a real arbitrary-DEM source is plumbed in. */
+export type TerrainSource = 'none' | 'sample-ridge';
 
 /** Default access constraint stack: line-of-sight on, the rest off with representative bands
  *  pre-filled so toggling one on is a single click. */
@@ -74,6 +87,8 @@ export const DEFAULT_ACCESS_CONSTRAINTS: AccessConstraintSpec = {
   sunKeepoutEnabled: false,
   sunKeepoutDeg: 30,
   azElMaskEnabled: false,
+  terrainLosEnabled: false,
+  terrainSource: 'none',
 };
 
 /** A selectable sensor boresight pointing mode for the in-FOV sweep. nadir and sun are
@@ -142,4 +157,30 @@ export const DEFAULT_SLEW_FEASIBILITY: SlewFeasibilitySpec = {
   mode: 'targetTrack',
   maxRateDegPerSec: 1,
   maxAccelDegPerSec2: 0.25,
+};
+
+/** [ux-p3-access] The multi-target observation-schedule configuration the panel form drives and the
+ *  engine op runs. The target LIST is the comma/space-separated body names to observe; the active
+ *  instrument/FOV and pointing mode come from the mission + the in-FOV card; the slew dynamics gate
+ *  whether the attitude slew between consecutive targets fits the gap. Engine units: deg, deg/s. */
+export interface ObservationScheduleSpec {
+  /** The observation targets to schedule, in priority/list order (resolved against the ephemerides). */
+  readonly targets: readonly string[];
+  /** The sensor boresight pointing mode used for each target's in-FOV window (nadir or sun). */
+  readonly pointing: FovPointingMode;
+  /** Eigen-axis slew dynamics gating the inter-target transition (must fit the gap to schedule). */
+  readonly maxRateDegPerSec: number;
+  readonly maxAccelDegPerSec2: number;
+  /** Minimum dwell (s) each scheduled observation slot must hold the target in view. */
+  readonly minDwellSec: number;
+}
+
+/** Default observation-schedule spec: an empty target list (the panel pre-fills representative
+ *  targets), nadir pointing, a 1 deg/s / 0.25 deg/s^2 slew profile, and a 60 s minimum dwell. */
+export const DEFAULT_OBSERVATION_SCHEDULE: ObservationScheduleSpec = {
+  targets: [],
+  pointing: 'nadir',
+  maxRateDegPerSec: 1,
+  maxAccelDegPerSec2: 0.25,
+  minDwellSec: 60,
 };

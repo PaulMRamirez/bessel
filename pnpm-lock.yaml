@@ -188,6 +188,9 @@ importers:
       '@bessel/state':
         specifier: workspace:*
         version: link:../../packages/state
+      '@bessel/terrain':
+        specifier: workspace:*
+        version: link:../../packages/terrain
       '@bessel/timeline':
         specifier: workspace:*
         version: link:../../packages/timeline

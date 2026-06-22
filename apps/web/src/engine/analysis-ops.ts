@@ -56,12 +56,16 @@ export type { SlewPointing, ConstellationParams };
 // [ux-p2-access] The Phase-2 access/comms ops (station passes, link worksheet, slew feasibility)
 // join the same re-export so they reach the engine through this one lazy-import seam and share the
 // @bessel/access + @bessel/rf + @bessel/attitude deps already in this chunk (no new ops chunk).
+// [ux-p3-access] computeObservationSchedule (the conflict-free multi-target schedule) joins the
+// same re-export so it reaches the engine through this one lazy seam and shares the @bessel/access +
+// @bessel/attitude + @bessel/terrain deps already in this chunk (no new ops chunk).
 export {
   computeAccessStack,
   computeFovWindows,
   computeStationPasses,
   computeLinkWorksheet,
   computeSlewFeasibility,
+  computeObservationSchedule,
 } from './ops-access.ts';
 import type { AppStore, OdResult } from '../store/index.ts';
 import type { EngineCore } from './bootstrap.ts';
