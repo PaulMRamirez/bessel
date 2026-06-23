@@ -369,8 +369,8 @@ export function BesselViewer(): JSX.Element {
     <>
       {missionMenu}
       {scriptMenu}
-      {analyzeButton}
       {viewsMenu}
+      {analyzeButton}
       {layersMenu}
       {themeToggle}
     </>
