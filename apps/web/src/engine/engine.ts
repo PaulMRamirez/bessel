@@ -2008,10 +2008,6 @@ export class BesselEngine {
     }
   }
 
-  // The canned guided tour, expressed in the same cosmoscripting line grammar the
-  // console interprets, so the tour and the console share one execution path.
-  private static readonly TOUR_SCRIPT = ['setTimeRate 3600', 'unpause', 'viewFromSun'].join('\n');
-
   // Unload the active mission and return to the neutral inner-solar-system scene,
   // mirroring Cosmographia's File > Unload Last Catalog. Furnished kernels stay
   // loaded (SPICE has no per-kernel unfurnsh here); only the rendered objects and
@@ -2038,11 +2034,6 @@ export class BesselEngine {
       fovOk: false,
       status: 'Ready',
     });
-  }
-
-  // Run a short scripted tour over the viewer (surfaces the scripting API).
-  runTour(): void {
-    this.runScript(BesselEngine.TOUR_SCRIPT);
   }
 
   // Interpret a cosmoscripting-style program (one verb per line) against the live
