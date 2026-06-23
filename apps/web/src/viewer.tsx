@@ -21,7 +21,6 @@ import {
   StateVectorPanel,
   ObjectBrowser,
   ObjectInspector,
-  OpsPanel,
   PanelContainer,
   ReadoutPanel,
   SearchBox,
@@ -39,7 +38,6 @@ import {
 import { createAppStore, useStore, type AppStore } from './store/index.ts';
 import { SCRIPT_VERBS } from './script-runner.ts';
 import { useBesselEngine } from './engine/index.ts';
-import { createMissionRegistry } from './missions.ts';
 import { AppShell, useMediaQuery, NARROW_MEDIA_QUERY } from './shell/index.ts';
 import { Popover } from './overlays/Popover.tsx';
 // Heavy workbench and menu panels are code-split: each loads on demand the first time
@@ -216,12 +214,6 @@ export function BesselViewer(): JSX.Element {
     return q ? objects.filter((e) => e.name.toLowerCase().includes(q)) : objects;
   }, [query, objects]);
 
-  // The bundled missions come from the plugin registry (surfacing it in the shell).
-  const registryRef = useRef(createMissionRegistry());
-  const missions = useMemo(
-    () => registryRef.current.list().map((p) => ({ id: p.id, name: p.name })),
-    [],
-  );
   const focusEntry = objects.find((e) => e.id === focus);
   const inspectorFields = [{ label: 'SPICE id', value: SPICE_IDS[focus] ?? '-' }];
 
@@ -248,7 +240,7 @@ export function BesselViewer(): JSX.Element {
   const narrowChrome = useMediaQuery(NARROW_MEDIA_QUERY);
 
   const missionMenu = (
-      <Popover label="Mission" title="Mission and operations" align="right" testId="mission-menu">
+      <Popover label="Mission" title="Load a mission" align="right" testId="mission-menu">
         <CatalogLoader
           onLoad={(file) => void engine?.loadCatalog(file)}
           status={loadedName ? `Loaded ${loadedName}: ${objects.length} objects` : null}
@@ -257,13 +249,6 @@ export function BesselViewer(): JSX.Element {
           onLoadSample={(url) => void engine?.loadCatalogUrl(url)}
           onLoadUrl={(url) => void engine?.loadCatalogUrl(url)}
         />
-        <div className="bessel-menu-section" data-testid="panel-ops">
-          <OpsPanel
-            missions={missions}
-            onLoadMission={(id) => void engine?.loadMission(registryRef.current, id)}
-            onRunTour={() => engine?.runTour()}
-          />
-        </div>
       </Popover>
   );
 
