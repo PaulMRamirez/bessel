@@ -27,3 +27,25 @@ test('operations panel: bundled plugin, telemetry residual, and guided tour', as
   await page.getByTestId('run-tour').click();
   await expect(page.getByRole('button', { name: 'Pause' })).toBeVisible({ timeout: 5_000 });
 });
+
+test('the Operations missions list loads the bundled Cassini mission (registry path)', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await expect(page.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
+
+  await page.getByTestId('mission-menu').click();
+  await page.getByTestId('mission-cassini-soi').click();
+  await page.keyboard.press('Escape');
+
+  // loadMission furnishes the declared kernels and renders the same bundled sample
+  // catalog as the welcome / file paths: the Cassini spacecraft and the planets,
+  // focused on Saturn (not the old minimal Probe-only fixture).
+  await expect(page.getByTestId('select-Cassini')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('select-Jupiter')).toBeVisible();
+  await expect
+    .poll(async () => page.getByTestId('viewport').getAttribute('data-cam-target'), {
+      timeout: 30_000,
+    })
+    .toBe('Saturn');
+});

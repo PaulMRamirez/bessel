@@ -51,7 +51,6 @@ export function createMissionRegistry(): PluginRegistry {
     description: 'Cassini orbit-insertion arc at Saturn (SPICE SPK), with the ringed globe.',
     kernels: CASSINI_KERNELS,
     frames: ['J2000', 'IAU_SATURN'],
-    panels: ['plugins'],
     // Load the same bundled sample catalog every other entry point uses, so loading
     // Cassini from the mission list matches the welcome / sample / file paths.
     loadCatalog: () => fetchCatalog(`${import.meta.env.BASE_URL}samples/cassini-saturn.json`),
