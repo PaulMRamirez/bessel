@@ -10,37 +10,8 @@ import { SettingsPanel } from './SettingsPanel.tsx';
 import { TimelineControls, humanizeRate } from './TimelineControls.tsx';
 import { CameraFrameControls } from './CameraFrameControls.tsx';
 import { KeyboardHelp } from './KeyboardHelp.tsx';
-import { OpsPanel } from './OpsPanel.tsx';
 
 const html = (el: Parameters<typeof renderToStaticMarkup>[0]): string => renderToStaticMarkup(el);
-
-describe('@bessel/ui OpsPanel', () => {
-  it('lists registry missions and the guided tour', () => {
-    const out = html(
-      createElement(OpsPanel, {
-        missions: [{ id: 'cassini-saturn', name: 'Cassini at Saturn' }],
-        onLoadMission: () => {},
-        onRunTour: () => {},
-      }),
-    );
-    expect(out).toContain('data-testid="mission-cassini-saturn"');
-    expect(out).toContain('Cassini at Saturn');
-    expect(out).toContain('data-testid="run-tour"');
-    // The live telemetry residual now lives in the HUD ops strip, not here.
-    expect(out).not.toContain('data-testid="telemetry-residual"');
-  });
-
-  it('shows an empty-missions hint when none are bundled', () => {
-    const out = html(
-      createElement(OpsPanel, {
-        missions: [],
-        onLoadMission: () => {},
-        onRunTour: () => {},
-      }),
-    );
-    expect(out).toContain('none bundled');
-  });
-});
 
 describe('@bessel/ui CatalogLoader', () => {
   it('renders one-click sample chips and a load-from-URL field when wired', () => {

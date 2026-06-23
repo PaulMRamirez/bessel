@@ -808,13 +808,6 @@ button[aria-pressed='true'] {
   right: 0;
 }
 
-/* A top-bar menu may stack several panels; separate them with a rule. */
-.bessel-menu-section {
-  margin-top: var(--space-3);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--border);
-}
-
 /* Selection-driven inspector card (floats over the canvas) ---------------- */
 
 /* The selection inspector now docks in the left rail as a "Selection" panel (it was a

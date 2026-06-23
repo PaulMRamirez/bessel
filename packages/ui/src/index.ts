@@ -73,7 +73,6 @@ export {
   type StateVectorPanelProps,
   type BodyState,
 } from './StateVectorPanel.tsx';
-export { OpsPanel, type OpsPanelProps, type MissionOption } from './OpsPanel.tsx';
 export {
   TelemetryOverlay,
   severityFor,
