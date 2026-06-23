@@ -40,7 +40,7 @@ import { createAppStore, useStore, type AppStore } from './store/index.ts';
 import { SCRIPT_VERBS } from './script-runner.ts';
 import { useBesselEngine } from './engine/index.ts';
 import { createMissionRegistry } from './missions.ts';
-import { AppShell, resolvePanel, pluginPanelIds, useMediaQuery, NARROW_MEDIA_QUERY } from './shell/index.ts';
+import { AppShell, useMediaQuery, NARROW_MEDIA_QUERY } from './shell/index.ts';
 import { Popover } from './overlays/Popover.tsx';
 // Heavy workbench and menu panels are code-split: each loads on demand the first time
 // its menu opens (the Popover mounts its children only while open), keeping the analysis
@@ -222,17 +222,6 @@ export function BesselViewer(): JSX.Element {
     () => registryRef.current.list().map((p) => ({ id: p.id, name: p.name })),
     [],
   );
-  // The shell resolves the plugin-declared panel ids to concrete components; the
-  // registry stays UI-free. The Plugins panel appears when any plugin contributes it.
-  const PluginPanel = useMemo(() => {
-    const ids = pluginPanelIds(registryRef.current.list());
-    for (const id of ids) {
-      const component = resolvePanel(id);
-      if (component) return component;
-    }
-    return null;
-  }, []);
-
   const focusEntry = objects.find((e) => e.id === focus);
   const inspectorFields = [{ label: 'SPICE id', value: SPICE_IDS[focus] ?? '-' }];
 
@@ -278,15 +267,6 @@ export function BesselViewer(): JSX.Element {
       </Popover>
   );
 
-  const pluginsMenu = PluginPanel ? (
-    <Popover label="Plugins" title="Mission plugins" align="right" testId="plugins-menu">
-      <PanelSuspense>
-        <PluginPanel engine={engine} store={store} registry={registryRef.current} />
-      </PanelSuspense>
-    </Popover>
-  ) : null;
-
-
   const scriptMenu = (
     <Popover label="Script" title="Scripting console" align="right" testId="script-menu" pinnable>
       <PanelSuspense>
@@ -307,16 +287,20 @@ export function BesselViewer(): JSX.Element {
   );
 
   const analyzeButton = (
-    <button
-      type="button"
-      className="bessel-popover-trigger"
-      data-testid="analyze-toggle"
-      aria-expanded={analyzeOpen}
-      aria-pressed={analyzeOpen}
-      onClick={() => engine?.toggleAnalyze()}
-    >
-      Analyze
-    </button>
+    <Tooltip label="Analyze">
+      <button
+        type="button"
+        className="bessel-popover-trigger"
+        data-testid="analyze-toggle"
+        aria-label="Analyze"
+        title="Analyze"
+        aria-expanded={analyzeOpen}
+        aria-pressed={analyzeOpen}
+        onClick={() => engine?.toggleAnalyze()}
+      >
+        <Icon name="bar-chart" />
+      </button>
+    </Tooltip>
   );
 
   const viewsMenu = (
@@ -374,7 +358,6 @@ export function BesselViewer(): JSX.Element {
       <Popover label="More" title="More actions" align="right" testId="more-menu">
         <div className="bessel-appbar-overflow">
           {missionMenu}
-          {pluginsMenu}
           {scriptMenu}
           {viewsMenu}
         </div>
@@ -385,10 +368,9 @@ export function BesselViewer(): JSX.Element {
   ) : (
     <>
       {missionMenu}
-      {pluginsMenu}
       {scriptMenu}
-      {analyzeButton}
       {viewsMenu}
+      {analyzeButton}
       {layersMenu}
       {themeToggle}
     </>
