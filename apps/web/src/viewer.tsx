@@ -287,16 +287,20 @@ export function BesselViewer(): JSX.Element {
   );
 
   const analyzeButton = (
-    <button
-      type="button"
-      className="bessel-popover-trigger"
-      data-testid="analyze-toggle"
-      aria-expanded={analyzeOpen}
-      aria-pressed={analyzeOpen}
-      onClick={() => engine?.toggleAnalyze()}
-    >
-      Analyze
-    </button>
+    <Tooltip label="Analyze">
+      <button
+        type="button"
+        className="bessel-popover-trigger"
+        data-testid="analyze-toggle"
+        aria-label="Analyze"
+        title="Analyze"
+        aria-expanded={analyzeOpen}
+        aria-pressed={analyzeOpen}
+        onClick={() => engine?.toggleAnalyze()}
+      >
+        <Icon name="bar-chart" />
+      </button>
+    </Tooltip>
   );
 
   const viewsMenu = (
